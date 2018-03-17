@@ -1,23 +1,28 @@
 """K-mer creator"""
 import fasta_parser as fp
-
+import csv
+	
 #k = k value for k-mer freq analysis
 #filename = list of genomes
 def analyze(k, filename):
+	#dictionary: key = genome id, value = DNA sequence
 	seq_dict = fp.parse(filename)
-	for seq in seq_dict:
+	for key in seq_dict.keys():
 		kmer_dict = {}
-		for i in xrange( len(seq_dict[seq])-(k-1) ):
-			read = my_dict[seq][i:i+k]
+		
+		for i in range( len(seq_dict[key])-(k-1) ):
+			read = seq_dict[key][i:i+k]
 			if read in kmer_dict:
 				kmer_dict[read]+=1
 			else:
 				kmer_dict[read] = 1
-		filename = "%k_mers_in_%s.csv" % (k, seq)
-		with open(filename, 'wb') as csv_file:
+		filename = "%i_mers_in_%s.csv" % (k, key)
+		with open(filename, 'w') as csv_file:
 			writer = csv.writer(csv_file)
-			for key, value in seq_dict.items():
-				writer.writerow([key, value])
-
+			for pkey in sorted(kmer_dict.keys()):
+				writer.writerow([pkey, kmer_dict[pkey]])
+				csv_file.flush()
+				
 def main():
-	analyze(3, "viral_genomes.fna")
+	analyze(4, "viral_genomes.fna")
+main()
