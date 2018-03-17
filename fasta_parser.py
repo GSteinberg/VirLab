@@ -8,5 +8,6 @@ def parse( filename ):
 	records = list(SeqIO.parse( filename, "fasta" )
 	for genome in records:
 		seq_dict[genome.id] = str(genome.seq)
+		
    	return seq_dict
 
