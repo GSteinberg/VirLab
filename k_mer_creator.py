@@ -10,8 +10,8 @@ def analyze(k, filename):
 		for i in xrange( len(seq_dict[seq])-(k-1) ):
 			read = my_dict[seq][i:i+k]
 			if read in kmer_dict:
-				kmer_dict[read]++
-			else
+				kmer_dict[read]+=1
+			else:
 				kmer_dict[read] = 1
 		filename = "%k_mers_in_%s.csv" % (k, seq)
 		with open(filename, 'wb') as csv_file:
