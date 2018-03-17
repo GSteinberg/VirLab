@@ -4,8 +4,9 @@
 from Bio import SeqIO
 
 def parse( filename ):
+	seq_dict = {}
 	records = list(SeqIO.parse( filename, "fasta" )
-	for segment in records:
-		segment = str(segment.seq)
-   	return records
+	for genome in records:
+		seq_dict[genome.id] = str(genome.seq)
+   	return seq_dict
 
