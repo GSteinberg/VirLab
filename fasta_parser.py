@@ -1,8 +1,7 @@
 """FASTA PARSER"""
-# takes a FASTA file outputs it as a list of strings
-
 from Bio import SeqIO
 
+#Takes a FASTA file, outputs it as a list of strings
 def parse( filename ):
 	seq_dict = {}
 	records = list(SeqIO.parse( filename, "fasta" ))
