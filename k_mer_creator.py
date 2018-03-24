@@ -1,4 +1,4 @@
-"""K-mer creator"""
+"""K-MER CREATOR"""
 import fasta_parser as fp
 import csv
 	
@@ -30,6 +30,7 @@ def analyze(k, filename):
 				csv_file.flush()
 				
 def main():
-	analyze(4, "viral.2.1.genomic.fna")
+	filename = input("File name: ")
+	analyze(8, filename)
 
 main()
