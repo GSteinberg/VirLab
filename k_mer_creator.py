@@ -51,6 +51,7 @@ def analyze(k, filename, style="sift"):
 
 def main():
 	filename = input("File name: ")
-	analyze(8, filename, "aggregate")
+	k = int(input("Desired k-value: "))
+	analyze(k, filename, "aggregate")
 
 main()

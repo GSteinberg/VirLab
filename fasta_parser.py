@@ -5,7 +5,6 @@ from Bio import SeqIO
 def parse( filename ):
 	seq_dict = {}
 	filetype = filename.rsplit(".", 1)[-1]
-	print(filetype)
 	if filetype == "fna":
 		filetype = "fasta"
 	elif filetype == "gbff":
