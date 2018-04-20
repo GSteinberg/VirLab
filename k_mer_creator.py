@@ -5,9 +5,9 @@ import csv
 #k = k value for k-mer freq analysis
 #filename = list of genomes
 #Generates csv files of k-mer frequency
-def analyze(k, filename, style="sift"):
+def analyze(k, rootdir, style):
 	#seq_dict: dictionary w/ key = genome id, value = DNA sequence
-	seq_dict = fp.parse(filename)
+	seq_dict = fp.parse(rootdir)
 	
 	if style == "sift":
 	#iterate through genomes and create individual kmer dictionaries
@@ -48,10 +48,9 @@ def analyze(k, filename, style="sift"):
 			for pkey in sorted(kmer_dict.keys()):
 				writer.writerow([pkey, kmer_dict[pkey]])
 				csv_file.flush()
-
+				
 def main():
-	filename = input("File name: ")
 	k = int(input("Desired k-value: "))
-	analyze(k, filename, "aggregate")
-
+	analyze(k, '.', "aggregate")
+	
 main()
