@@ -1,6 +1,6 @@
 """K-MER CREATOR"""
 import fasta_parser as fp
-import variance as v
+#import variance as v
 import csv
 	
 #k = k value for k-mer freq analysis
@@ -94,7 +94,7 @@ def analyze_range(k_min, k_max, rootdir):
 								if kmer not in vectors[i][j][k].keys():
 									vectors[i][j][k][kmer] = 0
 						
-	v.sigcheck(vectors, kmer_dict)
+#	v.sigcheck(vectors, kmer_dict)
 	
 	#make csv file with each row having key and value
 	filename = "Vector k_mer data.csv"
@@ -123,6 +123,6 @@ def main():
 	analyze_single(k, '.', "sift")"""
 	
 	#k_min, k_max = int(input("Desired k-mer range: ")).split(',')
-	analyze_range(4, 5, '.')
+	analyze_range(4, 5, '/')
 	
 main()
