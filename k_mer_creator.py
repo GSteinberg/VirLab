@@ -1,7 +1,8 @@
 """K-MER CREATOR"""
 import fasta_parser as fp
-#import variance as v
+#import kruskal_wallis as kw
 import csv
+#from itertools import izip
 	
 #k = k value for k-mer freq analysis
 #filename = list of genomes
@@ -52,7 +53,7 @@ def analyze_single(k, rootdir, style):
 				writer.writerow([pkey, kmer_dict[pkey]])
 				csv_file.flush()
 
-def analyze_range(k_min, k_max, rootdir):
+def analyze_range( k_min, k_max, rootdir ):
 	#vectors: key = vector_folder, value = diseases
 	#	diseases: key = filename, value = sequences
 	#		sequences: key = genome id, value = genome sequence
@@ -68,7 +69,6 @@ def analyze_range(k_min, k_max, rootdir):
 					#if substring of length k starting at i is not in kmer_dict,
 					#add it as key and initialize value as 1. Else add and increment value
 					kmers = {}
-					kmers['VECTOR'] = vector
 					for k in range(k_min, k_max+1):
 						for i in range( len(vectors[vector][file][sequence])-(k-1) ):
 							read = vectors[vector][file][sequence][i:i+k]
@@ -94,11 +94,11 @@ def analyze_range(k_min, k_max, rootdir):
 								if kmer not in vectors[i][j][k].keys():
 									vectors[i][j][k][kmer] = 0
 						
-#	v.sigcheck(vectors, kmer_dict)
+#	kw.test(vectors, kmer_dict)
 	
 	#make csv file with each row having key and value
 	filename = "Vector k_mer data.csv"
-	with open(filename, 'w') as csv_file:
+	with open(filename, 'w', newline="") as csv_file:
 		# Instantiate labels
 		fieldnames = []
 		for vector in vectors.keys():
@@ -117,12 +117,25 @@ def analyze_range(k_min, k_max, rootdir):
 				for sequence in vectors[vector][file].keys():
 					writer.writerow(vectors[vector][file][sequence])
 		csv_file.flush()
+	
+	flipped_list = zip(*csv.reader(open(filename, "r")))
+	
+	with open(filename, "w", newline="") as flipped_csv:
+		csv_writer = csv.writer(flipped_csv)
+		vector_list = []
+		vector_list.append("VECTORS")
+		for vector in vectors.keys():
+			for file in vectors[vector].keys():
+				for sequence in vectors[vector][file].keys():
+					vector_list.append(vector)
+		csv_writer.writerow(vector_list)
+		csv_writer.writerows(flipped_list)
 
 def main():
 	"""k = int(input("Desired k-value: "))
 	analyze_single(k, '.', "sift")"""
 	
 	#k_min, k_max = int(input("Desired k-mer range: ")).split(',')
-	analyze_range(4, 5, '/')
+	analyze_range(4, 5, '/Users/GSteinberg/VirLab')
 	
 main()

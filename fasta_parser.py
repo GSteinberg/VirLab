@@ -8,9 +8,9 @@ def parse( rootdir ):
 	
 	for dirName, subdirList, fileList in os.walk(rootdir):
 		# Enter directory if it corresponds to a valid vector
-		if dirName in (".\Test_Aedes", ".\Test_Culex", ".\Test_Direct_trans"):
+		if dirName in (rootdir + "\Test_Aedes", rootdir + "\Test_Culex", rootdir + "\Test_Direct_trans"):
 			diseases = {}
-			vectors[dirName] = diseases
+			vectors[dirName.rsplit("\\", 1)[-1]] = diseases
 		
 			for filename in fileList:
 				# Split file name to obtain file type
