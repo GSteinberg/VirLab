@@ -93,8 +93,6 @@ def analyze_range( k_min, k_max, rootdir ):
 							for k in vectors[i][j].keys():
 								if kmer not in vectors[i][j][k].keys():
 									vectors[i][j][k][kmer] = 0
-						
-#	kw.test(vectors, kmer_dict)
 	
 	#make csv file with each row having key and value
 	filename = "Vector k_mer data.csv"
@@ -130,6 +128,8 @@ def analyze_range( k_min, k_max, rootdir ):
 					vector_list.append(vector)
 		csv_writer.writerow(vector_list)
 		csv_writer.writerows(flipped_list)
+		
+	kw.test(filename)
 
 def main():
 	"""k = int(input("Desired k-value: "))

@@ -1,31 +1,32 @@
 """ KRUSKAL-WALLIS TEST """	
 
 from scipy import stats
-#from itertools import izip
 import csv
 
-# TRANSPOSE CSV FIRST (OR MAYBE IN THIS??)
-
 def test ( filename ):
-	
-	# transpose filename
-	flipped_list = izip(*csv.reader(open( filename , "rb")))
-	csv.writer( open(filename, "wb") ).writerows(flipped_list)
-
-	"""
-	reader = csv.reader( filename, delimiter=’,’) 
-	reader.read(first_row)
-	for label in first_row:
-		if label == Aedes, aedes-count++
-		elif
-		else
-
-
-	for row in reader:
-	for count in row:
-	if col_number is between 1 and aedescount, add to x
-	elif col_num is between aedes_count and culex_count, add to y
-	elif col_num != 0, add to z
-
-	results_of_row = stats.kruskal(x,y,z)[1]
-	row.append(results_of_row)"""
+	with open(filename) as csv_file:
+		reader = csv.reader( csv_file, delimiter=',' ) 
+		line = 0
+		vector1_count, vector2_count, vector3_count = 0
+		x, y, z = 0
+		
+		for row in reader:
+			# if first line get num of kmer counts for each vector
+			if line == 0:
+				for cell in row:
+					if "Aedes" in cell: vector1_count+=1
+					elif "Culex" in cell: vector2_count+=1
+					elif "Direct_trans" in cell: vector3_count+=1
+			else:
+				col = 0;
+				for cell in row:
+					if 1 <= col <= vector1_count: x+=1
+					elif vector1_count <= col <= vector2_count: y+=1
+					elif col != 0: z+=1
+					col+=1
+			line+=1
+"""
+		DONT KNOW WHAT TO DO WITH THIS
+		results_of_row = stats.kruskal(x,y,z)[1]
+		row.append(results_of_row)
+"""
