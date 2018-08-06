@@ -1,8 +1,7 @@
 """K-MER CREATOR"""
 import fasta_parser as fp
-#import kruskal_wallis as kw
+# import kruskal_wallis as kw
 import csv
-#from itertools import izip
 	
 #k = k value for k-mer freq analysis
 #filename = list of genomes
@@ -129,13 +128,14 @@ def analyze_range( k_min, k_max, rootdir ):
 		csv_writer.writerow(vector_list)
 		csv_writer.writerows(flipped_list)
 		
-	kw.test(filename)
+	# kw.test(filename)
 
 def main():
 	"""k = int(input("Desired k-value: "))
 	analyze_single(k, '.', "sift")"""
 	
 	#k_min, k_max = int(input("Desired k-mer range: ")).split(',')
-	analyze_range(4, 5, '/Users/GSteinberg/VirLab')
+	#### CHANGE THIS TO THE DIRECTORY VIRLAB IS IN ####
+	analyze_range(4, 5, '/Users/gppst/VirLab')
 	
 main()
