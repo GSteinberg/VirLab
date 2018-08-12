@@ -9,7 +9,8 @@ def test ( filename ):
 		line = 0
 		vector1_count, vector2_count, vector3_count = 0
 		x, y, z = 0
-		
+		p_list = []		
+
 		for row in reader:
 			# if first line get num of kmer counts for each vector
 			if line == 0:
@@ -24,9 +25,17 @@ def test ( filename ):
 					elif vector1_count <= col <= vector2_count: y+=1
 					elif col != 0: z+=1
 					col+=1
-			line+=1
-"""
-		DONT KNOW WHAT TO DO WITH THIS
-		results_of_row = stats.kruskal(x,y,z)[1]
-		row.append(results_of_row)
-"""
+				p_score = stats.kruskal(x,y,z)[1]
+				p_list.append( (row[0], p_score) )
+				line+=1
+
+		sorted(p_list, key=lambda x: x[1])
+		if (1000 > 0.1*len(p_list)): 
+			for i in range(0.1*len(p_list)):
+				results = p_list[i]
+		else:
+			for i in range(1000):
+				results = p_list[i]
+
+	return results
+
