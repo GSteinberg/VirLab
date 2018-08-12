@@ -1,6 +1,5 @@
 """K-MER CREATOR"""
 import fasta_parser as fp
-import kruskal_wallis as kw
 import csv
 	
 #k = k value for k-mer freq analysis
@@ -127,8 +126,7 @@ def analyze_range( k_min, k_max, rootdir ):
 					vector_list.append(vector)
 		csv_writer.writerow(vector_list)
 		csv_writer.writerows(flipped_list)
-		
-	kw.test(filename)
+	
 
 def main():
 	"""k = int(input("Desired k-value: "))

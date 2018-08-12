@@ -39,3 +39,7 @@ def test ( filename ):
 
 	return results
 
+def main():
+	test("Vector k_mer data.csv")
+
+main()
