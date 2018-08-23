@@ -52,11 +52,13 @@ def test (filename):
 			
 		p_list.sort(key=lambda x: x[1])
 
-		print(len(p_list))
 		for i in range(min(1000, int(0.1*len(p_list)))):
 			results.append(p_list[i])
-		print(len(results))
-#	print(p_list)
+			
+		f = open("kw_reuslts.txt", 'w')
+		for i in results: 
+			f.write(str(i[0]) + ", " + str(i[1]) + "\n")
+		f.close()
 
 def main():
 	test("Vector k_mer data.csv")
