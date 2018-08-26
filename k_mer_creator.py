@@ -51,6 +51,7 @@ def analyze_single(k, rootdir, style):
 				writer.writerow([pkey, kmer_dict[pkey]])
 				csv_file.flush()
 
+				
 def analyze_range( k_min, k_max, rootdir ):
 	#vectors: key = vector_folder, value = diseases
 	#	diseases: key = filename, value = sequences
@@ -134,6 +135,8 @@ def main():
 	
 	#k_min, k_max = int(input("Desired k-mer range: ")).split(',')
 	#### CHANGE THIS TO THE DIRECTORY VIRLAB IS IN ####
-	analyze_range(4, 5, '/home/hayden/VirLab')
+	##  '/home/hayden/VirLab'
+	##  '/Users/gppst/VirLab'
+	analyze_range(4, 5, '/Users/gppst/VirLab')
 	
 main()
