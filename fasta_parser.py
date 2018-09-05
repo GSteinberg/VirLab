@@ -29,8 +29,8 @@ def parse( rootdir ):
 					sequences[genome.id] = str(genome.seq)
 				
 	return vectors
-	
-"""
+
+		"""
 		# Making array subdirs
 		subdirs = []
 		print(subdirList)
