@@ -1,6 +1,7 @@
 """K-MER CREATOR"""
 import fasta_parser as fp
 import csv
+import kruskal_wallis as kw
 	
 #k = k value for k-mer freq analysis
 #filename = list of genomes
@@ -51,7 +52,6 @@ def analyze_single(k, rootdir, style):
 				writer.writerow([pkey, kmer_dict[pkey]])
 				csv_file.flush()
 
-				
 def analyze_range( k_min, k_max, rootdir ):
 	#vectors: key = vector_folder, value = diseases
 	#	diseases: key = filename, value = sequences
@@ -71,12 +71,12 @@ def analyze_range( k_min, k_max, rootdir ):
 					for k in range(k_min, k_max+1):
 						for i in range( len(vectors[vector][file][sequence])-(k-1) ):
 							read = vectors[vector][file][sequence][i:i+k]
-							chars = set('NWKMRYSBVHDX')
-							if not any((c in chars) for c in read):
-								if read in kmers:
-									kmers[read] += 1
-								else:
-									kmers[read] = 1
+
+							if read in kmers:
+								kmers[read] += 1
+							else:
+								kmers[read] = 1
+							
 					vectors[vector][file][sequence] = kmers
 					kmer_dict = kmers
 	
@@ -127,7 +127,18 @@ def analyze_range( k_min, k_max, rootdir ):
 					vector_list.append(vector)
 		csv_writer.writerow(vector_list)
 		csv_writer.writerows(flipped_list)
+		
+	retlist = kw.test(  filename  )	
 	
+	# Accepting significant K-mers and making final csv
+	with open("significant_k_mers.csv", 'w', newline="") as csv_file:
+		writer = csv.DictWriter(csv_file, fieldnames=retlist, extrasaction='ignore')
+		writer.writeheader()
+		for vector in vectors.keys():
+			for file in vectors[vector].keys():
+				for sequence in vectors[vector][file].keys():
+					writer.writerow(vectors[vector][file][sequence])
+		csv_file.flush()
 
 def main():
 	"""k = int(input("Desired k-value: "))
@@ -139,4 +150,4 @@ def main():
 	##  '/Users/gppst/VirLab'
 	analyze_range(4, 5, '/Users/gppst/VirLab')
 	
-main()
+#main()

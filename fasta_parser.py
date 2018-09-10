@@ -25,8 +25,10 @@ def parse( rootdir ):
 				
 				# records = list of genomes. Each one having traits
 				records = list(SeqIO.parse(dirName + "\\" + filename, filetype ))
+				chars = set('NWKMRYSBVHDX')
 				for genome in records:
-					sequences[genome.id] = str(genome.seq)
+					if not any((c in chars) for c in genome):
+						sequences[genome.id] = str(genome.seq)
 				
 	return vectors
 	
