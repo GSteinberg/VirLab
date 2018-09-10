@@ -4,11 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # IMPORT DATASET
-<<<<<<< HEAD
 dataset = pd.read_csv(   "significant_k_mers.csv"    )
-=======
-dataset = pd.read_csv(   "INSERT CSV FILE NAME HERE"    )
->>>>>>> 97a3e3091802855952fdf3978c0a7233862d34b6
 
 # DATA PREPROCESSING
 X = dataset.drop('Class', axis=1)
@@ -57,8 +53,4 @@ def visualize():
 	plt.scatter(X[;,0], X[:,1], c=y, cmap=plt.cm.coolwarm)
 	plt.xlabel('')
 	plt.ylabel('')
-<<<<<<< HEAD
 """	
-=======
-"""
->>>>>>> 97a3e3091802855952fdf3978c0a7233862d34b6
