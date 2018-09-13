@@ -1,0 +1,6 @@
+-automatically add labels - DONE
+-make graph of kmer signatures
+-make host and virus datatsets - DONE
+-scale it to 4-20mers
+-mak periodic updates in kruskall-wallis.py
+--if i%10000: print()

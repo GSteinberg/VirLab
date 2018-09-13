@@ -137,7 +137,13 @@ def analyze_range( k_min, k_max, rootdir ):
 		for vector in vectors.keys():
 			for file in vectors[vector].keys():
 				for sequence in vectors[vector][file].keys():
+					if vector == "Test_Culex":
+						vectors[vector][file][sequence]["Class"] = 0
+					else:
+						vectors[vector][file][sequence]["Class"] = 1
+					
 					writer.writerow(vectors[vector][file][sequence])
+					
 		csv_file.flush()
 
 def main():
@@ -150,4 +156,4 @@ def main():
 	##  '/Users/gppst/VirLab'
 	analyze_range(4, 5, '/Users/gppst/VirLab')
 	
-#main()
+main()

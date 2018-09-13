@@ -46,7 +46,9 @@ def test(filename):
 
 		for i in range( min(1000, int(0.1*len(p_list))) ):
 			results.append(p_list[i])
-			
+		
+		results.append(("Class", 0))
+		
 		return [i[0] for i in results]
 			
 		"""with open("kw_reuslts.txt", 'w') as f:
