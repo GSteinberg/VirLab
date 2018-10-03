@@ -77,9 +77,9 @@ def analyze_range( k_min, k_max, rootdir ):
 							else:
 								kmers[read] = 1
 						
-						for read in vectors[vector][file][sequence]:
-							kmers[read] /= (len(vectors[vector][file][sequence]) - (k-1))
-							kmers[read] *= 100
+					for read in kmers:
+						kmers[read] /= (len(vectors[vector][file][sequence]) - (len(kmers[read]-1)))
+						kmers[read] *= 100
 
 					vectors[vector][file][sequence] = kmers
 					kmer_dict = kmers
