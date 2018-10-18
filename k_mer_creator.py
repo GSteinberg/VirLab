@@ -52,11 +52,14 @@ def analyze_single(k, rootdir, style):
 				writer.writerow([pkey, kmer_dict[pkey]])
 				csv_file.flush()
 
-def analyze_range( k_min, k_max, rootdir ):
+def toZero( list, kmer ):
+	list[kmer] = 0
+				
+def analyze_range( k_min, k_max, rootdir, dataset1, dataset2 ):
 	#vectors: key = vector_folder, value = diseases
 	#	diseases: key = filename, value = sequences
 	#		sequences: key = genome id, value = genome sequence
-	vectors = fp.parse(rootdir)
+	vectors = fp.parse( rootdir, dataset1, dataset2 )
 	
 	#iterate through genomes and create individual kmer dictionaries
 	kmer_dict = {}
@@ -70,7 +73,7 @@ def analyze_range( k_min, k_max, rootdir ):
 					kmers = {}
 					for k in range(k_min, k_max+1):
 						for i in range( len(vectors[vector][file][sequence])-(k-1) ):
-							read = vectors[vector][file][sequence][i:i+k]
+							read = vectors[vector][file][sequence][i:i+k].upper()
 
 							if read in kmers:
 								kmers[read] += 1
@@ -78,8 +81,8 @@ def analyze_range( k_min, k_max, rootdir ):
 								kmers[read] = 1
 						
 					for read in kmers:
-						kmers[read] /= (len(vectors[vector][file][sequence]) - (len(kmers[read]-1)))
-						kmers[read] *= 100
+						kmers[read] /= (len(vectors[vector][file][sequence]) - (kmers[read]-1))
+						kmers[read] *= 100000
 
 					vectors[vector][file][sequence] = kmers
 					kmer_dict = kmers
@@ -90,12 +93,10 @@ def analyze_range( k_min, k_max, rootdir ):
 		for file in vectors[vector].keys():
 			for sequence in vectors[vector][file].keys():
 				for kmer in vectors[vector][file][sequence].keys():
-					
-					for i in vectors.keys():
-						for j in vectors[i].keys():
-							for k in vectors[i][j].keys():
-								if kmer not in vectors[i][j][k].keys():
-									vectors[i][j][k][kmer] = 0
+				
+					[toZero(vectors[i][j][k], kmer) for i in vectors.keys()	for j in vectors[i].keys() \
+						for k in vectors[i][j].keys() if kmer not in vectors[i][j][k].keys()]
+	
 	
 	#make csv file with each row having key and value
 	filename = "Vector k_mer data.csv"
@@ -132,7 +133,7 @@ def analyze_range( k_min, k_max, rootdir ):
 		csv_writer.writerow(vector_list)
 		csv_writer.writerows(flipped_list)
 		
-	retlist = kw.test(  filename  )	
+	retlist = kw.test( filename, dataset1, dataset2 )	
 	
 	# Accepting significant K-mers and making final csv
 	with open("significant_k_mers.csv", 'w', newline="") as csv_file:
@@ -141,7 +142,7 @@ def analyze_range( k_min, k_max, rootdir ):
 		for vector in vectors.keys():
 			for file in vectors[vector].keys():
 				for sequence in vectors[vector][file].keys():
-					if vector == "Test_Culex":
+					if vector == dataset1[1:]:
 						vectors[vector][file][sequence]["Class"] = 0
 					else:
 						vectors[vector][file][sequence]["Class"] = 1
@@ -158,6 +159,6 @@ def main():
 	#### CHANGE THIS TO THE DIRECTORY VIRLAB IS IN ####
 	##  '/home/hayden/VirLab'
 	##  '/Users/gppst/VirLab'
-	analyze_range(4, 5, '/Users/gppst/VirLab')
+	analyze_range(5, 5, '/Users/gppst/VirLab', '\#Test_Viruses', '\#Test_Hosts')
 	
 main()
