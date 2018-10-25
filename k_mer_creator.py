@@ -55,11 +55,11 @@ def analyze_single(k, rootdir, style):
 def toZero( list, kmer ):
 	list[kmer] = 0
 				
-def analyze_range( k_min, k_max, rootdir, dataset1, dataset2 ):
+def analyze_range( k_min, k_max, rootdir, dataset1, dataset2, unknown ):
 	#vectors: key = vector_folder, value = diseases
 	#	diseases: key = filename, value = sequences
 	#		sequences: key = genome id, value = genome sequence
-	vectors = fp.parse( rootdir, dataset1, dataset2 )
+	vectors = fp.parse( rootdir, dataset1, dataset2, unknown )
 	
 	#iterate through genomes and create individual kmer dictionaries
 	kmer_dict = {}
@@ -97,7 +97,6 @@ def analyze_range( k_min, k_max, rootdir, dataset1, dataset2 ):
 					[toZero(vectors[i][j][k], kmer) for i in vectors.keys()	for j in vectors[i].keys() \
 						for k in vectors[i][j].keys() if kmer not in vectors[i][j][k].keys()]
 	
-	
 	#make csv file with each row having key and value
 	filename = "Vector k_mer data.csv"
 	with open(filename, 'w', newline="") as csv_file:
@@ -133,8 +132,8 @@ def analyze_range( k_min, k_max, rootdir, dataset1, dataset2 ):
 		csv_writer.writerow(vector_list)
 		csv_writer.writerows(flipped_list)
 		
-	retlist = kw.test( filename, dataset1, dataset2 )	
-	
+	retlist = kw.test( filename, dataset1, dataset2 )
+		
 	# Accepting significant K-mers and making final csv
 	with open("significant_k_mers.csv", 'w', newline="") as csv_file:
 		writer = csv.DictWriter(csv_file, fieldnames=retlist, extrasaction='ignore')
@@ -144,8 +143,10 @@ def analyze_range( k_min, k_max, rootdir, dataset1, dataset2 ):
 				for sequence in vectors[vector][file].keys():
 					if vector == dataset1[1:]:
 						vectors[vector][file][sequence]["Class"] = 0
-					else:
+					elif vector == dataset2[1:]:
 						vectors[vector][file][sequence]["Class"] = 1
+					else:
+						vectors[vector][file][sequence]["Class"] = 2
 					
 					writer.writerow(vectors[vector][file][sequence])
 					
@@ -159,6 +160,6 @@ def main():
 	#### CHANGE THIS TO THE DIRECTORY VIRLAB IS IN ####
 	##  '/home/hayden/VirLab'
 	##  '/Users/gppst/VirLab'
-	analyze_range(4, 5, '/Users/gppst/VirLab', '\Test_Aedes', '\Test_Culex')
+	analyze_range(4, 5, '/Users/gppst/VirLab', '\Test_Aedes', '\Test_Culex', '\\Unknown_genomes')
 	
 main()

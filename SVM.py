@@ -9,7 +9,15 @@ dataset = pd.read_csv(   "significant_k_mers.csv"    )
 # DATA PREPROCESSING
 X = dataset.drop('Class', axis=1)
 y = dataset['Class']
+u = pd.DataFrame()
 
+for i in range(len(y)):
+	if y[i] == 2:
+		u = u.append( X[] )
+		X = X.drop(i)
+		y = y.drop(i)
+print(u)
+	
 # SPLIT DATASET INTO TRAIN AND TEST SETS
 from sklearn.model_selection import train_test_split  
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.30) 
@@ -17,7 +25,7 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.30)
 """======================================================="""
 
 # PICK A KERNEL AND DEGREE
-kernel_choice = 'rbf'
+kernel_choice = 'poly'
 	# 'linear'  --> used for simple linear classification
 	# 'poly'    --> polynomial kernel, pick degree below
 	# 'rbf'     --> Gaussian model, long runtime but very accurate
@@ -30,16 +38,22 @@ degree_choice = 3
 """======================================================="""
 
 # TRAIN ALGORITHM
-from sklearn.svm import SVC  
+from sklearn.svm import SVC
+from sklearn.metrics import classification_report, confusion_matrix  
 svclassifier = SVC(kernel=kernel_choice, degree=degree_choice)
 svclassifier.fit(X_train, y_train)
 
 y_pred = svclassifier.predict(X_test)
+y_pred2 = svclassifier.predict(X_train)
+
 
 # EVALUATE ALGORITHM
-from sklearn.metrics import classification_report, confusion_matrix  
 print(confusion_matrix(y_test,y_pred))
+print(confusion_matrix(y_train,y_pred2))
 print(classification_report(y_test,y_pred))
+print(classification_report(y_train,y_pred2))
+
+
 
 """======================================================="""
 

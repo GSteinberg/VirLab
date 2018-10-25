@@ -7,11 +7,11 @@ def test( filename, dataset1, dataset2 ):
 	with open(filename) as csv_file:
 		reader = csv.reader( csv_file, delimiter=',' ) 
 		line = 0
-		vector1_count = vector2_count = vector3_count = 0
+		vector1_count = vector2_count = 0
 		x = [0]
 		y = [0]
-#		z = [0]
-		#x_list = y_list = z_list = []
+		z = [0]
+		
 		p_list = [] 
 		results = []
 		counter = 0;
@@ -42,10 +42,10 @@ def test( filename, dataset1, dataset2 ):
 			if counter%1000 == 0: 
 				print("This is the # %d iteration" % counter)
 		p_list.sort(key=lambda x: x[1])
-
+		
 		for i in range( min(1000, int(0.1*len(p_list))) ):
 			results.append(p_list[i])
-		
+			
 		results.append(("Class", 0))
 		
 		return [i[0] for i in results]
