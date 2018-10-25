@@ -159,6 +159,6 @@ def main():
 	#### CHANGE THIS TO THE DIRECTORY VIRLAB IS IN ####
 	##  '/home/hayden/VirLab'
 	##  '/Users/gppst/VirLab'
-	analyze_range(5, 5, '/Users/gppst/VirLab', '\#Test_Viruses', '\#Test_Hosts')
+	analyze_range(4, 5, '/Users/gppst/VirLab', '\Test_Aedes', '\Test_Culex')
 	
 main()

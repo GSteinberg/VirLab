@@ -19,8 +19,8 @@ def test( filename, dataset1, dataset2 ):
 			# if first line get num of kmer counts for each vector
 			if line == 0:
 				for cell in row:
-					if dataset1[2:] in cell: vector1_count+=1
-					elif dataset2[2:] in cell: vector2_count+=1
+					if dataset1[1:] in cell: vector1_count+=1
+					elif dataset2[1:] in cell: vector2_count+=1
 			else:
 				col = 0
 				for cell in row:
@@ -49,7 +49,3 @@ def test( filename, dataset1, dataset2 ):
 		results.append(("Class", 0))
 		
 		return [i[0] for i in results]
-			
-		"""with open("kw_reuslts.txt", 'w') as f:
-			for i in results: 
-				f.write(str(i[0]) + ", " + str(i[1]) + "\n")"""
