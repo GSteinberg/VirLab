@@ -1,3 +1,29 @@
+# IMPORTS
+import csv
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.decomposition import IncrementalPCA
+from sklearn.manifold import TSNE
+
+def reduce( filename ):
+	# CONVERT CSV TO NP ARRAY
+	X = np.getfromtxt( filename, delimiter=',' )	
+
+	# USE PCA TO REDUCE ELEMENTS
+	icpa = IncrementalPCA( n_components = 50, batch_size = 3 )
+	icpa.fit( X )
+	icpa.transform( X )
+
+	# CALL TSNE
+	model = TSNE( n_components=2 ).fit_transform( X )
+	
+	# VISUALIZE	
+	res = model.fit_transform( X )
+	l = model.shape[1]
+	plt.scatter( res[l:,0], res[l:,1] )
+
+
+'''
 import plotly
 import plotly.plotly as py
 import plotly.graph_objs as go
@@ -37,3 +63,4 @@ def plot():
 	plotly.offline.plot(fig, filename='ribbon-plot-python')
 
 plot()
+'''
