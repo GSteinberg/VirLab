@@ -58,19 +58,9 @@ print(classification_report(y_test,y_pred))
 print("Training Classification Report")
 print(classification_report(y_train,y_pred2))
 print("Unknown Classification Report")
+
 print(u_pred)
 
-
 """======================================================="""
-
-
-"""
-# 3D VISUALIZATION (FOR LATER)
 def visualize():
-	kmers = 
-	x = 
-	y = 
-	plt.scatter(X[;,0], X[:,1], c=y, cmap=plt.cm.coolwarm)
-	plt.xlabel('')
-	plt.ylabel('')
-"""	
+	
