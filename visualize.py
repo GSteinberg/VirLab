@@ -7,7 +7,7 @@ from sklearn.manifold import TSNE
 
 def reduce( filename ):
 	# CONVERT CSV TO NP ARRAY
-	X = np.getfromtxt( filename, delimiter=',' )	
+	X = np.genfromtxt( filename, delimiter=',', skip_header=1 )	
 
 	# USE PCA TO REDUCE ELEMENTS
 	icpa = IncrementalPCA( n_components = 50, batch_size = 3 )
@@ -22,7 +22,7 @@ def reduce( filename ):
 	l = model.shape[1]
 	plt.scatter( res[l:,0], res[l:,1] )
 
-
+	
 '''
 import plotly
 import plotly.plotly as py

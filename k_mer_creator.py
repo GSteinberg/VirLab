@@ -2,6 +2,7 @@
 import fasta_parser as fp
 import csv
 import kruskal_wallis as kw
+import visualize as viz
 	
 #k = k value for k-mer freq analysis
 #filename = list of genomes
@@ -151,6 +152,8 @@ def analyze_range( k_min, k_max, rootdir, dataset1, dataset2, unknown ):
 					writer.writerow(vectors[vector][file][sequence])
 					
 		csv_file.flush()
+		
+		viz.reduce("significant_k_mers.csv")
 
 def main():
 	"""k = int(input("Desired k-value: "))
