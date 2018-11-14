@@ -163,6 +163,6 @@ def main():
 	#### CHANGE THIS TO THE DIRECTORY VIRLAB IS IN ####
 	##  '/home/hayden/VirLab'
 	##  '/Users/gppst/VirLab'
-	analyze_range(4, 5, '/Users/gppst/VirLab', '\Test_Direct_trans', '\Test_Tick', '\\Unknown_genomes')
+	analyze_range(3, 5, '/Users/gppst/VirLab', '\Test_Direct_trans', '\Test_Tick', '\\Unknown_genomes')
 	
 main()

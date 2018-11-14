@@ -2,27 +2,43 @@
 import csv
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.decomposition import IncrementalPCA
+from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
 def reduce( filename ):
 	# CONVERT CSV TO NP ARRAY
-	X = np.genfromtxt( filename, delimiter=',', skip_header=1 )	
+	reader = csv.reader( open(filename, 'r'), delimiter=',')
+	next(reader)
+	reader_list = list(reader)
+	X = np.array(reader_list).astype("float")
+	
+	labels = []
+	for i in X:
+		labels.append(i[-1])
+	X = np.delete(X, -1, 1)
 
 	# USE PCA TO REDUCE ELEMENTS
-	icpa = IncrementalPCA( n_components = 50, batch_size = 3 )
+	"""icpa = PCA( n_components = 50 )
 	icpa.fit( X )
-	icpa.transform( X )
+	icpa.transform( X )"""
 
 	# CALL TSNE
 	model = TSNE( n_components=2 ).fit_transform( X )
 	
-	# VISUALIZE	
-	res = model.fit_transform( X )
-	l = model.shape[1]
-	plt.scatter( res[l:,0], res[l:,1] )
+	# VISUALIZE WITH MATPLOTLIB
+	elemt = 0
+	for label in labels:
+		if label == 0.0:
+			plt.scatter( model[elemt][0], model[elemt][1], color='blue' )
+		elif label == 1.0:
+			plt.scatter( model[elemt][0], model[elemt][1], color='red' )
+		else:
+			plt.scatter( model[elemt][0], model[elemt][1], color='yellow' )
+		elemt+=1
+	#plt.scatter( [i[0] for i in model], [x[1] for x in model] )
+	plt.show()
 
-	
+#reduce('significant_k_mers.csv')	
 '''
 import plotly
 import plotly.plotly as py
