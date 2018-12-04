@@ -27,14 +27,24 @@ def reduce( filename ):
 	
 	# VISUALIZE WITH MATPLOTLIB
 	elemt = 0
+	genome = 0
 	for label in labels:
 		if label == 0.0:
-			plt.scatter( model[elemt][0], model[elemt][1], color='blue' )
+			#if genome < 30:
+			plt.scatter( model[elemt][0], model[elemt][1], c='blue' )
+			"""elif 30 < genome < 60:
+				plt.scatter( model[elemt][0], model[elemt][1], c=(.00, .4, .8) )
+			elif 60 < genome < 90:
+				plt.scatter( model[elemt][0], model[elemt][1], c=(0, .3, .7) )"""
 		elif label == 1.0:
-			plt.scatter( model[elemt][0], model[elemt][1], color='red' )
-		else:
-			plt.scatter( model[elemt][0], model[elemt][1], color='yellow' )
+			#if 90 < genome < 120:
+			plt.scatter( model[elemt][0], model[elemt][1], c='red' )
+			"""elif 120 < genome < 150:
+				plt.scatter( model[elemt][0], model[elemt][1], c=(.9, .3, .3) )
+			elif 150 < genome < 180:
+				plt.scatter( model[elemt][0], model[elemt][1], c=(.9, .1, .1) )"""
 		elemt+=1
+		genome+=1
 	#plt.scatter( [i[0] for i in model], [x[1] for x in model] )
 	plt.show()
 

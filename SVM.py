@@ -57,12 +57,13 @@ print("Testing Classification Report")
 print(classification_report(y_test,y_pred))
 print("Training Classification Report")
 print(classification_report(y_train,y_pred2))
+
+"""
 print("Unknown Classification Report")
 
 comparison_arr = np.ndarray(shape=(10,), buffer=np.array([0,1,0,1,1,1,1,1,1,1,0,0,0,0]), dtype=int)
-if(u_pred == comparison_arr).all():
+if np.all(u_pred == comparison_arr):
 	print("Correct!\n" + str(u_pred) + "\n" + str(comparison_arr))
 else:
 	print("Incorrect!\n" + str(u_pred) + "\n" + str(comparison_arr))
-
-"""======================================================="""
+"""
