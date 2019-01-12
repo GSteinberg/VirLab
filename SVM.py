@@ -9,17 +9,11 @@ dataset = pd.read_csv(   "significant_k_mers.csv"    )
 # DATA PREPROCESSING
 X = dataset.drop('Class', axis=1)
 y = dataset['Class']
-u = pd.DataFrame()
 
-for i in range(len(y)):
-	if y[i] == 2:
-		u = u.append( X.ix[i] )
-		X = X.drop(i)
-		y = y.drop(i)
-	
 # SPLIT DATASET INTO TRAIN AND TEST SETS
+# Pre split
 from sklearn.model_selection import train_test_split  
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.30) 
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.30)
 
 """======================================================="""
 
@@ -44,9 +38,6 @@ svclassifier.fit(X_train, y_train)
 
 y_pred = svclassifier.predict(X_test)
 y_pred2 = svclassifier.predict(X_train)
-
-# PREDICTING UNKNOWN GENOME
-u_pred = svclassifier.predict(u)
 
 # EVALUATE ALGORITHM
 print("Testing Confusion Matrix")

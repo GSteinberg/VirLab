@@ -25,8 +25,8 @@ def test( filename, dataset1, dataset2 ):
 				col = 0
 				for cell in row:
 					if col != 0:
-					
 						int_cell = float(cell)
+						
 						if 1 <= col <= vector1_count: 
 							x.append(int_cell)
 						elif vector1_count < col <= vector1_count + vector2_count:
