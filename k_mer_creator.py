@@ -5,6 +5,7 @@ import kruskal_wallis as kw
 import visualize as viz
 from genome import Genome
 import random
+import time
 
 def toZero( list, kmer ):
 	list[kmer] = 0
@@ -12,15 +13,20 @@ def toZero( list, kmer ):
 def analyze_range( k_min, k_max, rootdir, dataset1, dataset2 ):
 	genomes = fp.parse( rootdir, dataset1, dataset2 )
 	
+	unique_kmers = set()
 	for g in genomes:
 		g.populate_dictionary( k_min, k_max )
-	
+		for key in g.kmers.keys():
+			unique_kmers.add(key)
+
 	# replace blanks with zeros
 	# checks if any k-mers are not present in all other genomic kmer dictionaries
 	# if not found, adds them with a value of 0 so all genomes have the same kmer features
 	# this takes over 1/3 of our computation time
 	for g in genomes:
-		[toZero(g.kmers, kmer) for g2 in genomes for kmer in sorted(g2.kmers.keys()) if kmer not in g.kmers.keys()]
+		for kmer in unique_kmers:
+			if kmer not in g.kmers.keys(): 
+				toZero( g.kmers, kmer )
 	print("zeros added")
 	
 	# split into test and train sets
@@ -93,6 +99,9 @@ def main():
 	#### CHANGE THIS TO THE DIRECTORY VIRLAB IS IN ####
 	##  '/home/hayden/VirLab'
 	##  '/Users/gppst/VirLab'
-	analyze_range(4, 5, '/Users/gppst/VirLab', '\Test_Aedes', '\Test_Culex')
+	start = time.time()
+	analyze_range(3, 5, '/Users/gppst/VirLab', '\Test_Aedes', '\Test_Culex')
+	end = time.time()
+	print("Time: %.5f" % (end - start))
 	
 main()
