@@ -36,6 +36,14 @@ def analyze_range( k_min, k_max, rootdir, dataset1, dataset2 ):
 	train_data = genomes[:pivot]
 	test_data = genomes[pivot:]
 	
+	# make fasta file with test data
+	with open("test_genomes.fasta", 'w', newline="") as test_file:
+		for gen in test_data:
+			if len(gen.sequence) >= 76:
+				test_file.write(str(gen))
+				test_file.write("\n\n")
+		test_file.flush()
+	
 	#make csv file with each row having key and value
 	filename = "%s-%smers in %s and %s.csv" % (k_min, k_max, dataset1.strip("\\"), dataset2.strip("\\"))
 	with open(filename, 'w', newline="") as csv_file:
@@ -90,7 +98,7 @@ def analyze_range( k_min, k_max, rootdir, dataset1, dataset2 ):
 				g.kmers["Class"] = 1
 			
 			writer.writerow(g.kmers)
-					
+			
 		csv_file.flush()
 	
 	# viz.reduce("significant_k_mers.csv")

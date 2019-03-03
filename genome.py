@@ -23,3 +23,14 @@ class Genome:
 		for read in self.kmers:
 			self.kmers[read] /= ( len(self.sequence) - (len(read)-1) )
 			self.kmers[read] *= 100000
+
+	def __str__(self):
+		retstr = ">" + self.vector + " " + self.disease + "\n"
+		i = 1
+		for ch in self.sequence:
+			retstr += ch
+			if i % 79 == 0:
+				retstr += "\n"
+			i += 1
+		return retstr
+
