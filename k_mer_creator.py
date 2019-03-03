@@ -6,6 +6,7 @@ import visualize as viz
 from genome import Genome
 import random
 import time
+import profile
 
 def toZero( list, kmer ):
 	list[kmer] = 0
@@ -100,7 +101,7 @@ def main():
 	##  '/home/hayden/VirLab'
 	##  '/Users/gppst/VirLab'
 	start = time.time()
-	analyze_range(3, 5, '/Users/gppst/VirLab', '\Test_Aedes', '\Test_Culex')
+	analyze_range(3, 5, '/home/hayden/VirLab', '/Test_Aedes', '/Test_Culex')
 	end = time.time()
 	print("Time: %.5f" % (end - start))
 	
