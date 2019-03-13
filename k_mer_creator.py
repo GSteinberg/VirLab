@@ -47,7 +47,7 @@ def analyze_range( k_min, k_max, rootdir, dataset1, dataset2 ):
 	
 	# call BBMap randomread.sh
 	# turn testing_genomes.fasta (genomes) into testing_reads.fasta (reads)
-	subprocess.run("BBMap/randomreads.sh ref=test_genomes.fasta out=test_reads.fastq length=75 coverage=50 seed=-1")
+	subprocess.call(['bash', "BBMap/randomreads.sh", 'ref=test_genomes.fasta', 'out=test_reads.fastq', 'length=75', 'coverage=50', 'seed=-1'])
 	
 	#make csv file with each row having key and value
 	filename = "%s-%smers in %s and %s.csv" % (k_min, k_max, dataset1.strip("\\"), dataset2.strip("\\"))
