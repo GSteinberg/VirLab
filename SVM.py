@@ -16,13 +16,13 @@ y_test = test_dataset['Class']
 """======================================================="""
 
 # PICK A KERNEL AND DEGREE
-kernel_choice = 'poly'
+kernel_choice = 'sigmoid'
 	# 'linear'  --> used for simple linear classification
 	# 'poly'    --> polynomial kernel, pick degree below - most accurate
 	# 'rbf'     --> Gaussian model, long runtime but very accurate
 	# 'sigmoid' --> best used for binary classification
 
-degree_choice = 3
+degree_choice = 5
 	# only used by 'poly', default is 3
 	# ignored by all other kernels
 	
@@ -48,3 +48,12 @@ print("Training Classification Report")
 print(classification_report(y_train,y_pred2))
 print("Testing Classification Report")
 print(classification_report(y_test,y_pred))
+
+#finding wrong predictions	
+"""
+i = 0
+for prediction, label in zip(y_pred, y_test):
+	i += 1
+	if prediction != label:
+		print(i, " has been classified as  ", prediction, " and should be ", label)
+		"""
