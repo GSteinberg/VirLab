@@ -16,13 +16,13 @@ y_test = test_dataset['Class']
 """======================================================="""
 
 # PICK A KERNEL AND DEGREE
-kernel_choice = 'sigmoid'
+kernel_choice = 'poly'
 	# 'linear'  --> used for simple linear classification
 	# 'poly'    --> polynomial kernel, pick degree below - most accurate
 	# 'rbf'     --> Gaussian model, long runtime but very accurate
 	# 'sigmoid' --> best used for binary classification
 
-degree_choice = 5
+degree_choice = 2
 	# only used by 'poly', default is 3
 	# ignored by all other kernels
 	

@@ -88,11 +88,11 @@ def analyze_range( k_min, k_max, rootdir, dataset1, dataset2 ):
 		csv_writer.writerows(flipped_list)
 		
 	# takes about 1/3 of computation time
-	retlist = kw.test( filename, dataset1, dataset2 )
+	sig_kmers = kw.test( filename, dataset1, dataset2 )
 		
 	# Accepting significant K-mers and making final csv
 	with open("training_sig_k_mers.csv", 'w', newline="") as csv_file:
-		writer = csv.DictWriter(csv_file, fieldnames=retlist, extrasaction='ignore')
+		writer = csv.DictWriter(csv_file, fieldnames=sig_kmers, extrasaction='ignore')
 		writer.writeheader()
 		for g in train_data:
 			if g.vector == dataset1[1:]:
@@ -109,19 +109,17 @@ def analyze_range( k_min, k_max, rootdir, dataset1, dataset2 ):
 	test_reads = fp.parse_files(rootdir, 'test_reads_1.fastq', 'test_reads_2.fastq')
 
 	for r in test_reads:
-		r.populate_dictionary( k_min, k_max, retlist )
+		r.populate_dictionary( k_min, k_max, sig_kmers )
 	"""for g in test_reads_2:
 		g.populate_dictionary( k_min, k_max )
 		"""
-	
-
-
+		
 	for r in test_reads:
-		for kmer in retlist:
-			if kmer not in g.kmers.keys():
-				toZero( g.kmers, kmer )
+		for kmer in sig_kmers:
+			if kmer not in r.kmers.keys():
+				toZero( r.kmers, kmer )
 	"""for g in test_reads_2:
-		for kmer in retlist:
+		for kmer in sig_kmers:
 			if kmer not in g.kmers.keys():
 				toZero( g.kmers, kmer )			
 	print("zeros added to test genomes")
@@ -129,7 +127,7 @@ def analyze_range( k_min, k_max, rootdir, dataset1, dataset2 ):
 	
 	
 	with open("testing_sig_k_mers.csv", 'w', newline="") as csv_file:
-		writer = csv.DictWriter(csv_file, fieldnames=retlist, extrasaction='ignore')
+		writer = csv.DictWriter(csv_file, fieldnames=sig_kmers, extrasaction='ignore')
 		writer.writeheader()
 		"""
 		for g in test_reads_1:

@@ -2,6 +2,7 @@
 from Bio import SeqIO
 import os
 from genome import Genome
+from genome import Read
 
 # Takes a FASTA file, outputs it as a list of strings
 def parse_dir( rootdir, dataset1, dataset2 ):
@@ -48,8 +49,8 @@ def parse_files( rootdir, file1, file2 ):
 				records = list(SeqIO.parse(filename, filetype))
 				chars = set('NWKMRYSBVHDX')
 				for read in records:
-					if not any((c in chars) for c in genome):
-						my_read = Read(vector, "", str(genome.seq))
+					if not any((c in chars) for c in read):
+						my_read = Read(vector, "", str(read.seq))
 						reads.append(my_read)
 						
-	return genomes
+	return reads
