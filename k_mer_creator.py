@@ -107,13 +107,16 @@ def analyze_range( k_min, k_max, rootdir, dataset1, dataset2 ):
 	#TESTING
 	#making dictionaries for test read collections
 	test_reads = fp.parse_files(rootdir, 'test_reads_1.fastq', 'test_reads_2.fastq')
-    	
-	for g in test_reads:
-		g.populate_dictionary( k_min, k_max )
+
+	for r in test_reads:
+		r.populate_dictionary( k_min, k_max, retlist )
 	"""for g in test_reads_2:
 		g.populate_dictionary( k_min, k_max )
 		"""
-	for g in test_reads:
+	
+
+
+	for r in test_reads:
 		for kmer in retlist:
 			if kmer not in g.kmers.keys():
 				toZero( g.kmers, kmer )
@@ -139,13 +142,14 @@ def analyze_range( k_min, k_max, rootdir, dataset1, dataset2 ):
 			
 		csv_file.flush()
 		"""
-		for g in test_reads:
-			if g.vector == "test_reads_1":
-				g.kmers["Class"] = 0
-			elif g.vector == "test_reads_2":
-				g.kmers["Class"] = 1
+		for r in test_reads:
+			if r.num_sig_kmers >= 2:
+				if r.vector == "test_reads_1":
+					r.kmers["Class"] = 0
+				elif r.vector == "test_reads_2":
+					r.kmers["Class"] = 1
 			
-			writer.writerow(g.kmers)
+				writer.writerow(r.kmers)
 					
 		csv_file.flush()
 	

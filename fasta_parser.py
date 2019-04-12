@@ -31,7 +31,7 @@ def parse_dir( rootdir, dataset1, dataset2 ):
 	return genomes
 						
 def parse_files( rootdir, file1, file2 ):
-	genomes = []
+	reads = []
 	
 	for dirName, subdirList, fileList in os.walk(rootdir):
 		# if file1 and dataset2 are in VirLab
@@ -47,9 +47,9 @@ def parse_files( rootdir, file1, file2 ):
 				# records = list of genomes. Each one having traits
 				records = list(SeqIO.parse(filename, filetype))
 				chars = set('NWKMRYSBVHDX')
-				for genome in records:
+				for read in records:
 					if not any((c in chars) for c in genome):
-						my_gen = Genome(vector, "", str(genome.seq))
-						genomes.append(my_gen)
+						my_read = Read(vector, "", str(genome.seq))
+						reads.append(my_read)
 						
 	return genomes
