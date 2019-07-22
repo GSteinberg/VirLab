@@ -55,9 +55,9 @@ def analyze_range( k_min, k_max, rootdir, dataset1, dataset2 ):
 	
 	# call BBMap randomread.sh
 	# turn testing_genomes.fasta (genomes) into testing_reads.fasta (reads)
-	subprocess.call(['bash', "BBMap/randomreads.sh", 'ref=test_genomes_1.fasta', 'out=test_reads_1.fastq', 'length=75', 'coverage=50', 'seed=-1'])
+	subprocess.call(['bash', "BBMap/randomreads.sh", 'ref=test_genomes_1.fasta', 'out=test_reads_1.fastq', 'length=110', 'coverage=50', 'seed=-1'])
 	
-	subprocess.call(['bash', "BBMap/randomreads.sh", 'ref=test_genomes_2.fasta', 'out=test_reads_2.fastq', 'length=75', 'coverage=50', 'seed=-1'])
+	subprocess.call(['bash', "BBMap/randomreads.sh", 'ref=test_genomes_2.fasta', 'out=test_reads_2.fastq', 'length=110', 'coverage=50', 'seed=-1'])
 	
 	#TRAINING
 	#make csv file with each row having key and value

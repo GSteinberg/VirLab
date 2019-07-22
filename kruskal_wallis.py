@@ -14,7 +14,6 @@ def test( filename, dataset1, dataset2 ):
 		
 		p_list = [] 
 		results = []
-		counter = 0;
 		for row in reader:
 			# if first line get num of kmer counts for each vector
 			if line == 0:
@@ -38,9 +37,6 @@ def test( filename, dataset1, dataset2 ):
 				p_list.append( (row[0], p_score) )
 					
 			line+=1
-			counter+=1
-			if counter%1000 == 0: 
-				print("This is the # %d iteration" % counter)
 		p_list.sort(key=lambda x: x[1])
 		
 		for i in range( min(1000, int(0.1*len(p_list))) ):
