@@ -4,8 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # IMPORT DATASET
-train_dataset = pd.read_csv("training_sig_k_mers.csv")
-test_dataset = pd.read_csv("testing_sig_k_mers.csv")
+train_dataset = pd.read_csv("../results/training_sig_k_mers.csv")
+test_dataset = pd.read_csv("../results/testing_sig_k_mers.csv")
 
 # DATA PREPROCESSING
 X_train = train_dataset.drop('Class', axis=1)

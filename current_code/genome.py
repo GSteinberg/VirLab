@@ -10,9 +10,9 @@ class Genome:
 		self.kmers = {}
 
 	def populate_dictionary( self, k_min, k_max ):
-		#iterate through each sequence in genomes
-		#if substring of length k starting at i is not in kmer_dict,
-		#add it as key and initialize value as 1. Else add and increment value
+		# iterate through each sequence in genomes
+		# if substring of length k starting at i is not in kmer_dict,
+		# add it as key and initialize value as 1. Else add and increment value
 		for k in range(k_min, k_max+1):
 			for i in range( len(self.sequence)-(k-1) ):
 				read = self.sequence[i:i+k].upper()
@@ -41,13 +41,12 @@ class Read:
 		self.disease = d
 		self.sequence = s
 		self.num_sig_kmers = 0
-#		self.num_kmer_counts
 		self.kmers = {}
 
 	def populate_dictionary( self, k_min, k_max, sig_list ):
-		#iterate through each sequence in genomes
-		#if substring of length k starting at i is not in kmer_dict,
-		#add it as key and initialize value as 1. Else add and increment value
+		# iterate through each sequence in genomes
+		# if substring of length k starting at i is not in kmer_dict,
+		# add it as key and initialize value as 1. Else add and increment value
 		for k in range(k_min, k_max+1):
 			for i in range( len(self.sequence)-(k-1) ):
 				read = self.sequence[i:i+k].upper()
@@ -61,4 +60,3 @@ class Read:
 		for read in self.kmers:
 			self.kmers[read] /= ( len(self.sequence) - (len(read)-1) )
 			self.kmers[read] *= 100000
-
