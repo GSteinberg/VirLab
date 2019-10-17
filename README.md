@@ -21,8 +21,11 @@
 
 #### Instructions
  1. Clone this repository into your home directory
- 2. Run "python k_mer_creator.py" to generate files
- 3. Run "SVM.py" to classify
+ 2. Install BioPython
+ 	- https://biopython.org/
+ 3. For Windows: Install Java in your Linux subsystem for the BBMap script to work  
+ 4. Run "python k_mer_creator.py" to generate files
+ 5. Run "SVM.py" to classify
 
 ### TODO
  1. Need a way for SVM to return an "i dont know" - distance from the vector
