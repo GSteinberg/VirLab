@@ -21,13 +21,15 @@
 
 #### Instructions
  1. Clone this repository into your home directory
- 2. Install BioPython
- 	- https://biopython.org/
+ 2. Install BioPython and skikit learn
+   - https://biopython.org/
+   - https://scikit-learn.org/stable/
  3. For Windows: Install Java in your Linux subsystem for the BBMap script to work  
  4. Run "python k_mer_creator.py" to generate files
  5. Run "SVM.py" to classify
 
 ### TODO
- 1. Need a way for SVM to return an "i dont know" - distance from the vector
- 2. Turning reads into contigs and test on those
- 3. Convert some nested for loops to list comprehensions for speed and readability
+ - [ ] Need a way for SVM to return an "i dont know" - distance from the vector
+ - [ ] Turning reads into contigs and test on those
+ - [ ] Convert some nested for loops to list comprehensions for speed and readability
+ - [ ] Adding script for one hot encoding
