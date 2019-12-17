@@ -26,8 +26,8 @@
 	- https://scikit-learn.org/stable/
 	- To install the dependencies, use `pip3 install -r requirements.txt`
  3. For Windows: Install Java in your Linux subsystem for the BBMap script to work  
- 4. Run "python k_mer_creator.py" to generate files
- 5. Run "SVM.py" to classify
+ 4. Run `python3 current_code/k_mer_creator.py` to generate files
+ 5. Run `SVM.py` to classify
 
 ### TODO
  - [ ] Need a way for SVM to return an "i dont know" - distance from the vector
