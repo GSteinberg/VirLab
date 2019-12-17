@@ -22,9 +22,9 @@
 #### Instructions
  1. Clone this repository into your home directory
  2. Install BioPython and skikit learn
-   - https://biopython.org/
-   - https://scikit-learn.org/stable/
-   - To install the dependencies, use `pip3 install -r requirements.txt`
+	- https://biopython.org/
+	- https://scikit-learn.org/stable/
+	- To install the dependencies, use `pip3 install -r requirements.txt`
  3. For Windows: Install Java in your Linux subsystem for the BBMap script to work  
  4. Run "python k_mer_creator.py" to generate files
  5. Run "SVM.py" to classify
