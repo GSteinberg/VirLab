@@ -1,0 +1,10 @@
+# Python Related
+__pycache__
+*.py[cod]
+*$py.class
+
+# Virtual environment
+env
+
+# Do not upload generated
+results
