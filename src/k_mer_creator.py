@@ -14,13 +14,13 @@ MIN_GEN_LEN = 76
 MIN_SIG_KMERS = 2
 K_MIN = 4
 K_MAX = 4
-DATASET1 = "\Test_Aedes"
-DATASET2 = "\Test_Culex"
+DATASET1 = "/Test_Aedes"
+DATASET2 = "/Test_Culex"
 
 # Helper for replacing blanks in kmer signatures with 0s
 def toZero( list, kmer ):
 	list[kmer] = 0
-				
+
 def analyze_range( k_min, k_max, dataset1, dataset2 ):
 	# returns list of genome objs w/ vector, disease, and seq for each obj
 	genomes = fp.parse_dir( dataset1, dataset2 )
@@ -35,21 +35,21 @@ def analyze_range( k_min, k_max, dataset1, dataset2 ):
 
 	# replace blanks with zeros
 	# checks if any k-mers not present in all other genomic kmer dictionaries
-	# if not found, adds them with a value of 0 so all genomes have the same 
+	# if not found, adds them with a value of 0 so all genomes have the same
 	# kmer features
 	# Takes over 1/3 of computation time
 	for g in genomes:
 		for kmer in unique_kmers:
-			if kmer not in g.kmers.keys(): 
+			if kmer not in g.kmers.keys():
 				toZero( g.kmers, kmer )
 	print("zeros added")
-	
+
 	# split into test and train sets
 	random.shuffle(genomes)
 	pivot = int(len(genomes) * PERCENT_TRAIN)
 	train_data = genomes[:pivot]
 	test_data = genomes[pivot:]
-	
+
 	# For compatability with BBMap
 	# make fasta file with species 1 test data
 	with open("../results/test_genomes_1.fasta", 'w', newline="") as test_file:
@@ -58,7 +58,7 @@ def analyze_range( k_min, k_max, dataset1, dataset2 ):
 				test_file.write(str(gen))
 				test_file.write("\n\n")
 		test_file.flush()
-		
+
 	# make fasta file with species 2 test data
 	with open("../results/test_genomes_2.fasta", 'w', newline="") as test_file:
 		for gen in test_data:
@@ -66,7 +66,7 @@ def analyze_range( k_min, k_max, dataset1, dataset2 ):
 				test_file.write(str(gen))
 				test_file.write("\n\n")
 		test_file.flush()
-	
+
 	# Read simulator
 	# test_genomes_1.fasta (genomes) --> test_reads_1.fasta (reads)
 	subprocess.call(['bash', "../BBMap/randomreads.sh", \
@@ -74,34 +74,34 @@ def analyze_range( k_min, k_max, dataset1, dataset2 ):
 		'out=../results/test_reads_1.fastq', 'length=110', 'coverage=50', \
 		'seed=-1'\
 	])
-	
+
 	# test_genomes_2.fasta (genomes) --> test_reads_2.fasta (reads)
 	subprocess.call(['bash', "../BBMap/randomreads.sh", \
 		'ref=../results/test_genomes_2.fasta', \
 		'out=../results/test_reads_2.fastq', 'length=110', 'coverage=50', \
 		'seed=-1'\
 	])
-	
+
 	# TRAINING SET
 	# make csv file with kmer counts for training set
 	filename = "../results/%s-%smers in %s and %s.csv" % \
-		(k_min, k_max, dataset1.strip("\\"), dataset2.strip("\\"))
-	with open(filename, 'w', newline="") as csv_file:
+		(k_min, k_max, dataset1.strip("/"), dataset2.strip("/"))
+	with open(filename, "w+", newline="") as csv_file:
 		fieldnames = []
 		for g in train_data:
 			for key in sorted(g.kmers.keys()):
 				if key not in fieldnames:
 					fieldnames.append(key)
-					
+
 		writer = csv.DictWriter(csv_file, fieldnames=sorted(fieldnames))
 		writer.writeheader()
 		for g in train_data:
 			writer.writerow(g.kmers)
 		csv_file.flush()
-	
+
 	# flipping it to be compatable with kw_test
 	flipped_list = zip(*csv.reader(open(filename, "r")))
-	with open(filename, "w", newline="") as flipped_csv:
+	with open(filename, "w+", newline="") as flipped_csv:
 		csv_writer = csv.writer(flipped_csv)
 		vector_list = ["VECTORS"]
 		for g in train_data:
@@ -114,7 +114,7 @@ def analyze_range( k_min, k_max, dataset1, dataset2 ):
 	sig_kmers = kw.test( filename, dataset1, dataset2 )
 
 	# Make csv for only significant kmers for training
-	with open("../results/training_sig_k_mers.csv", 'w', newline="") as csv_file:
+	with open("../results/training_sig_k_mers.csv", 'w+', newline="") as csv_file:
 		writer = csv.DictWriter(csv_file, fieldnames=sig_kmers, extrasaction='ignore')
 		writer.writeheader()
 		for g in train_data:
@@ -122,11 +122,11 @@ def analyze_range( k_min, k_max, dataset1, dataset2 ):
 				g.kmers["Class"] = 0
 			elif g.vector == dataset2[1:]:
 				g.kmers["Class"] = 1
-			
+
 			writer.writerow(g.kmers)
-					
+
 		csv_file.flush()
-	
+
 	# TESTING
 	# making dictionaries for test read collections
 	test_reads = fp.parse_files('../results/test_reads_1.fastq', \
@@ -134,13 +134,13 @@ def analyze_range( k_min, k_max, dataset1, dataset2 ):
 
 	for r in test_reads:
 		r.populate_dictionary( k_min, k_max, sig_kmers )
-		
+
 	for r in test_reads:
 		for kmer in sig_kmers:
 			if kmer not in r.kmers.keys():
 				toZero( r.kmers, kmer )
-	
-	with open("../results/testing_sig_k_mers.csv", 'w', newline="") as csv_file:
+
+	with open("../results/testing_sig_k_mers.csv", 'w+', newline="") as csv_file:
 		writer = csv.DictWriter(csv_file, fieldnames=sig_kmers, extrasaction='ignore')
 		writer.writeheader()
 
@@ -150,14 +150,14 @@ def analyze_range( k_min, k_max, dataset1, dataset2 ):
 					r.kmers["Class"] = 0
 				elif r.vector == "test_reads_2":
 					r.kmers["Class"] = 1
-			
+
 				writer.writerow(r.kmers)
-					
+
 		csv_file.flush()
-	
+
 	# viz.reduce("significant_k_mers.csv")
 
 def main():
 	analyze_range(K_MIN, K_MAX, DATASET1, DATASET2)
-	
+
 main()
