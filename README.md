@@ -34,3 +34,14 @@
  - [ ] Turning reads into contigs and test on those
  - [ ] Convert some nested for loops to list comprehensions for speed and readability
  - [ ] Adding script for one hot encoding
+ 
+***Janis***
+
+ - [ ] Reproduce stats for full genomes and record them
+ - [ ] Reproduce stats for reads (should have high error rate
+ - [ ] Produce results for classification with reads
+
+***Anna***
+
+ - [ ] Fix the cnn input shape sizes. Get CNN working for 300 samples
+ - [ ] Get it to work for a bunch of genomes of different sizes
