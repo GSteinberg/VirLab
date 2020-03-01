@@ -47,12 +47,15 @@ class VirLabDataset(Dataset):
 
 import torch.nn as nn
 import torch.optim as optim
+from torch.autograd import Variable
+import torch.nn as nn
+import torch.nn.functional as F
 
 class Net(nn.Module):
 
     def __init__(self):
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
+        self.conv1 = nn.Conv2d(in_channels = 4, out_channels = 10, kernel_size=5)
         self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
         self.mp = nn.MaxPool2d(2)
         self.fc = nn.Linear(320, 10)
@@ -64,9 +67,10 @@ class Net(nn.Module):
         x = x.view(in_size, -1)  # flatten the tensor
         x = self.fc(x)
         return F.log_softmax(x)
-    
 
-def train(epoch):
+
+def train(model, train_loader, epoch):
+    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.5)
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = Variable(data), Variable(target)
@@ -81,7 +85,7 @@ def train(epoch):
                 100. * batch_idx / len(train_loader), loss.item()))
 
 
-def test():
+def test(model):
     model.eval()
     test_loss = 0
     correct = 0
@@ -126,13 +130,11 @@ def main():
 
     model = Net()
 
-    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.5)
 
-    
     for epoch in range(1, 10):
-        train(epoch)
-        test()
-    
-    # https://github.com/hunkim/PyTorchZeroToAll/blob/master/10_1_cnn_mnist.py
+        train(model, train_loader, epoch)
+        test(model)
 
+    # https://github.com/hunkim/PyTorchZeroToAll/blob/master/10_1_cnn_mnist.py
+    # https://hanqingguo.github.io/CNN1
 main()
