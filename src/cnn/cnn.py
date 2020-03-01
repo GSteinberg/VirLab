@@ -93,4 +93,6 @@ def main():
 
     model = Net()
 
+    # https://github.com/hunkim/PyTorchZeroToAll/blob/master/10_1_cnn_mnist.py
+
 main()
