@@ -6,7 +6,10 @@ __pycache__
 # Virtual environment 
 env
 
-# Do not upload generated results
+# Do not upload generated results (see .gitignore file in results folder)
+
+# Cache
+src/ref/
 
 # OS generated files
 .DS_Store
