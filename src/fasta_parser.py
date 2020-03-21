@@ -10,10 +10,18 @@ import re
 def parse_dir( dataset1, dataset2 ):
 	genomes = []
 
+#TODO fix empty list
+
 	for dirName, subdirList, fileList in os.walk(".."):
 		# if dataset1 and dataset2 are in VirLab
-		if dirName in ("../genomes" + dataset1, "../genomes" + dataset2):
+		'''
+		print("dir: ", dirName)
+		print("subdirs: ", subdirList)
+		print("files: ", fileList)
+		'''
+		if dirName in ("../genomes/" + dataset1, "../genomes/" + dataset2):
 			vector = dirName.rsplit("/")[-1]
+			#print("dir: ", dirName)
 
 			for filename in fileList:
 				# Split file name to obtain file type
@@ -33,6 +41,7 @@ def parse_dir( dataset1, dataset2 ):
 						genomes.append(my_gen)
 
 	return genomes
+
 
 # For parsing intermediate read files
 def parse_files( file1, file2 ):
