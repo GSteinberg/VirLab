@@ -6,6 +6,7 @@ __pycache__
 # Virtual environment
 env
 
+<<<<<<< HEAD
 # Do not upload generated results (see .gitignore file in results folder)
 
 # Cache
@@ -19,3 +20,6 @@ src/ref/
 .Trashes
 ehthumbs.db
 Thumbs.db
+=======
+# Do not upload generated results
+>>>>>>> 767e25891f3d29841c551909950f2be5e5813437
