@@ -14,8 +14,9 @@ MIN_GEN_LEN = 76
 MIN_SIG_KMERS = 2
 K_MIN = 4
 K_MAX = 4
-DATASET1 = "/Test_Aedes"
-DATASET2 = "/Test_Culex"
+DATASET1 = "Test_Aedes"
+DATASET2 = "Test_Culex"
+FILEPATH = "/Users/lenkaupert/Desktop/Files/VirLab/"
 
 # Helper for replacing blanks in kmer signatures with 0s
 def toZero( list, kmer ):
@@ -24,6 +25,7 @@ def toZero( list, kmer ):
 def analyze_range( k_min, k_max, dataset1, dataset2 ):
 	# returns list of genome objs w/ vector, disease, and seq for each obj
 	genomes = fp.parse_dir( dataset1, dataset2 )
+	#print(genomes)
 
 	# populates kmers member for each gen obj
 	# make unique_kmers for next step: filling blanks w zeros
@@ -52,31 +54,34 @@ def analyze_range( k_min, k_max, dataset1, dataset2 ):
 
 	# For compatability with BBMap
 	# make fasta file with species 1 test data
-	with open("../results/test_genomes_1.fasta", 'w', newline="") as test_file:
+
+	# dataset1[1:] to account for slash
+	with open("../results/test_genomes_1.fasta", 'w', newline='') as test_file:
 		for gen in test_data:
-			if len(gen.sequence) >= MIN_GEN_LEN and gen.vector == dataset1[1:]:
+			if len(gen.sequence) >= MIN_GEN_LEN and gen.vector == dataset1:
 				test_file.write(str(gen))
 				test_file.write("\n\n")
 		test_file.flush()
 
 	# make fasta file with species 2 test data
-	with open("../results/test_genomes_2.fasta", 'w', newline="") as test_file:
+	with open("../results/test_genomes_2.fasta", 'w+', newline='') as test_file:
 		for gen in test_data:
-			if len(gen.sequence) >= MIN_GEN_LEN and gen.vector == dataset2[1:]:
+			if len(gen.sequence) >= MIN_GEN_LEN and gen.vector == dataset2:
 				test_file.write(str(gen))
 				test_file.write("\n\n")
 		test_file.flush()
 
 	# Read simulator
 	# test_genomes_1.fasta (genomes) --> test_reads_1.fasta (reads)
-	subprocess.call(['bash', "../BBMap/randomreads.sh", \
+	subprocess.check_call(['bash', "../BBMap/randomreads.sh", \
 		'ref=../results/test_genomes_1.fasta', \
 		'out=../results/test_reads_1.fastq', 'length=110', 'coverage=50', \
 		'seed=-1'\
 	])
 
+
 	# test_genomes_2.fasta (genomes) --> test_reads_2.fasta (reads)
-	subprocess.call(['bash', "../BBMap/randomreads.sh", \
+	subprocess.check_call(['bash', "../BBMap/randomreads.sh", \
 		'ref=../results/test_genomes_2.fasta', \
 		'out=../results/test_reads_2.fastq', 'length=110', 'coverage=50', \
 		'seed=-1'\
@@ -85,7 +90,7 @@ def analyze_range( k_min, k_max, dataset1, dataset2 ):
 	# TRAINING SET
 	# make csv file with kmer counts for training set
 	filename = "../results/%s-%smers in %s and %s.csv" % \
-		(k_min, k_max, dataset1.strip("/"), dataset2.strip("/"))
+		(k_min, k_max, dataset1.strip("/")[1], dataset2.strip("/")[1])
 	with open(filename, "w+", newline="") as csv_file:
 		fieldnames = []
 		for g in train_data:

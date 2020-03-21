@@ -4,8 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # IMPORT DATASET
-train_dataset = pd.read_csv("../results/training_sig_k_mers.csv")
-test_dataset = pd.read_csv("../results/testing_sig_k_mers.csv")
+test_dataset = pd.read_csv("../results/training_sig_k_mers.csv")
+train_dataset = pd.read_csv("../results/testing_sig_k_mers.csv")
 
 # DATA PREPROCESSING
 X_train = train_dataset.drop('Class', axis=1)
@@ -16,7 +16,7 @@ y_test = test_dataset['Class']
 """======================================================="""
 
 # PICK A KERNEL AND DEGREE
-kernel_choice = 'poly'
+kernel_choice = 'linear'
 	# 'linear'  --> used for simple linear classification
 	# 'poly'    --> polynomial kernel, pick degree below - most accurate
 	# 'rbf'     --> Gaussian model, long runtime but very accurate
