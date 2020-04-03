@@ -61,10 +61,10 @@ class Net(nn.Module):
         LAYER_ONE_CHANNELS = 2
         LAYER_TWO_CHANNELS = 4
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels = 1, out_channels =LAYER_ONE_CHANNELS, kernel_size=KERNEL_SIZE)
-        # self.conv2 = nn.Conv2d(LAYER_ONE_CHANNELS, LAYER_TWO_CHANNELS, kernel_size=KERNEL_SIZE)
+        self.conv1 = nn.Conv2d(in_channels = 1, out_channels =2, kernel_size=4)
+        # self.conv2 = nn.Conv2d(2, LAYER_TWO_CHANNELS, kernel_size=KERNEL_SIZE)
         self.mp = nn.MaxPool2d(1)
-        self.fc = nn.Linear(2, 1)
+        self.fc = nn.Linear(9082 * 2, 30)
 
     def forward(self, x):
         in_size = x.size(0)
@@ -134,8 +134,10 @@ def main():
                               shuffle=True,
                               num_workers=2)
 
-    # 300 Aedes and 300 Culex
-    print("Dataset size: ", len(dataset))
+    # 300 batches, 1 channel, H=9082, W=4
+    print("Data size: ", culex_data.shape) # (300, 1, 9082, 4)
+    print("Data size: ", aedes_data.shape) # (300, 1, 9082, 4)
+    print("Dataset size: ", len(dataset)) # 600 - 300 Aedes and 300 Culex
     model = Net()
     model = model.double()
     for epoch in range(1, 10):
@@ -144,4 +146,6 @@ def main():
 
     # https://github.com/hunkim/PyTorchZeroToAll/blob/master/10_1_cnn_mnist.py
     # https://hanqingguo.github.io/CNN1
+    # https://towardsdatascience.com/pytorch-layer-dimensions-what-sizes-should-they-be-and-why-4265a41e01fd
+    # http://cs231n.github.io/convolutional-networks/
 main()
