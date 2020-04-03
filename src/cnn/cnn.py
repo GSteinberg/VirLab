@@ -25,8 +25,9 @@ def get_data(fasta_sequences):
         one_hot_sequence = one_hot_encode(sequence.lower())
         if (len(one_hot_sequence) >= min_len):
             one_hot_sequence = one_hot_sequence[0: (min_len-1)]
-        sequences.append(one_hot_sequence)
-    return np.asarray(sequences)
+        sequences.append(np.expand_dims(one_hot_sequence, axis=0))
+    # print((np.asarray(sequences, dtype=np.double)).dtype)
+    return np.asarray(sequences, dtype=np.double)
 
 from torch.utils.data import Dataset, DataLoader
 
@@ -51,19 +52,24 @@ from torch.autograd import Variable
 import torch.nn as nn
 import torch.nn.functional as F
 
+
+
 class Net(nn.Module):
 
     def __init__(self):
+        KERNEL_SIZE = 4
+        LAYER_ONE_CHANNELS = 2
+        LAYER_TWO_CHANNELS = 4
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels = 4, out_channels = 10, kernel_size=5)
-        self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
-        self.mp = nn.MaxPool2d(2)
-        self.fc = nn.Linear(320, 10)
+        self.conv1 = nn.Conv2d(in_channels = 1, out_channels =LAYER_ONE_CHANNELS, kernel_size=KERNEL_SIZE)
+        # self.conv2 = nn.Conv2d(LAYER_ONE_CHANNELS, LAYER_TWO_CHANNELS, kernel_size=KERNEL_SIZE)
+        self.mp = nn.MaxPool2d(1)
+        self.fc = nn.Linear(2, 1)
 
     def forward(self, x):
         in_size = x.size(0)
         x = F.relu(self.mp(self.conv1(x)))
-        x = F.relu(self.mp(self.conv2(x)))
+        # x = F.relu(self.mp(self.conv2(x)))
         x = x.view(in_size, -1)  # flatten the tensor
         x = self.fc(x)
         return F.log_softmax(x)
@@ -128,12 +134,13 @@ def main():
                               shuffle=True,
                               num_workers=2)
 
+    # 300 Aedes and 300 Culex
+    print("Dataset size: ", len(dataset))
     model = Net()
-
-
+    model = model.double()
     for epoch in range(1, 10):
         train(model, train_loader, epoch)
-        test(model)
+    #     test(model)
 
     # https://github.com/hunkim/PyTorchZeroToAll/blob/master/10_1_cnn_mnist.py
     # https://hanqingguo.github.io/CNN1
