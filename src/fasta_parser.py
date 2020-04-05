@@ -1,8 +1,8 @@
 """FASTA PARSER"""
 from Bio import SeqIO
 import os
-from genome import Genome
-from genome import Read
+from src.genome import Genome
+from src.genome import Read
 import re
 
 # Takes a FASTA file, outputs it as a list of genome objects

@@ -1,13 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="3e23446f-63c8-416b-9698-2a0439ed2191" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/k_mer_creator.py" beforeDir="false" afterPath="$PROJECT_DIR$/k_mer_creator.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ref/genome/1/chr1.chrom.gz" beforeDir="false" afterPath="$PROJECT_DIR$/ref/genome/1/chr1.chrom.gz" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ref/genome/1/info.txt" beforeDir="false" afterPath="$PROJECT_DIR$/ref/genome/1/info.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ref/genome/1/scaffolds.txt.gz" beforeDir="false" afterPath="$PROJECT_DIR$/ref/genome/1/scaffolds.txt.gz" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ref/genome/1/summary.txt" beforeDir="false" afterPath="$PROJECT_DIR$/ref/genome/1/summary.txt" afterDir="false" />
-    </list>
+    <list default="true" id="3e23446f-63c8-416b-9698-2a0439ed2191" name="Default Changelist" comment="" />
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -219,7 +213,7 @@
       <window_info anchor="bottom" id="Message" order="0" />
       <window_info anchor="bottom" id="Find" order="1" />
       <window_info anchor="bottom" id="Run" order="2" weight="0.32936978" />
-      <window_info active="true" anchor="bottom" id="Debug" order="3" visible="true" weight="0.39952436" />
+      <window_info anchor="bottom" id="Debug" order="3" weight="0.39952436" />
       <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
       <window_info anchor="bottom" id="TODO" order="6" />

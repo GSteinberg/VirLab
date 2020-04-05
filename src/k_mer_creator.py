@@ -1,9 +1,12 @@
 """K-MER CREATOR"""
-import fasta_parser as fp
+
+IMPORT_PATH = 'src'
+
+import src.fasta_parser as fp
 import csv
-import kruskal_wallis as kw
-import visualize as viz
-from genome import Genome
+import src.kruskal_wallis as kw
+import src.visualize as viz
+from src.genome import Genome
 import random
 import time
 import cProfile
@@ -17,7 +20,7 @@ K_MIN = 4
 K_MAX = 4
 DATASET1 = "Test_Aedes"
 DATASET2 = "Test_Culex"
-PATH = "../"
+PATH = ""
 
 # Helper for replacing blanks in kmer signatures with 0s
 def toZero( list, kmer ):
@@ -74,7 +77,7 @@ def analyze_range( k_min, k_max, dataset1, dataset2 ):
 
 	# Read simulator
 	# test_genomes_1.fasta (genomes) --> test_reads_1.fasta (reads)
-	subprocess.check_call(['bash', Path(PATH, "BBMap/randomreads.sh"), \
+	subprocess.call(['bash', Path(PATH, "BBMap/randomreads.sh"), \
 		Path('ref=' + PATH, 'results/test_genomes_1.fasta'), \
 		Path('out=' + PATH, 'results/test_reads_1.fastq'), 'length=110', 'coverage=50', \
 		'seed=-1'\
@@ -82,7 +85,7 @@ def analyze_range( k_min, k_max, dataset1, dataset2 ):
 
 
 	# test_genomes_2.fasta (genomes) --> test_reads_2.fasta (reads)
-	subprocess.check_call(['bash', "../BBMap/randomreads.sh", \
+	subprocess.call(['bash', Path(PATH, "BBMap/randomreads.sh"), \
 		Path('ref=' + PATH, 'results/test_genomes_2.fasta'), \
 		Path('out=' + PATH, 'results/test_reads_2.fastq'), 'length=110', 'coverage=50', \
 		'seed=-1'\
@@ -120,7 +123,7 @@ def analyze_range( k_min, k_max, dataset1, dataset2 ):
 	sig_kmers = kw.test( filename, dataset1, dataset2 )
 
 	# Make csv for only significant kmers for training
-	with open(Path(PATH, "results/training_sig_k_mers.csv", 'w+', newline="")) as csv_file:
+	with open(Path(PATH, "results/training_sig_k_mers.csv"), 'w+', newline="") as csv_file:
 		writer = csv.DictWriter(csv_file, fieldnames=sig_kmers, extrasaction='ignore')
 		writer.writeheader()
 		for g in train_data:
