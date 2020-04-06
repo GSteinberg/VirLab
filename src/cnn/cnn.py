@@ -51,8 +51,7 @@ import torch.optim as optim
 from torch.autograd import Variable
 import torch.nn as nn
 import torch.nn.functional as F
-
-
+import torch
 
 class Net(nn.Module):
 
@@ -93,7 +92,7 @@ def train(model, train_loader, epoch):
                 100. * batch_idx / len(train_loader), loss.item()))
 
 
-def test(model):
+def test(model, test_loader):
     model.eval()
     test_loss = 0
     correct = 0
@@ -101,6 +100,7 @@ def test(model):
         data, target = Variable(data, volatile=True), Variable(target)
         output = model(data)
         # sum up batch loss
+        target = target.long()
         test_loss += F.nll_loss(output, target, size_average=False).data
         # get the index of the max log-probability
         pred = output.data.max(1, keepdim=True)[1]
@@ -130,21 +130,29 @@ def main():
     data = np.concatenate((aedes_data, culex_data))
     labels = np.concatenate((aedes_labels, culex_labels))
 
-    dataset = VirLabDataset(data, labels)
-    train_loader = DataLoader(dataset=dataset,
-                              batch_size=30,
+    full_dataset = VirLabDataset(data, labels)
+    train_size = int(0.8 * len(full_dataset))
+    test_size = len(full_dataset) - train_size
+    batch_size = 30
+    train_dataset, test_dataset = torch.utils.data.random_split(full_dataset, [train_size, test_size])
+    train_loader = DataLoader(dataset=train_dataset,
+                              batch_size=batch_size,
                               shuffle=True,
                               num_workers=2)
+
+    test_loader = DataLoader(dataset=test_dataset,
+                              batch_size=batch_size,
+                              shuffle=False)
 
     # 300 batches, 1 channel, H=9082, W=4
     print("Data size: ", culex_data.shape) # (300, 1, 9082, 4)
     print("Data size: ", aedes_data.shape) # (300, 1, 9082, 4)
-    print("Dataset size: ", len(dataset)) # 600 - 300 Aedes and 300 Culex
+    print("Dataset size: ", len(full_dataset)) # 600 - 300 Aedes and 300 Culex
     model = Net()
     model = model.double()
     for epoch in range(1, 10):
         train(model, train_loader, epoch)
-    #     test(model)
+        test(model, test_loader)
 
     # https://github.com/hunkim/PyTorchZeroToAll/blob/master/10_1_cnn_mnist.py
     # https://hanqingguo.github.io/CNN1
