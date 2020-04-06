@@ -61,15 +61,16 @@ class Net(nn.Module):
         LAYER_ONE_CHANNELS = 2
         LAYER_TWO_CHANNELS = 4
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels = 1, out_channels =2, kernel_size=4)
-        # self.conv2 = nn.Conv2d(2, LAYER_TWO_CHANNELS, kernel_size=KERNEL_SIZE)
-        self.mp = nn.MaxPool2d(1)
-        self.fc = nn.Linear(9082 * 2, 30)
+        # Unsure what happens with kernel_size != 1
+        self.conv1 = nn.Conv2d(in_channels = 1, out_channels = 10, kernel_size=1, padding=0)
+        self.conv2 = nn.Conv2d(in_channels = 10, out_channels = 20, kernel_size=1)
+        self.mp = nn.MaxPool2d(2)
+        self.fc = nn.Linear(45400, 10)
 
     def forward(self, x):
         in_size = x.size(0)
         x = F.relu(self.mp(self.conv1(x)))
-        # x = F.relu(self.mp(self.conv2(x)))
+        x = F.relu(self.mp(self.conv2(x)))
         x = x.view(in_size, -1)  # flatten the tensor
         x = self.fc(x)
         return F.log_softmax(x)
@@ -82,6 +83,7 @@ def train(model, train_loader, epoch):
         data, target = Variable(data), Variable(target)
         optimizer.zero_grad()
         output = model(data)
+        target = target.long()
         loss = F.nll_loss(output, target)
         loss.backward()
         optimizer.step()
