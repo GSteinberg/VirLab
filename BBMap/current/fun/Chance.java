@@ -1,5 +1,6 @@
 package fun;
 
+import java.util.Locale;
 import java.util.Random;
 
 import shared.Shared;
@@ -34,7 +35,7 @@ public class Chance {
 		}
 		
 		double odds=passes*1.0/rounds;
-		System.err.println("Probability: "+String.format("%.6f%%", 100*odds));
+		System.err.println("Probability: "+String.format(Locale.ROOT, "%.6f%%", 100*odds));
 	}
 
 	private static int runOneRound(Random randy, int draws, int minSuccess, float prob) {

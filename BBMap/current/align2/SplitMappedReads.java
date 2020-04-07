@@ -173,7 +173,7 @@ public class SplitMappedReads {
 		//Ensure no superfluous data is written
 		r.sites=null;
 		r.originalSite=null;
-		r.obj=null;
+		r.samline=null;
 		
 //		System.err.println("Adding to chrom "+r.chrom+", side "+side+", paired="+r.paired+", "+(r.list==null ? "null" : r.list.size()));
 		if(r.chrom<MIN_CHROM || r.chrom>MAX_CHROM){return;}

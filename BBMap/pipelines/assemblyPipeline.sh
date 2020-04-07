@@ -2,7 +2,7 @@
 set -e
 
 #Written by Brian Bushnell
-#Last updated September 18, 2018
+#Last updated March 4, 2019
 
 #This script is designed to preprocess data for assembly of overlapping 2x150bp reads from Illumina HiSeq 2500.
 #Some numbers and steps may need adjustment for different data types or file paths.
@@ -66,6 +66,7 @@ rm temp.fq.gz; ln -s eccc.fq.gz temp.fq.gz
 #Error-correct phase 3
 #Low-depth reads can be discarded here with the "tossjunk", "tossdepth", or "tossuncorrectable" flags.
 #For very large datasets, "prefilter=1" or "prefilter=2" can be added to conserve memory.
+#Alternatively, bbcms.sh can be used if Tadpole still runs out of memory.
 tadpole.sh in=temp.fq.gz out=ecct.fq.gz ecc k=62 ordered
 rm temp.fq.gz; ln -s ecct.fq.gz temp.fq.gz
 

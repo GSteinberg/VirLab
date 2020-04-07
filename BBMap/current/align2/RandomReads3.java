@@ -54,6 +54,7 @@ public final class RandomReads3 {
 		long maxReads=0;
 		int minlen=150;
 		int maxlen=150;
+		int midlen=-1;
 
 		int minInsLen=1;
 		int minSubLen=2;
@@ -103,19 +104,20 @@ public final class RandomReads3 {
 		String prefix_=null;
 		
 		ReadWrite.USE_PIGZ=ReadWrite.USE_UNPIGZ=true;
+		ReadWrite.USE_BGZIP=ReadWrite.USE_UNBGZIP=ReadWrite.PREFER_BGZIP=true;
 		
 		float targetCov=-1;
-		
+//		sdfg
 		for(int i=0; i<args.length; i++){
 			final String arg=args[i];
 			final String[] split=arg.split("=");
 			final String a=split[0].toLowerCase();
 			final String b=split.length>1 ? split[1] : null;
 			
-			int x=-1;
-			try {
-				x=Integer.parseInt(b);
-			} catch (NumberFormatException e) {}
+//			int x=-1;
+//			try {
+//				x=Tools.parseIntKMG(b);
+//			} catch (NumberFormatException e) {}
 			
 			if(Parser.parseZip(arg, a, b)){
 				//do nothing
@@ -128,17 +130,19 @@ public final class RandomReads3 {
 			}else if(a.equals("reads")){
 				maxReads=Tools.parseIntKMG(b);
 			}else if(a.equals("len") || a.equals("length") || a.equals("readlen") || a.equals("readlength")){
-				minlen=maxlen=x;
+				minlen=maxlen=Tools.parseIntKMG(b);
 			}else if(a.equals("append") || a.equals("app")){
 				append=ReadStats.append=Tools.parseBoolean(b);
 			}else if(a.equals("overwrite") || a.equals("ow")){
 				overwrite=Tools.parseBoolean(b);
-			}else if(a.startsWith("minlen")){
-				minlen=x;
+			}else if(a.equals("minlen") || a.equals("minlength")){
+				minlen=Tools.parseIntKMG(b);
 				maxlen=Tools.max(minlen, maxlen);
-			}else if(a.startsWith("maxlen")){
-				maxlen=x;
+			}else if(a.equals("maxlen") || a.equals("maxlength")){
+				maxlen=Tools.parseIntKMG(b);
 				minlen=Tools.min(minlen, maxlen);
+			}else if(a.equals("midlen") || a.equals("midlength")){
+				midlen=Tools.parseIntKMG(b);
 			}else if(a.equals("pbadapter") || a.equals("pacbioadapter")){
 				pbadapter=b;
 			}else if(a.equals("fragadapter") || a.equals("fragadapter1")){
@@ -146,7 +150,7 @@ public final class RandomReads3 {
 			}else if(a.equals("fragadapter2")){
 				fragadapter2=b;
 			}else if(a.equals("amp")){
-				AMP=Integer.parseInt(b);
+				AMP=Tools.parseIntKMG(b);
 			}else if(a.equals("snprate")){
 				snpRate=Float.parseFloat(b);
 			}else if(a.equals("subrate")){
@@ -158,35 +162,35 @@ public final class RandomReads3 {
 			}else if(a.equals("nrate")){
 				nRate=Float.parseFloat(b);
 			}else if(a.equals("maxsnps")){
-				maxSnps=Integer.parseInt(b);
+				maxSnps=Tools.parseIntKMG(b);
 			}else if(a.equals("maxdels")){
-				maxDels=Integer.parseInt(b);
+				maxDels=Tools.parseIntKMG(b);
 			}else if(a.equals("maxsubs")){
-				maxSubs=Integer.parseInt(b);
+				maxSubs=Tools.parseIntKMG(b);
 			}else if(a.equals("maxinss") || a.equals("maxins")){
-				maxInss=Integer.parseInt(b);
+				maxInss=Tools.parseIntKMG(b);
 			}else if(a.equals("banns")){
 				BAN_NS=Tools.parseBoolean(b);
 			}else if(a.equals("maxns")){
-				maxNs=Integer.parseInt(b);
+				maxNs=Tools.parseIntKMG(b);
 			}else if(a.startsWith("maxdellen")){
-				maxDelLen=Integer.parseInt(b);
+				maxDelLen=Tools.parseIntKMG(b);
 			}else if(a.startsWith("maxsublen")){
-				maxSubLen=Integer.parseInt(b);
+				maxSubLen=Tools.parseIntKMG(b);
 			}else if(a.startsWith("maxinslen")){
-				maxInsLen=Integer.parseInt(b);
+				maxInsLen=Tools.parseIntKMG(b);
 			}else if(a.startsWith("maxnlen")){
-				maxNLen=Integer.parseInt(b);
+				maxNLen=Tools.parseIntKMG(b);
 			}else if(a.startsWith("mindellen")){
-				minDelLen=Integer.parseInt(b);
+				minDelLen=Tools.parseIntKMG(b);
 			}else if(a.startsWith("minsublen")){
-				minSubLen=Integer.parseInt(b);
+				minSubLen=Tools.parseIntKMG(b);
 			}else if(a.startsWith("mininslen")){
-				minInsLen=Integer.parseInt(b);
+				minInsLen=Tools.parseIntKMG(b);
 			}else if(a.startsWith("minnlen")){
-				minNLen=Integer.parseInt(b);
+				minNLen=Tools.parseIntKMG(b);
 			}else if(a.equals("fastawrap")){
-				Shared.FASTA_WRAP=Integer.parseInt(b);
+				Shared.FASTA_WRAP=Tools.parseIntKMG(b);
 			}else if(a.startsWith("seed")){
 				seed2=Long.parseLong(b);
 			}else if(a.equals("ref") || a.equals("reference")){
@@ -197,58 +201,69 @@ public final class RandomReads3 {
 				assert(false) : "'nodisk' has not been implemented; please remove that flag.";
 				RefToIndex.NODISK=NODISK=Tools.parseBoolean(b);
 			}else if(a.equals("s") || a.startsWith("snp")){
-				maxSnps=x;
+				maxSnps=Tools.parseIntKMG(b);
 				snpRate=1;
 			}else if(a.equals("i") || a.startsWith("ins")){
+				int x=Tools.parseIntKMG(b);
 				maxInss=(x>0 ? 1 : 0);
-				maxInsLen=x;
+				maxInsLen=Tools.parseIntKMG(b);
 				insRate=1;
 			}else if(a.equals("d") || a.startsWith("del")){
+				int x=Tools.parseIntKMG(b);
 				maxDels=(x>0 ? 1 : 0);
-				maxDelLen=x;
+				maxDelLen=Tools.parseIntKMG(b);
 				delRate=1;
 			}else if(a.equals("u") || a.startsWith("sub")){
+				int x=Tools.parseIntKMG(b);
 				maxSubs=(x>0 ? 1 : 0);
-				maxSubLen=x;
+				maxSubLen=Tools.parseIntKMG(b);
 				subRate=1;
 			}else if(a.equals("n")){
-				maxNs=x;
+				maxNs=Tools.parseIntKMG(b);
 				nRate=1;
 				minNLen=maxNLen=1;
 			}else if(a.startsWith("minchrom")){
-				minChrom=x;
+				minChrom=Tools.parseIntKMG(b);
 			}else if(a.equals("int") || a.equals("interleaved") || a.equals("interleave")){
 				OUTPUT_INTERLEAVED=Tools.parseBoolean(b);
 				if(OUTPUT_INTERLEAVED){paired=true;}
 			}else if(a.equals("biasedsnps")){
 				BIASED_SNPS=Tools.parseBoolean(b);
 			}else if(a.startsWith("maxchrom")){
-				maxChrom=x;
+				maxChrom=Tools.parseIntKMG(b);
 			}else if(a.startsWith("build") || a.startsWith("genome")){
-				build=x;
+				build=Tools.parseIntKMG(b);
 //				assert(false) : "Set genome to "+x;
 			}else if(a.startsWith("minq")){
-				minQuality=x;
+				minQuality=Tools.parseIntKMG(b);
 				midQuality=Tools.max(midQuality,  minQuality);
 				maxQuality=Tools.max(maxQuality,  minQuality);
 			}else if(a.startsWith("midq")){
-				midQuality=x;
+				midQuality=Tools.parseIntKMG(b);
 			}else if(a.startsWith("maxq")){
-				maxQuality=x;
+				maxQuality=Tools.parseIntKMG(b);
 				midQuality=Tools.min(midQuality,  maxQuality);
 				minQuality=Tools.min(minQuality,  maxQuality);
 			}else if(a.equals("q")){
-				minQuality=midQuality=maxQuality=x;
+				minQuality=midQuality=maxQuality=Tools.parseIntKMG(b);
 			}else if(a.equals("qv") || a.equals("variance") || a.equals("qvariance")){
-				qVariance=x;
+				qVariance=Tools.parseIntKMG(b);
 			}else if(a.equals("mininsert")){
-				minInsert=x;
+				minInsert=Tools.parseIntKMG(b);
 			}else if(a.equals("maxinsert")){
-				maxInsert=x;
+				maxInsert=Tools.parseIntKMG(b);
+			}else if(a.equals("readlengthdev") || a.equals("readlengthsd")){
+				readLengthDev=Tools.parseIntKMG(b);
+			}else if(a.equals("linearlength")){
+				LINEAR_LENGTH=Tools.parseBoolean(b); 
+				BELL_LENGTH=!LINEAR_LENGTH;
+			}else if(a.equals("belllength") || a.equals("gaussianlength")){
+				BELL_LENGTH=Tools.parseBoolean(b); 
+				LINEAR_LENGTH=!BELL_LENGTH;
 			}else if(a.startsWith("minmid")){
-				mateMiddleMin=x;
+				mateMiddleMin=Tools.parseIntKMG(b);
 			}else if(a.startsWith("maxmid")){
-				mateMiddleMax=x;
+				mateMiddleMax=Tools.parseIntKMG(b);
 			}else if(a.startsWith("paired")){
 				paired=Tools.parseBoolean(b);
 			}else if(a.startsWith("superflat")){
@@ -293,7 +308,7 @@ public final class RandomReads3 {
 			}else if(a.equals("pbmax") || a.equals("pbmaxrate")){
 				pbMaxErrorRate=Float.parseFloat(b);
 			}else if(a.startsWith("midpad")){
-				midPad=Integer.parseInt(b);
+				midPad=Tools.parseIntKMG(b);
 			}else if(a.startsWith("randomscaffold")){
 				RANDOM_SCAFFOLD=Tools.parseBoolean(b);
 			}else if(a.startsWith("metagenome")){
@@ -317,7 +332,7 @@ public final class RandomReads3 {
 			}else if(a.equals("samestrand")){
 				mateSameStrand=Tools.parseBoolean(b);
 			}else if(a.equals("minoverlap") || a.equals("overlap")){
-				MIN_SCAFFOLD_OVERLAP=Integer.parseInt(b);
+				MIN_SCAFFOLD_OVERLAP=Tools.parseIntKMG(b);
 			}else if(a.equals("prefix")){
 				prefix_=b;
 			}else if(a.equals("slashes") || a.equals("addslashes") || a.equals("slash") || a.equals("addslash")){
@@ -346,12 +361,19 @@ public final class RandomReads3 {
 			slash1="/1";
 			slash2="/2";
 		}
-		
+
 		if(insertDev>-1){
 			mateMiddleDev=insertDev;
 		}else{
 			mateMiddleDev=Tools.absdif(mateMiddleMax, mateMiddleMin)/6;
 		}
+
+		if(readLengthDev>-1){
+			//do nothing
+		}else{
+			readLengthDev=Tools.absdif(minlen, maxlen)/4;
+		}
+		
 		assert(pbMaxErrorRate>=pbMinErrorRate) : "pbMaxErrorRate must be >= pbMinErrorRate";
 		
 		ArrayList<ChromosomeArray> chromlist=null;
@@ -474,7 +496,7 @@ public final class RandomReads3 {
 		
 		if(fname2!=null){OUTPUT_INTERLEAVED=false;}
 //		assert(false) : out+", "+fname1+", "+fname2;
-		rr.writeRandomReadsX(maxReads, minlen, maxlen,
+		rr.writeRandomReadsX(maxReads, minlen, maxlen, midlen,
 				maxSnps, maxInss, maxDels, maxSubs, maxNs,
 				snpRate, insRate, delRate, subRate, nRate,
 				minInsLen, minDelLen, minSubLen, minNLen,
@@ -1075,7 +1097,7 @@ public final class RandomReads3 {
 		return new int[] {chrom, start, readlen};
 	}
 	
-	public void writeRandomReadsX(long numReads, int minlen, int maxlen,
+	public void writeRandomReadsX(long numReads, int minlen, int maxlen, int midlen,
 			int maxSnps, int maxInss, int maxDels, int maxSubs, int maxNs,
 			float snpRate, float insRate, float delRate, float subRate, float nRate,
 			int minInsLen, int minDelLen, int minSubLen, int minNLen,
@@ -1180,7 +1202,7 @@ public final class RandomReads3 {
 			}
 			
 			
-			Read r1=makeRead(null, minlen, maxlen, minChrom, maxChrom,
+			Read r1=makeRead(null, minlen, maxlen, midlen, minChrom, maxChrom,
 					maxSnps, maxInss, maxDels, maxSubs, maxNs,
 					snpRate, insRate, delRate, subRate, nRate,
 					minInsLen, minDelLen, minSubLen, minNLen,
@@ -1194,7 +1216,7 @@ public final class RandomReads3 {
 
 				Read r2=null;
 				for(int tries=0; r2==null && tries<100; tries++){
-					r2=makeRead(r1, minlen, maxlen, minChrom, maxChrom,
+					r2=makeRead(r1, minlen, maxlen, midlen, minChrom, maxChrom,
 							maxSnps, maxInss, maxDels, maxSubs, maxNs,
 							snpRate, insRate, delRate, subRate, nRate,
 							minInsLen, minDelLen, minSubLen, minNLen,
@@ -1261,7 +1283,7 @@ public final class RandomReads3 {
 	
 
 	
-	public ArrayList<Read> makeRandomReadsX(int numReads, int minlen, int maxlen,
+	public ArrayList<Read> makeRandomReadsX(int numReads, int minlen, int maxlen, int midlen,
 			int maxSnps, int maxInss, int maxDels, int maxSubs, int maxNs,
 			float snpRate, float insRate, float delRate, float subRate, float nRate,
 			int minInsLen, int minDelLen, int minSubLen, int minNLen,
@@ -1352,7 +1374,7 @@ public final class RandomReads3 {
 				}
 			}
 			
-			Read r1=makeRead(null, minlen, maxlen, minChrom, maxChrom,
+			Read r1=makeRead(null, minlen, maxlen, midlen, minChrom, maxChrom,
 					maxSnps, maxInss, maxDels, maxSubs, maxNs,
 					snpRate, insRate, delRate, subRate, nRate,
 					minInsLen, minDelLen, minSubLen, minNLen,
@@ -1366,7 +1388,7 @@ public final class RandomReads3 {
 
 				Read r2=null;
 				for(int tries=0; r2==null && tries<100; tries++){
-					r2=makeRead(r1, minlen, maxlen, minChrom, maxChrom,
+					r2=makeRead(r1, minlen, maxlen, midlen, minChrom, maxChrom,
 							maxSnps, maxInss, maxDels, maxSubs, maxNs,
 							snpRate, insRate, delRate, subRate, nRate,
 							minInsLen, minDelLen, minSubLen, minNLen,
@@ -1457,7 +1479,51 @@ public final class RandomReads3 {
 		}
 	}
 	
-	public Read makeRead(Read r0, int minlen, int maxlen, int minChrom, int maxChrom,
+	public int genReadLen(int minLen, int maxLen, int midLen, Random randy, boolean linear, boolean bell){
+		if(minLen==maxLen){return minLen;}
+		
+		final int range=maxLen-minLen+1;
+		assert(range>0) : minLen+", "+maxLen+", "+midLen+", "+linear;
+		if(linear){
+			return minLen+randy.nextInt(range);
+		}
+		assert(midLen>=minLen && midLen<=maxLen) : "minLen="+minLen+", midLen="+midLen+", maxLen="+maxLen; 
+		
+		float choice=randy.nextFloat();
+		int len;
+		if(choice<0.01){
+			len=minLen+randy.nextInt(range);
+//			System.err.println("A: "+len);
+		}else if(choice<0.05){
+			len=minLen+Tools.min(randy.nextInt(range), randy.nextInt(range));
+//			System.err.println("B: "+len);
+		}else if(choice<0.2){
+			double g=randy.nextGaussian();
+			len=(int)Math.round((g*readLengthDev)+midLen);
+			while(len<minLen || len>maxLen){
+				g=randy.nextGaussian();
+				len=(int)Math.round((g*readLengthDev)+midLen);
+			}
+		}else if(choice<0.4){
+			double g=randy.nextGaussian();
+			len=(int)Math.round((g*readLengthDev/2)+midLen);
+			while(len<minLen || len>maxLen){
+				g=randy.nextGaussian();
+				len=(int)Math.round((g*readLengthDev/2)+midLen);
+			}
+		}else{
+			double g=randy.nextGaussian();
+			len=(int)Math.round((g*readLengthDev/8)+midLen);
+			while(len<minLen || len>maxLen){
+				g=randy.nextGaussian();
+				len=(int)Math.round((g*readLengthDev/8)+midLen);
+			}
+		}
+		
+		return len;
+	}
+	
+	public Read makeRead(Read r0, int minlen, int maxlen, int midlen, int minChrom, int maxChrom,
 			int maxSnps, int maxInss, int maxDels, int maxSubs, int maxNs,
 			float snpRate, float insRate, float delRate, float subRate, float nRate,
 			int minInsLen, int minDelLen, int minSubLen, int minNLen,
@@ -1492,7 +1558,7 @@ public final class RandomReads3 {
 		
 		int[] delsa=makeDelsa(DELs, minDelLen, maxDelLen, randy2);
 		
-		int readlen=(minlen==maxlen ? maxlen : minlen+randyLength.nextInt(maxlen-minlen+1));
+		int readlen=genReadLen(minlen, maxlen, midlen, randyLength, LINEAR_LENGTH, BELL_LENGTH);
 		int inititallen0=readlen+(delsa==null ? 0 : (int)Tools.sum(delsa));
 		
 		if(verbose){
@@ -1859,10 +1925,13 @@ public final class RandomReads3 {
 	public static int mateMiddleMin=-200;
 	public static int mateMiddleMax=150;
 	public static int mateMiddleDev=-1;
+	public static int readLengthDev=-1;
 	public static boolean SUPERFLAT_DIST=false;
 	public static boolean FLAT_DIST=false;
 	public static boolean BELL_DIST=true;
 	public static boolean EXP_DIST=false;
+	public static boolean LINEAR_LENGTH=true;
+	public static boolean BELL_LENGTH=false;
 	public static double EXP_LAMDA=0.8d;
 	public static boolean BIASED_SNPS=false;
 	public static boolean ILLUMINA_NAMES=false;

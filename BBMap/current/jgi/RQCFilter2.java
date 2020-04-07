@@ -36,7 +36,7 @@ import stream.FASTQ;
 import stream.Read;
 import stream.ReadInputStream;
 import tax.FilterByTaxa;
-import tax.GiToNcbi;
+import tax.GiToTaxid;
 import tax.TaxFilter;
 import tax.TaxNode;
 import tax.TaxTree;
@@ -100,6 +100,7 @@ public class RQCFilter2 {
 		FASTQ.DETECT_QUALITY_OUT=false;
 		FASTQ.ASCII_OFFSET_OUT=33;
 		ReadWrite.USE_PIGZ=ReadWrite.USE_UNPIGZ=true;
+		ReadWrite.USE_BGZIP=ReadWrite.USE_UNBGZIP=ReadWrite.PREFER_BGZIP=true;
 		ReadWrite.MAX_ZIP_THREADS=Tools.max(Shared.threads()>1 ? 2 : 1, Shared.threads()>20 ? Shared.threads()/2 : Shared.threads());
 		TaxFilter.REQUIRE_PRESENT=false;
 		SendSketch.suppressErrors=ServerTools.suppressErrors=true;
@@ -1428,7 +1429,7 @@ public class RQCFilter2 {
 			final TextStreamWriter tsw=new TextStreamWriter(rqcStatsName, overwrite, false, false);
 			tsw.start();
 			tsw.println(BBDuk.rqcString());
-			tsw.println("gcPolymerRatio="+String.format("%.6f", filterstats.gcPolymerRatio));
+			tsw.println("gcPolymerRatio="+String.format(Locale.ROOT, "%.6f", filterstats.gcPolymerRatio));
 			tsw.poisonAndWait();
 		}
 		
@@ -2653,7 +2654,7 @@ public class RQCFilter2 {
 		}
 		
 		if(loadGiTable){
-			GiToNcbi.initialize(giTable);
+			GiToTaxid.initialize(giTable);
 		}
 		
 		String[] args=argList.toArray(new String[0]);
@@ -2665,7 +2666,7 @@ public class RQCFilter2 {
 			fbt.process(new Timer());
 			FASTQ.FORCE_INTERLEAVED=OLD_FORCE_INT;
 			FASTQ.TEST_INTERLEAVED=OLD_TEST_INT;
-			GiToNcbi.unload();
+			GiToTaxid.unload();
 		}
 		
 		if(reproduceName!=null){

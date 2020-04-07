@@ -78,7 +78,6 @@ public class CountBarcodes {
 				ByteFile2.verbose=verbose;
 				stream.FastaReadInputStream.verbose=verbose;
 				ConcurrentGenericReadInputStream.verbose=verbose;
-//				align2.FastaReadInputStream2.verbose=verbose;
 				stream.FastqReadInputStream.verbose=verbose;
 				ReadWrite.verbose=verbose;
 			}else if(a.equals("countundefined")){
@@ -387,8 +386,8 @@ public class CountBarcodes {
 	
 	/*--------------------------------------------------------------*/
 
-	private boolean reverseComplimentMate=false;
-	private boolean reverseCompliment=false;
+	private boolean reverseComplementMate=false;
+	private boolean reverseComplement=false;
 	private boolean countUndefined=true;
 	private boolean printHeader=true;
 	private int maxRows=-1;

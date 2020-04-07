@@ -3,7 +3,7 @@
 usage(){
 echo "
 Written by Brian Bushnell
-Last modified February 11, 2019
+Last modified September 25, 2019
 
 Description:  Reads the entire file to find extended information about the format and contents.
 
@@ -17,6 +17,8 @@ speed=f         Print processing time.
 
 printjunk=f     Print headers of junk reads to stdout.
 printbarcodes=f Print barcodes to stdout.
+zmw=t           Parse PacBio ZMW IDs.
+
 printqhist=f    Print quality histogram to stdout.
 printihist=f    Print insert size histogram to stdout.
 
@@ -33,8 +35,11 @@ File output parameters (these can be eliminated by setting to null):
 
 junk=junk.txt          Print headers of junk reads to this file.
 barcodes=barcodes.txt  Print barcodes to this file.
+
+hist=t                 False will bulk-disable all histogram output.
 qhist=qhist.txt        Print quality histogram to this file.
 ihist=ihist.txt        print insert size histogram to this file.
+
 
 
 Terminology:
@@ -70,7 +75,8 @@ GC              GC content: (C+G)/(C+G+A+T+U).
 Cardinality     Approximate number of unique 31-mers in the file.
 Organism        Taxonomic name of top hit from BBSketch RefSeq server.
 TaxID           TaxID from BBSketch.
-Barcodes        Number of observed barcodes.
+Barcodes        Number of observed barcodes (for Illumina).
+ZMWs            Number of observed ZMWs (for PacBio).
 
 Mergable        Fraction of read pairs that appear to overlap.
 -InsertMean     Average insert size, from merging.
@@ -111,8 +117,6 @@ CP="$DIR""current/"
 
 z="-Xmx2g"
 z2="-Xms2g"
-EA="-ea"
-EOOM=""
 set=0
 
 if [ -z "$1" ] || [[ $1 == -h ]] || [[ $1 == --help ]]; then
@@ -122,6 +126,7 @@ fi
 
 calcXmx () {
 	source "$DIR""/calcmem.sh"
+	setEnvironment
 	parseXmx "$@"
 	if [[ $set == 1 ]]; then
 		return
@@ -133,24 +138,6 @@ calcXmx () {
 calcXmx "$@"
 
 testformat() {
-	if [[ $SHIFTER_RUNTIME == 1 ]]; then
-		#Ignore NERSC_HOST
-		shifter=1
-	elif [[ $NERSC_HOST == genepool ]]; then
-		module unload oracle-jdk
-		module load oracle-jdk/1.8_144_64bit
-		module load pigz
-	elif [[ $NERSC_HOST == denovo ]]; then
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	elif [[ $NERSC_HOST == cori ]]; then
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/jgi
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/usg
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	fi
 	local CMD="java $EA $EOOM $z -cp $CP jgi.TestFormat $@"
 #	echo $CMD >&2
 	eval $CMD

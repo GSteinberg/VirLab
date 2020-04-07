@@ -89,7 +89,6 @@ public class DemuxByName {
 				ByteFile2.verbose=verbose;
 				stream.FastaReadInputStream.verbose=verbose;
 				ConcurrentGenericReadInputStream.verbose=verbose;
-//				align2.FastaReadInputStream2.verbose=verbose;
 				stream.FastqReadInputStream.verbose=verbose;
 				ReadWrite.verbose=verbose;
 			}else if(a.equals("names") || a.equals("name") || a.equals("affixes")){
@@ -115,6 +114,8 @@ public class DemuxByName {
 				outu1=b;
 			}else if(a.equals("outu2")){
 				outu2=b;
+			}else if(a.equals("perheader") || a.equals("persequence") || a.equals("pername")){
+				perheader=Tools.parseBoolean(b);
 			}else if(a.equals("delimiter")){
 				if(b==null){delimiter=null;}
 				
@@ -186,7 +187,9 @@ public class DemuxByName {
 			}
 		}
 		
-		{
+		if(perheader){
+			ReadWrite.USE_PIGZ=false;
+		}else{
 			String[] x=names.toArray(new String[names.size()]);
 			names.clear();
 			for(String s : x){
@@ -225,7 +228,8 @@ public class DemuxByName {
 				Tools.reverseInPlace(affixLengths);
 			}
 			
-			assert((affixLengths.length>0 && affixLengths[0]>0) || delimiter!=null) : "Must include at least one non-zero-length affix (name), or a delimiter.";
+			assert((affixLengths.length>0 && affixLengths[0]>0) || delimiter!=null || perheader) : 
+				"Must include at least one non-zero-length affix (name), or a delimiter.";
 			ReadWrite.MAX_ZIP_THREADS=Tools.max(1, Tools.min(ReadWrite.MAX_ZIP_THREADS, (Shared.threads()*2-1)/Tools.max(1, names.size())));
 			if(names.size()>8){ReadWrite.USE_PIGZ=false;}
 		}
@@ -314,6 +318,13 @@ public class DemuxByName {
 			String ext=ReadWrite.rawExtension(out1);
 			useSharedHeader=FileFormat.isSamOrBam(ext);
 		}
+		
+		if(perheader){
+			fixedAffixLength=-1;
+			substringMode=false;
+			affixLengths=null;
+			delimiter=null;
+		}
 	}
 	
 	void process(Timer t){
@@ -332,7 +343,8 @@ public class DemuxByName {
 		if(out1!=null){
 			final int buff=4;
 			
-			mcros=(fixedAffixLength>0 || delimiter!=null ? new MultiCros(out1, out2, false, overwrite, append, true, useSharedHeader, FileFormat.FASTQ, buff) : null);
+			mcros=(fixedAffixLength>0 || delimiter!=null || perheader ? 
+					new MultiCros(out1, out2, false, overwrite, append, true, useSharedHeader, FileFormat.FASTQ, buff) : null);
 			
 			if(paired && out2==null && (in1==null || !in1.contains(".sam"))){
 				outstream.println("Writing interleaved.");
@@ -390,8 +402,7 @@ public class DemuxByName {
 			for(String s : names){
 				nameToArray.put(s, new ArrayList<Read>());
 			}
-			final ArrayListSet als=(fixedAffixLength<1 && delimiter==null ? null : new ArrayListSet(false));
-			
+			final ArrayListSet als=(fixedAffixLength<1 && delimiter==null && !perheader ? null : new ArrayListSet(false));
 			
 			while(ln!=null && reads!=null && reads.size()>0){//ln!=null prevents a compiler potential null access warning
 				
@@ -446,8 +457,7 @@ public class DemuxByName {
 							String sub=r1.id;
 							if(fixedAffixLength>0){
 								sub=(sub.length()<=fixedAffixLength ? sub : prefixMode ? id.substring(0, fixedAffixLength) : id.substring(idlen-fixedAffixLength));
-							}else{
-								assert(delimiter!=null);
+							}else if(delimiter!=null) {
 								String[] split=sub.split(delimiter);
 								assert(split.length>1) : "Delimiter '"+delimiter+"' was not found in name '"+sub+"'";
 								if(column>-1){
@@ -463,6 +473,9 @@ public class DemuxByName {
 								}else{
 									sub=split[prefixMode ? 0 : split.length-1];
 								}
+							}else{
+								assert(perheader);
+								//Use the full ID
 							}
 							als.add(r1, sub);
 						}
@@ -559,6 +572,7 @@ public class DemuxByName {
 	private String delimiter=null;
 	private boolean prefixMode=true;
 	private boolean substringMode=false;
+	private boolean perheader=false;
 	private int column=-1;
 	private boolean warned=false;
 //	private int affixLen=-1;

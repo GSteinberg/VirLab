@@ -72,7 +72,6 @@ public class MergeBarcodes {
 				ByteFile2.verbose=verbose;
 				stream.FastaReadInputStream.verbose=verbose;
 				ConcurrentGenericReadInputStream.verbose=verbose;
-//				align2.FastaReadInputStream2.verbose=verbose;
 				stream.FastqReadInputStream.verbose=verbose;
 				ReadWrite.verbose=verbose;
 			}else if(a.equals("barcode") || a.equals("bar") || a.equals("index")){
@@ -82,11 +81,11 @@ public class MergeBarcodes {
 			}else if(a.equals("addcolon")){
 				addcolon=Tools.parseBoolean(b);
 			}else if(a.equals("rcompmate") || a.equals("rcm")){
-				reverseComplimentMate=Tools.parseBoolean(b);
-				outstream.println("Set RCOMPMATE to "+reverseComplimentMate);
+				reverseComplementMate=Tools.parseBoolean(b);
+				outstream.println("Set RCOMPMATE to "+reverseComplementMate);
 			}else if(a.equals("rcomp") || a.equals("rc")){
-				reverseCompliment=Tools.parseBoolean(b);
-				outstream.println("Set RCOMP to "+reverseCompliment);
+				reverseComplement=Tools.parseBoolean(b);
+				outstream.println("Set RCOMP to "+reverseComplement);
 			}else if(parser.in1==null && i==0 && !arg.contains("=") && (arg.toLowerCase().startsWith("stdin") || new File(arg).exists())){
 				parser.in1=arg;
 			}else{
@@ -335,12 +334,12 @@ public class MergeBarcodes {
 					{
 						readsProcessed++;
 						basesProcessed+=initialLength1;
-						if(reverseCompliment){r1.reverseComplement();}
+						if(reverseComplement){r1.reverseComplement();}
 					}
 					if(r2!=null){
 						readsProcessed++;
 						basesProcessed+=initialLength2;
-						if(reverseCompliment || reverseComplimentMate){r2.reverseComplement();}
+						if(reverseComplement || reverseComplementMate){r2.reverseComplement();}
 					}
 
 					String key=r1.id;
@@ -415,8 +414,8 @@ public class MergeBarcodes {
 	
 	/*--------------------------------------------------------------*/
 
-	private boolean reverseComplimentMate=false;
-	private boolean reverseCompliment=false;
+	private boolean reverseComplementMate=false;
+	private boolean reverseComplement=false;
 	/** Add /1 and /2 to read names */
 	private boolean addslash=false;
 	/** Add 1: and 2: to read names */

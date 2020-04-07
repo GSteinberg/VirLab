@@ -92,10 +92,10 @@ public class MakeRocCurve {
 				assert(sl!=null);
 				Read r=sl.toRead(true);
 				if(r!=null){
-					r.obj=sl;
+					r.samline=sl;
 					if(sl.primary() && (seen==null || !seen.get(id))){
 						if(seen!=null){seen.set(id);}
-						calcStatistics1(r, (SamLine) r.obj);
+						calcStatistics1(r, sl);
 					}
 				}else{
 					assert(false) : "'"+"'";

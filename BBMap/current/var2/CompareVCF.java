@@ -75,6 +75,22 @@ public class CompareVCF {
 				ConcurrentGenericReadInputStream.verbose=verbose;
 				stream.FastqReadInputStream.verbose=verbose;
 				ReadWrite.verbose=verbose;
+			}else if(a.equals("splitalleles")) {
+				splitAlleles=Tools.parseBoolean(b);
+			}else if(a.equals("splitsubs") || a.equals("splitsnps")) {
+				splitSubs=Tools.parseBoolean(b);
+			}else if(a.equals("splitcomplex")) {
+				splitComplex=Tools.parseBoolean(b);
+			}else if(a.equals("sass") || a.equals("split")) {
+				splitAlleles=splitSubs=Tools.parseBoolean(b);
+			}else if(a.equals("splitall") || a.equals("sascsss")) {
+				splitAlleles=splitComplex=splitSubs=Tools.parseBoolean(b);
+			}else if(a.equals("minscore") || a.equals("minqual") || a.equals("minq")) {
+				minScore=Double.parseDouble(b);
+			}else if(a.equals("trimtocanonical") || a.equals("canonicalize") || a.equals("canonicize") || a.equals("canonize")){
+				VCFLine.TRIM_TO_CANONICAL=Tools.parseBoolean(b);
+			}else if(a.equals("ref")){
+				ref=b;
 			}else if(parser.parse(arg, a, b)){
 				//do nothing
 			}else{
@@ -102,10 +118,12 @@ public class CompareVCF {
 		}
 		ffin1=new FileFormat[in1.length];
 		for(int i=0; i<in1.length; i++){
-			ffin1[i]=FileFormat.testInput(in1[i], FileFormat.TXT, null, true, true);
+			ffin1[i]=FileFormat.testInput(in1[i], FileFormat.VCF, null, true, true);
 		}
 		
-		ffout1=FileFormat.testOutput(out1, FileFormat.TXT, null, true, overwrite, append, false);
+		ffout1=FileFormat.testOutput(out1, FileFormat.VCF, null, true, overwrite, append, false);
+		if(ffout1!=null && ffout1.type()==FileFormat.VAR){outputVar=true;}
+		if(ref!=null){ScafMap.loadReference(ref, null, null, true);}
 	}
 	
 	public HashSet<VCFLine> getSet(FileFormat ff, HashSet<VCFLine> set){
@@ -120,7 +138,15 @@ public class CompareVCF {
 		}
 		for(Entry<VCFLine, VCFLine> e : vfile.map.entrySet()){
 			VCFLine v=e.getValue();
-			if(!set.contains(v)){set.add(v);}
+			ArrayList<VCFLine> list=null;
+			if(splitAlleles || splitComplex || splitSubs){list=v.split(splitAlleles, splitComplex, splitSubs);}
+			if(list==null || list.isEmpty()){
+				if(!set.contains(v) && v.qual>=minScore){set.add(v);}
+			}else{
+				for(VCFLine line : list){
+					if(!set.contains(line) && v.qual>=minScore){set.add(line);}
+				}
+			}
 		}
 		
 		linesProcessed+=vfile.linesProcessed();
@@ -181,30 +207,41 @@ public class CompareVCF {
 		
 		ArrayList<VCFLine> list=toList();
 		
+		ByteStreamWriter bsw=null;
 		if(ffout1!=null){
-			ByteStreamWriter bsw=new ByteStreamWriter(ffout1);
+			bsw=new ByteStreamWriter(ffout1);
 			bsw.start();
+		}
+
+		{//Processing block
 			for(byte[] line : header){
 				headerLinesOut++;
-				bsw.println(line);
+				if(bsw!=null){bsw.println(line);}
 			}
 			ByteBuilder bb=new ByteBuilder(33000);
 			for(VCFLine line : list){
 				variantLinesOut++;
-				line.toText(bb);
+				if(outputVar){
+					assert(false) : "TODO";
+//					Var v=line.toVar();
+//					v.toText(bb, properPairRate, totalQualityAvg, totalMapqAvg, readLengthAvg, rarity, ploidy, ScafMap.defaultScafMap());
+				}else{
+					line.toText(bb);
+				}
 				bb.nl();
 				if(bb.length>=32000){
-					bsw.print(bb);
+					if(bsw!=null){bsw.print(bb);}
 					bb.clear();
 				}
 			}
 			if(bb.length>0){
-				bsw.print(bb);
+				if(bsw!=null){bsw.print(bb);}
 				bb.clear();
 			}
-			errorState|=bsw.poisonAndWait();
 		}
 		
+		if(bsw!=null){errorState|=bsw.poisonAndWait();}
+
 		t.stop();
 		outstream.println(Tools.timeLinesBytesProcessed(t, linesProcessed, bytesProcessed, 8));
 		
@@ -239,6 +276,7 @@ public class CompareVCF {
 	
 	private String in1[]=null;
 	private String out1=null;
+	private String ref=null;
 
 	private final FileFormat ffin1[];
 	private final FileFormat ffout1;
@@ -246,6 +284,12 @@ public class CompareVCF {
 	public final int mode;
 	
 	public boolean addSamples=true;
+	private boolean outputVar=false;
+
+	boolean splitAlleles=false;
+	boolean splitSubs=false;
+	boolean splitComplex=false;
+	double minScore=-99999;
 	
 	/*--------------------------------------------------------------*/
 	

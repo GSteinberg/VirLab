@@ -371,10 +371,10 @@ public final class KillSwitch extends Thread {
 
 	/*--------------------------------------------------------------*/
 	
-	public static byte[] copyOfRange(byte[] buffer, int start, int limit) {
+	public static byte[] copyOfRange(byte[] buffer, int from, int to) {
 		byte[] copy=null;
 		try {
-			copy=Arrays.copyOfRange(buffer, start, limit);
+			copy=Arrays.copyOfRange(buffer, from, to);
 		} catch (OutOfMemoryError e) {
 			memKill(e);
 		}

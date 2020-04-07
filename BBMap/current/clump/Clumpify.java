@@ -33,9 +33,27 @@ public class Clumpify {
 	public static void main(String[] args){
 		Timer t=new Timer();
 		ReadWrite.ZIPLEVEL=Tools.max(ReadWrite.ZIPLEVEL, 6);
+		
+		//Capture values of static variables that might be modified in case this is called by another class.
+		final boolean oldCQ=Read.CHANGE_QUALITY;
+		final boolean oldBgzip=ReadWrite.USE_BGZIP, oldPreferBgzip=ReadWrite.PREFER_BGZIP;
+		
 		BBMerge.changeQuality=Read.CHANGE_QUALITY=false;
+		ReadWrite.USE_BGZIP=true;
+		ReadWrite.PREFER_BGZIP=true;
+		
 		Clumpify x=new Clumpify(args);
 		x.process(t);
+		
+		//Restore values of static variables.
+//		Shared.setBuffers(oldCap);
+//		ReadWrite.ZIPLEVEL=oldZl;
+//		ReadWrite.USE_PIGZ=oldPigz;
+		ReadWrite.USE_BGZIP=oldBgzip;
+		ReadWrite.PREFER_BGZIP=oldPreferBgzip;
+//		ReadWrite.USE_UNPIGZ=oldUnpigz;
+//		ReadWrite.MAX_ZIP_THREADS=oldZipThreads;
+		BBMerge.changeQuality=Read.CHANGE_QUALITY=oldCQ;
 		
 		//Close the print stream if it was redirected
 		Shared.closeStream(x.outstream);
@@ -430,7 +448,7 @@ public class Clumpify {
 			FASTQ.TEST_INTERLEAVED=FASTQ.FORCE_INTERLEAVED=false;
 			FileFormat dest=FileFormat.testOutput(out1, FileFormat.FASTQ, null, true, overwrite, false, false);
 			FileFormat dest2=FileFormat.testOutput(out2, FileFormat.FASTQ, null, true, overwrite, false, false);
-			SortByName.mergeAndDump(names, /*null, */dest, dest2, delete, useSharedHeader, outstream, 150);
+			SortByName.mergeAndDump(names, /*null, */dest, dest2, delete, useSharedHeader, false, outstream, 150);
 		}
 		
 //		if(externalSort){

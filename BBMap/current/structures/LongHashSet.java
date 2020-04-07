@@ -19,7 +19,7 @@ import shared.Tools;
 public final class LongHashSet{
 	
 	public static void main(String[] args){
-		Random randy2=new Random();
+		Random randy2=Shared.threadLocalRandom();
 		LongHashSet set=new LongHashSet(20, 0.7f);
 		HashSet<Long> set2=new HashSet<Long>(20, 0.7f);
 		ArrayList<Long> list=new ArrayList<Long>();

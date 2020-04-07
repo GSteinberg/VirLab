@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.Random;
 import java.util.concurrent.ArrayBlockingQueue;
 
+import shared.Shared;
 import shared.Timer;
 
 
@@ -305,7 +306,7 @@ public class KCountArray4MT extends KCountArray {
 		
 		Timer t=new Timer();
 		long[][] r=new long[rows][cols];
-		Random randy=new Random(seed);
+		Random randy=Shared.threadLocalRandom(seed);
 		for(int i=0; i<r.length; i++){
 			fillMasks(r[i], randy);
 		}

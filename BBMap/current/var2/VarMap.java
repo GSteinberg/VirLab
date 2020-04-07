@@ -9,8 +9,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import shared.Shared;
 import shared.Tools;
+import structures.ByteBuilder;
 
-public class VarMap {
+public class VarMap implements Iterable<Var> {
 	
 	/*--------------------------------------------------------------*/
 	/*----------------        Construction          ----------------*/
@@ -20,6 +21,7 @@ public class VarMap {
 		this(scafMap_, -1, -1, -1, -1, -1);
 	}
 
+	@SuppressWarnings("unchecked")
 	VarMap(ScafMap scafMap_, int ploidy_, double pairingRate_, double totalQualityAvg_, double mapqAvg_, double readLengthAvg_){
 		scafMap=scafMap_;
 		ploidy=ploidy_;
@@ -137,35 +139,51 @@ public class VarMap {
 		return size;
 	}
 	
+	public long size2(){//123 Slow
+		assert(false) : "Slow";
+		int i=0;
+		for(Var v : this){i++;}
+		return i;
+	}
+	
 	/*--------------------------------------------------------------*/
 	/*----------------            Adders            ----------------*/
 	/*--------------------------------------------------------------*/
 	
 	private int add(final Var v){
+//		assert(size()==size2());//123;
+//		assert(mappedToSelf(false));//123
 		final ConcurrentHashMap<Var, Var> map=maps[v.start&MASK];
 		synchronized(map){
 			Var old=map.get(v);
 			if(old==null){
 				map.put(v, v);
+//				assert(mappedToSelf(false));//123
 				return 1;
 			}
 			else{
 				synchronized(old){
 					old.add(v);
+//					assert(mappedToSelf(false));//123
 				}
 			}
 		}
+//		assert(size()==size2());//123;
+//		assert(mappedToSelf(false));//123
 		return 0;
 	}
 	
 	int addUnsynchronized(final Var v){
+//		assert(mappedToSelf(false));//123
 		final ConcurrentHashMap<Var, Var> map=maps[v.start&MASK];
 		Var old=map.get(v);
 		if(old==null){
 			map.put(v, v);
+//			assert(mappedToSelf(false));//123
 			return 1;
 		}
 		old.add(v);
+//		assert(mappedToSelf(false));//123
 		return 0;
 	}
 	
@@ -215,48 +233,51 @@ public class VarMap {
 	/*----------------            Other             ----------------*/
 	/*--------------------------------------------------------------*/
 
-	public long[] processVariantsST(VarFilter filter, long[] scoreArray, long[] ploidyArray) {
+	public long[] processVariantsST(VarFilter filter, long[][] scoreArray, long[] ploidyArray, long[][] avgQualityArray,
+			long[] maxQualityArray, long[][] ADArray, double[] AFArray) {
 		assert(properPairRate>=0);
 		assert(ploidy>0);
 		assert(totalQualityAvg>=0);
 		
 		long[] types=new long[Var.VAR_TYPES];
 		for(ConcurrentHashMap<Var, Var> map : maps){
-			long[] types2=processVariants(map, filter, scoreArray, ploidyArray, false);
-			types2=processVariants(map, filter, ploidyArray, scoreArray, true);
-			types2=processVariants(map, filter, ploidyArray, scoreArray, false);
+			long[] types2=processVariants(map, filter, null, null, null, null, null, null, false);
+			types2=processVariants(map, filter, null, null, null, null, null, null, true);
+			types2=processVariants(map, filter, scoreArray, ploidyArray, avgQualityArray, maxQualityArray, ADArray, AFArray, false);
 			Tools.add(types, types2);
 		}
 		return types;
 	}
 	
-	public long[] addSharedVariantsST(VarFilter filter, VarMap sharedVarMap) {
-		assert(properPairRate>=0);
-		assert(ploidy>0);
-		assert(totalQualityAvg>=0);
-		
-		long[] types=new long[Var.VAR_TYPES];
-		for(int i=0; i<maps.length; i++){
-			long[] types2=addSharedVariants(maps[i], sharedVarMap.maps[i]);
-			Tools.add(types, types2);
-		}
-		return types;
+//	public long[] addSharedVariantsST(VarFilter filter, VarMap sharedVarMap) {
+//		assert(properPairRate>=0);
+//		assert(ploidy>0);
+//		assert(totalQualityAvg>=0);
+//		
+//		long[] types=new long[Var.VAR_TYPES];
+//		for(int i=0; i<maps.length; i++){
+//			long[] types2=addSharedVariants(maps[i], sharedVarMap.maps[i]);
+//			Tools.add(types, types2);
+//		}
+//		return types;
+//	}
+	
+	public long[] processVariantsMT(VarFilter filter, long[][] scoreArray, long[] ploidyArray, 
+			long[][] avgQualityArray, long[] maxQualityArray, long[][] ADArray, double[] AFArray) {
+		processVariantsMT_inner(filter, null, null, null, null, null, null, false);
+		processVariantsMT_inner(filter, null, null, null, null, null, null, true);
+		return processVariantsMT_inner(filter, scoreArray, ploidyArray, avgQualityArray, maxQualityArray, ADArray, AFArray, false);
 	}
 	
-	public long[] processVariantsMT(VarFilter filter, long[] scoreArray, long[] ploidyArray) {
-		processVariantsMT_inner(filter, null, null, false);
-		processVariantsMT_inner(filter, null, null, true);
-		return processVariantsMT_inner(filter, scoreArray, ploidyArray, false);
-	}
-	
-	private long[] processVariantsMT_inner(VarFilter filter, long[] scoreArray, long[] ploidyArray, boolean processInsertions) {
+	private long[] processVariantsMT_inner(VarFilter filter, long[][] scoreArray, long[] ploidyArray, 
+			long[][] avgQualityArray, long[] maxQualityArray, long[][] ADArray, double[] AFArray, boolean processInsertions) {
 		assert(properPairRate>=0);
 		assert(ploidy>0);
 		assert(totalQualityAvg>=0);
 		
 		ArrayList<ProcessThread> alpt=new ArrayList<ProcessThread>(WAYS);
 		for(int i=0; i<WAYS; i++){
-			ProcessThread pt=new ProcessThread(maps[i], filter, scoreArray!=null, ploidyArray!=null, processInsertions);
+			ProcessThread pt=new ProcessThread(maps[i], filter, scoreArray!=null, ploidyArray!=null, avgQualityArray!=null, ADArray!=null, processInsertions);
 			alpt.add(pt);
 			pt.start();
 		}
@@ -281,6 +302,10 @@ public class VarMap {
 			}
 			if(scoreArray!=null){Tools.add(scoreArray, pt.scoreArray);}
 			if(ploidyArray!=null){Tools.add(ploidyArray, pt.ploidyArray);}
+			if(avgQualityArray!=null){Tools.add(avgQualityArray, pt.avgQualityArray);}
+			if(maxQualityArray!=null){Tools.add(maxQualityArray, pt.maxQualityArray);}
+			if(ADArray!=null){Tools.add(ADArray, pt.ADArray);}
+			if(ADArray!=null){Tools.add(AFArray, pt.AFArray);}//Note this is triggered on ADArray
 			success&=pt.success;
 		}
 		
@@ -292,30 +317,40 @@ public class VarMap {
 	
 	private class ProcessThread extends Thread {
 		
-		ProcessThread(Map<Var, Var> map_, VarFilter filter_, boolean trackScores, boolean trackPloidy, boolean processInsertions_){
+		ProcessThread(Map<Var, Var> map_, VarFilter filter_, boolean trackScores, boolean trackPloidy, 
+				boolean trackQuality, boolean trackAD, boolean processInsertions_){
 			map=map_;
 			filter=filter_;
-			scoreArray=(trackScores ? new long[200] : null);
+			scoreArray=(trackScores ? new long[8][200] : null);
 			ploidyArray=(trackPloidy ? new long[ploidy+1] : null);
+			avgQualityArray=(trackQuality ? new long[8][100] : null);
+			maxQualityArray=(trackQuality ? new long[100] : null);
+			ADArray=(trackAD ? new long[2][7] : null);
+			AFArray=(trackAD ? new double[7] : null);
 			processInsertions=processInsertions_;
 		}
 		
 		@Override
 		public void run(){
-			types=processVariants(map, filter, scoreArray, ploidyArray, processInsertions);
+			types=processVariants(map, filter, scoreArray, ploidyArray, avgQualityArray, maxQualityArray, ADArray, AFArray, processInsertions);
 			success=true;
 		}
 		
 		final VarFilter filter;
 		final Map<Var, Var> map;
 		long[] types;
-		final long[] scoreArray;
+		final long[][] scoreArray;
 		final long[] ploidyArray;
+		final long[][] avgQualityArray;
+		final long[] maxQualityArray;
+		final long[][] ADArray;
+		final double[] AFArray;
 		boolean processInsertions;
 		boolean success=false;
 	}
 
-	private long[] processVariants(Map<Var, Var> map, VarFilter filter, long[] scoreArray, long[] ploidyArray, boolean processInsertions) {
+	private long[] processVariants(Map<Var, Var> map, VarFilter filter, long[][] scoreArray, long[] ploidyArray, 
+			long[][] avgQualityArray, long[] maxQualityArray, long[][] ADArray, double[] AFArray, boolean processInsertions) {
 		assert(properPairRate>=0);
 		assert(ploidy>0);
 		assert(totalQualityAvg>=0);
@@ -336,12 +371,27 @@ public class VarMap {
 				boolean pass=filter.passesFast(v);
 				if(pass){
 					v.calcCoverage(scafMap);
-					pass=filter.passesFilter(v, properPairRate, totalQualityAvg, totalMapqAvg, readLengthAvg, ploidy, scafMap);
+					pass=v.forced() || filter.passesFilter(v, properPairRate, totalQualityAvg, totalMapqAvg, readLengthAvg, ploidy, scafMap);
 				}
 				if(pass){
 					types[v.type()]++;
-					if(scoreArray!=null){scoreArray[(int)v.phredScore(properPairRate, totalQualityAvg, totalMapqAvg, readLengthAvg, filter.rarity, ploidy, scafMap)]++;}
+					if(scoreArray!=null){
+						int score=(int)v.phredScore(properPairRate, totalQualityAvg, totalMapqAvg, readLengthAvg, filter.rarity, ploidy, scafMap);
+						scoreArray[0][score]++;
+						scoreArray[v.type()+1][score]++;
+					}
 					if(ploidyArray!=null){ploidyArray[v.calcCopies(ploidy)]++;}
+					if(avgQualityArray!=null){
+						int q=(int)v.baseQAvg();
+						avgQualityArray[0][q]++;
+						avgQualityArray[v.type()+1][q]++;
+					}
+					if(maxQualityArray!=null){maxQualityArray[(int)v.baseQMax]++;}
+					if(ADArray!=null){
+						ADArray[0][v.type()]+=v.alleleCount();
+						ADArray[1][v.type()]+=v.coverage();
+					}
+					if(AFArray!=null){AFArray[v.type()]+=v.alleleFraction();}
 				}else{
 					iterator.remove();
 				}
@@ -373,34 +423,71 @@ public class VarMap {
 	public Var[] toArray(boolean sort) {
 		Var[] array=new Var[(int)size()];
 		int i=0;
-		for(ConcurrentHashMap<Var, Var> map : maps){
-			for(Entry<Var, Var> e : map.entrySet()){
-				array[i]=e.getValue();
-				i++;
-			}
+		
+//		assert(mappedToSelf(true));//123
+		
+		for(Var v : this){
+//			System.err.println(i+"\t"+v.start+"\t"+v.stop+"\t"+v.toKey()+"\t"+new String(v.allele)+"\t"+((Object)v).hashCode());//123
+			assert(i<array.length);
+			array[i]=v;
+			i++;
 		}
 		if(sort){Shared.sort(array);}
 		return array;
 	}
 	
+	private boolean mappedToSelf(boolean quiet){//123 slow
+		assert(false) : "Slow";
+		for(ConcurrentHashMap<Var, Var> map : maps){
+			for(Var key : map.keySet()){
+				Var value=map.get(key);
+				assert(value!=null);
+				assert(value.equals(key));
+				assert(value==key);
+				assert(map.get(value).equals(key));
+			}
+			for(Entry<Var, Var> e : map.entrySet()){
+				Var key=e.getKey();
+				Var value=e.getValue();
+				assert(value!=null);
+				assert(value.equals(key));
+				assert(value==key);
+			}
+			for(ConcurrentHashMap<Var, Var> map2 : maps){
+				if(map2!=map){
+					for(Var key : map.keySet()){
+						assert(!map2.containsKey(key));
+					}
+				}
+			}
+		}
+		int i=0;
+		for(Var v : this){
+			if(!quiet){System.err.println(i+"\t"+v.start+"\t"+v.stop+"\t"+v.toKey()+"\t"+v.hashcode+"\t"+v.hashCode()+"\t"+new String(v.allele)+"\t"+((Object)v).hashCode());}
+			Var v2=get(v);
+			assert(v==v2);
+			assert(get(v2)==v);
+			assert(get(v)==v) : "\n"+i+"\t"+v2.start+"\t"+v2.stop+"\t"+v2.toKey()+"\t"+v2.hashcode+"\t"+v2.hashCode()+"\t"+new String(v2.allele)+"\t"+((Object)v2).hashCode();
+			i++;
+		}
+		assert(i==size()) : i+", "+size()+", "+size2();
+//		assert(false) : i+", "+size();
+		return true;
+	}
+	
 	public long[] calcCoverage(ScafMap scafMap) {
 		long[] types=new long[Var.VAR_TYPES];
-		for(ConcurrentHashMap<Var, Var> map : maps){
-			for(Entry<Var, Var> e : map.entrySet()){
-				Var v=e.getValue();
-				v.calcCoverage(scafMap);
-				types[v.type()]++;
-			}
+		for(Var v : this){
+			v.calcCoverage(scafMap);
+			types[v.type()]++;
 		}
 		return types;
 	}
 	
 	public long[] countTypes() {
 		long[] types=new long[Var.VAR_TYPES];
-		for(ConcurrentHashMap<Var, Var> map : maps){
-			for(Entry<Var, Var> e : map.entrySet()){
-				types[e.getValue().type()]++;
-			}
+		for(Var v : this){
+			types[v.type()]++;
 		}
 		return types;
 	}
@@ -456,6 +543,7 @@ public class VarMap {
 	
 	
 	public void clear() {
+//		assert(mappedToSelf(false));//123
 		properPairRate=-1;
 		pairedInSequencingRate=-1;
 		totalQualityAvg=-1;
@@ -464,17 +552,67 @@ public class VarMap {
 		for(int i=0; i<maps.length; i++){
 			maps[i]=new ConcurrentHashMap<Var, Var>();
 		}
+//		assert(mappedToSelf(false));//123
 	}
 	
 	@Override
 	public String toString(){
-		StringBuilder sb=new StringBuilder();
+		ByteBuilder sb=new ByteBuilder();
 		for(ConcurrentHashMap<Var, Var> map : maps){
 			for(Var v : map.keySet()){
-				sb.append(v.toString());
+				v.toTextQuick(sb);
+				sb.nl();
 			}
 		}
 		return sb.toString();
+	}
+	
+	/*--------------------------------------------------------------*/
+	/*----------------          Iteration           ----------------*/
+	/*--------------------------------------------------------------*/
+	
+	@Override
+	public VarMapIterator iterator(){
+//		if(maps.length==1){return (maps[1].entrySet().iterator();}
+		return new VarMapIterator();
+	}
+	
+	private class VarMapIterator implements Iterator<Var> {
+
+		VarMapIterator(){
+//			System.err.println("\nInit: ("+this.hashCode()+")");//123
+			makeReady();
+		}
+		
+		@Override
+		public boolean hasNext() {
+			return iter.hasNext();
+		}
+
+		@Override
+		public Var next() {
+//			System.err.println("\nNext: ("+this.hashCode()+")");//123
+			Entry<Var, Var> e=iter.next();
+			if(!iter.hasNext()){makeReady();}
+			Var v=e==null ? null : e.getValue();
+//			System.err.println("Var "+v.hashCode());//123
+			return v;
+		}
+		
+		private void makeReady(){
+//			System.err.println("\nmakeReady ("+this.hashCode()+")");//123
+//			System.err.println("iter="+iter+", nextMap="+nextMap);//123
+			while((iter==null || !iter.hasNext()) && nextMap<maps.length){
+				iter=maps[nextMap].entrySet().iterator();
+				nextMap++;
+//				System.err.println("iter="+iter+", nextMap="+nextMap+" (loop)");//123
+			}
+//			System.err.println("break");//123
+		}
+		
+		private int nextMap=0;
+		private Iterator<Entry<Var, Var>> iter=null;
+		
 	}
 	
 	/*--------------------------------------------------------------*/
@@ -489,7 +627,7 @@ public class VarMap {
 	public double totalMapqAvg=-1;
 	public double readLengthAvg=-1;
 	public final ScafMap scafMap;
-	final ConcurrentHashMap<Var, Var>[] maps;
+	final ConcurrentHashMap<Var, Var>[] maps; //ConcurrentHashMap appears to be faster than HashMap here, if there are lots of threads.
 	
 	/*--------------------------------------------------------------*/
 	/*----------------        Static fields         ----------------*/
@@ -499,7 +637,8 @@ public class VarMap {
 	 * 
 	 */
 	private static final long serialVersionUID = 1L;
-	private static final int WAYS=4;
+	/** Must be a power of 2.  Max Vars stored is ways times 2 billion  */
+	private static final int WAYS=8;
 	public static final int MASK=WAYS-1;
 	
 }

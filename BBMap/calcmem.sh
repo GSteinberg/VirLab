@@ -1,10 +1,10 @@
 #!/bin/bash
 
 #usage(){
-#	echo "CalcMem v1.09"
+#	echo "CalcMem v1.12"
 #	echo "Written by Brian Bushnell, Doug Jacobsen, Alex Copeland, Bryce Foster"
 #	echo "Calculates available memory in megabytes"
-#	echo "Last modified December 4, 2018"
+#	echo "Last modified August 7, 2019"
 #}
 
 #Also parses other Java flags
@@ -64,10 +64,37 @@ function parseXmx () {
 	
 }
 
+function setEnvironment(){
 
-RAM=0;
+	EA="-ea"
+	EOOM=""
+
+	if [[ $SHIFTER_RUNTIME == 1 ]]; then
+		#Ignore NERSC_HOST
+		shifter=1
+	elif [ -z "$NERSC_HOST" ]; then
+		#Not NERSC; do nothing
+		:
+	else
+		PATH=/global/projectb/sandbox/gaag/bbtools/bgzip:$PATH
+		PATH=/global/projectb/sandbox/gaag/bbtools/lbzip2/bin:$PATH
+		PATH=/global/projectb/sandbox/gaag/bbtools/sambamba:$PATH
+		PATH=/global/projectb/sandbox/gaag/bbtools/java/jdk-11.0.2/bin:$PATH
+		PATH=/global/projectb/sandbox/gaag/bbtools/pigz2/pigz-2.4:$PATH
+		
+		if [[ $NERSC_HOST == cori ]]; then
+
+			#module unload PrgEnv-intel
+			#module load PrgEnv-gnu/7.1
+			PATH=/global/projectb/sandbox/gaag/bbtools/samtools_cori/bin:$PATH
+			:
+		fi
+	fi
+}
 
 function freeRam(){
+	RAM=0;
+
 	#Memory is in kilobytes.
 	local defaultMem=3200000
 	if [ $# -gt 0 ]; then

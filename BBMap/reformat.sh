@@ -3,7 +3,7 @@
 usage(){
 echo "
 Written by Brian Bushnell
-Last modified February 21, 2019
+Last modified September 11, 2019
 
 Description:  Reformats reads to change ASCII quality encoding, interleaving, file format, or compression format.
 Optionally performs additional functions such as quality trimming, subsetting, and subsampling.
@@ -46,8 +46,9 @@ addslash=f              Append ' /1' and ' /2' to read names, if not already pre
 spaceslash=t            Put a space before the slash in addslash mode.
 addcolon=f              Append ' 1:' and ' 2:' to read names, if not already present.  Please include the flag 'int=t' if the reads are interleaved.
 underscore=f            Change whitespace in read names to underscores.
-rcomp=f                 (rc) Reverse-compliment reads.
-rcompmate=f             (rcm) Reverse-compliment read 2 only.
+rcomp=f                 (rc) Reverse-complement reads.
+rcompmate=f             (rcm) Reverse-complement read 2 only.
+comp=f                  (complement) Reverse-complement reads.
 changequality=t         (cq) N bases always get a quality of 0 and ACGT bases get a min quality of 2.
 quantize=f              Quantize qualities to a subset of values like NextSeq.  Can also be used with comma-delimited list, like quantize=0,8,13,22,27,32,37
 tuc=f                   (touppercase) Change lowercase letters in reads to uppercase.
@@ -58,7 +59,8 @@ iupacToN=f              (itn) Convert non-ACGTN symbols to N.
 monitor=f               Kill this process if it crashes.  monitor=600,0.01 would kill after 600 seconds under 1% usage.
 crashjunk=t             Crash when encountering reads with invalid bases.
 tossjunk=f              Discard reads with invalid characters as bases.
-fixjunk=f               Convert invalid bases to N.
+fixjunk=f               Convert invalid bases to N (or X for amino acids).
+dotdashxton=f           Specifically convert . - and X to N (or X for amino acids).
 fixheaders=f            Convert nonstandard header characters to standard ASCII.
 recalibrate=f           (recal) Recalibrate quality scores.  Must first generate matrices with CalcTrueQuality.
 maxcalledquality=41     Quality scores capped at this upper bound.
@@ -94,7 +96,7 @@ ehist=<file>            Errors-per-read histogram.
 qahist=<file>           Quality accuracy histogram of error rates versus quality score.
 indelhist=<file>        Indel length histogram.
 mhist=<file>            Histogram of match, sub, del, and ins rates by read location.
-ihist=<file>            Insert size histograms.  Requires paired reads interleaved in sam file.
+ihist=<file>            Insert size histograms.  Requires paired reads in a sam file.
 idhist=<file>           Histogram of read count versus percent identity.
 idbins=100              Number idhist bins.  Set to 'auto' to use read length.
 
@@ -154,7 +156,7 @@ sam=                    Set to 'sam=1.3' to convert '=' and 'X' cigar symbols (f
                         Set to 'sam=1.4' to convert 'M' to '=' and 'X' (sam=1.4 requires MD tags to be present, or ref to be specified).
 
 Sam and bam alignment filtering options:
-These require = and X symbols in cigar strings, or MD tags, or areference fasta.
+These require = and X symbols in cigar strings, or MD tags, or a reference fasta.
 -1 means disabled; to filter reads with any of a symbol type, set to 0.
 
 subfilter=-1            Discard reads with more than this many substitutions.
@@ -164,7 +166,8 @@ indelfilter=-1          Discard reads with more than this many indels.
 editfilter=-1           Discard reads with more than this many edits.
 inslenfilter=-1         Discard reads with an insertion longer than this.
 dellenfilter=-1         Discard reads with a deletion longer than this.
-idfilter=-1.0           Discard reads with identity below this.
+minidfilter=-1.0        Discard reads with identity below this (0-1).
+maxidfilter=1.0         Discard reads with identity above this (0-1).
 clipfilter=-1           Discard reads with more than this many soft-clipped bases.
 
 Kmer counting and cardinality estimation:
@@ -204,9 +207,8 @@ popd > /dev/null
 #DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/"
 CP="$DIR""current/"
 
-z="-Xmx200m"
-EA="-ea"
-EOOM=""
+z="-Xmx300m"
+z="-Xms300m"
 set=0
 
 if [ -z "$1" ] || [[ $1 == -h ]] || [[ $1 == --help ]]; then
@@ -216,37 +218,13 @@ fi
 
 calcXmx () {
 	source "$DIR""/calcmem.sh"
+	setEnvironment
 	parseXmx "$@"
 }
 calcXmx "$@"
 
 function reformat() {
-	if [[ $SHIFTER_RUNTIME == 1 ]]; then
-		#Ignore NERSC_HOST
-		shifter=1
-	elif [[ $NERSC_HOST == genepool ]]; then
-		module unload oracle-jdk
-		module load oracle-jdk/1.8_144_64bit
-		module load samtools/1.4
-		module load pigz
-	elif [[ $NERSC_HOST == denovo ]]; then
-		module unload java
-		module unload oracle-jdk
-		module load java/1.8.0_144
-		module load PrgEnv-gnu/7.1
-		module load samtools/1.4
-		module load pigz
-	elif [[ $NERSC_HOST == cori ]]; then
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/jgi
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/usg
-		module unload java
-		module load java/1.8.0_144
-		module unload PrgEnv-intel
-		module load PrgEnv-gnu/7.1
-		module load samtools/1.4
-		module load pigz
-	fi
-	local CMD="java $EA $EOOM $z -cp $CP jgi.ReformatReads $@"
+	local CMD="java $EA $EOOM $z $z2 -cp $CP jgi.ReformatReads $@"
 	echo $CMD >&2
 	eval $CMD
 }

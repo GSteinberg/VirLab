@@ -27,7 +27,7 @@ public class IndexMaker4 {
 			boolean WRITE, boolean DISK_INVALID, Block[] index){
 		Timer t=new Timer();
 		
-		MAX_CONCURRENT_BLOCKS=(Shared.LOW_MEMORY ? 1 : (Data.WINDOWS ? (WRITE ? 1 : Tools.max(1, Shared.threads()/4)) : Tools.max(1, Shared.threads()/4)));
+		MAX_CONCURRENT_BLOCKS=(Shared.LOW_MEMORY ? 1 : (Shared.WINDOWS ? (WRITE ? 1 : Tools.max(1, Shared.threads()/4)) : Tools.max(1, Shared.threads()/4)));
 		
 		minChrom=Tools.max(1, minChrom);
 		if(genome>=0 && Data.GENOME_BUILD!=genome){
@@ -516,7 +516,7 @@ public class IndexMaker4 {
 	static final String ALLOC_SYNC=new String("ALLOC_SYNC");
 	private static final String THREAD_SYNC=new String("THREAD_SYNC");
 	
-	public static int MAX_CONCURRENT_BLOCKS=(Shared.LOW_MEMORY ? 1 : (Data.WINDOWS ? 1 : Tools.max(1, Shared.threads()/4)));
+	public static int MAX_CONCURRENT_BLOCKS=(Shared.LOW_MEMORY ? 1 : (Shared.WINDOWS ? 1 : Tools.max(1, Shared.threads()/4)));
 	private static int ACTIVE_BLOCKS=0;
 
 	public static boolean ALLOW_POLYMERS=false;

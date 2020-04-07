@@ -1,8 +1,10 @@
 package shared;
 
+import java.io.File;
 import java.io.PrintStream;
 import java.lang.management.ManagementFactory;
 import java.lang.reflect.Method;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -12,9 +14,57 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 
-import dna.Data;
-
 public class Shared {
+	
+	
+	/*--------------------------------------------------------------*/
+	/*----------------         Environment          ----------------*/
+	/*--------------------------------------------------------------*/
+
+
+	public static boolean ENV=(System.getenv()!=null);
+	public static boolean WINDOWS=envContainsPair("OS", "Win", true);
+	public static boolean MAC=envContainsPair("OS", "Mac", true);
+	//https://stackoverflow.com/questions/14288185/detecting-windows-or-linux
+	public static boolean LINUX=envContainsPair("OS", "nix", true) || envContainsPair("OS", "nux", true) || envContainsPair("OS", "aix", true);
+	public static boolean SOLARIS=envContainsPair("OS", "sunos", true);
+	public static boolean GENEPOOL=envContainsPair("NERSC_HOST", "genepool", false);
+	public static boolean DENOVO=envContainsPair("NERSC_HOST", "denovo", false);
+	public static boolean CORI=envContainsPair("NERSC_HOST", "cori", false);
+	public static boolean AMD64="amd64".equalsIgnoreCase(System.getProperty("os.arch"));
+	private static String HOSTNAME;
+	
+	public static boolean envContainsPair(String key, String value, boolean loose){
+		Map<String, String> map=System.getenv();
+		String v=map.get(key);
+		if(value==null || v==null){return v==value;}
+		return loose ? v.contains(value.toLowerCase()) : value.equalsIgnoreCase(v);
+	}
+	
+	public static String HOSTNAME(){
+		if(HOSTNAME==null){
+			try {
+				java.net.InetAddress localMachine = java.net.InetAddress.getLocalHost();
+				HOSTNAME=localMachine.getHostName();
+			} catch (UnknownHostException e) {
+				// TODO Auto-generated catch block
+//				e.printStackTrace();
+				HOSTNAME="unknown";
+			} catch (NullPointerException e) {
+				// TODO Auto-generated catch block
+//				e.printStackTrace();
+				HOSTNAME="unknown";
+			} catch (Throwable e) {
+				HOSTNAME="unknown";
+			}
+		}
+		return HOSTNAME;
+	}
+	
+	
+	/*--------------------------------------------------------------*/
+	/*----------------            Stuff             ----------------*/
+	/*--------------------------------------------------------------*/
 	
 	public static void main(String[] args){
 		COMMAND_LINE=args;
@@ -29,6 +79,8 @@ public class Shared {
 	private static int READ_BUFFER_LENGTH=200;
 	private static long READ_BUFFER_MAX_DATA=400000;
 	
+	public static boolean OUTPUT_KMG=true;
+	
 	/** Temporary, for testing; should be made non-global */
 	public static boolean AMINO_IN=false;
 	
@@ -40,14 +92,14 @@ public class Shared {
 	public static final int MINGAP=GAPBUFFER2+GAPLEN;
 	public static final int GAPCOST=Tools.max(1, GAPLEN/64);
 	public static final byte GAPC='-';
-
-	public static String BBMAP_VERSION_STRING="38.41";
-	public static String BBMAP_VERSION_NAME="Pond Scum";
+	
+	public static String BBMAP_VERSION_STRING="38.69";
+	public static String BBMAP_VERSION_NAME="Bubble Bath";
 	
 	public static boolean TRIM_READ_COMMENTS=false;
 	public static boolean TRIM_RNAME=false; //For mapped sam reads
 	
-	public static boolean USE_JNI=false;//Data.GENEPOOL;
+	public static boolean USE_JNI=CORI || DENOVO || GENEPOOL || (AMD64 && (LINUX || MAC));
 	public static boolean USE_MPI=false;
 	public static boolean MPI_KEEP_ALL=true;
 	/** Use ConcurrentReadInputStreamMPI instead of D */
@@ -119,7 +171,7 @@ public class Shared {
 	
 	/** Anomaly probably resolved as of v.20.1
 	 * This variable should be TRUE for normal users and FALSE for me. */
-	public static boolean anomaly=!(System.getProperty("user.dir")+"").contains("/bushnell/") && !Data.WINDOWS;
+	public static boolean anomaly=!(System.getProperty("user.dir")+"").contains("/bushnell/") && !WINDOWS;
 	
 	public static final char[] getTLCB(int len){
 		char[] buffer=TLCB.get();
@@ -202,6 +254,63 @@ public class Shared {
 	}
 	
 	/*--------------------------------------------------------------*/
+	/*----------------             JNI              ----------------*/
+	/*--------------------------------------------------------------*/
+	
+	private static int loadedJNI=-1; 
+	public static synchronized boolean loadJNI(){
+		return loadJNI("bbtoolsjni");
+	}
+	public static synchronized boolean loadJNI(String name){
+		if(loadedJNI<0){
+			boolean success=false;
+			
+			String libpath=System.getProperty("java.library.path");
+//			System.err.println("libpath='"+libpath+"'");
+			
+			if(libpath==null || libpath.length()==0){
+				libpath=System.getProperty("java.class.path").replace("/current", "/jni");
+			}else if(!libpath.contains("/jni")){
+				libpath=libpath+":"+System.getProperty("java.class.path").replace("/current", "/jni");
+			}
+			
+			//Normal load
+			try{
+				System.loadLibrary(name);
+				success=true;
+			}catch(UnsatisfiedLinkError e){}
+			
+			if(!success){
+				// System.loadLibrary() does not work with MPI.
+				// Need to use System.load() with an explicit full
+				// path to the native library file for the MPI case.
+//				String libpath=System.getProperty("java.library.path");
+				libpath=libpath.replace("-Djava.library.path=","");
+				String[] libpathEntries=libpath.split(File.pathSeparator);
+				for(int i=0; i<libpathEntries.length && !success; i++){
+					String lib=libpathEntries[i]+"/"+System.mapLibraryName(name);
+					try{
+						System.load(lib);
+						success=true;
+					}catch(UnsatisfiedLinkError e2){
+						success=false;
+					}
+				}
+			}
+
+			if(success){
+				loadedJNI=1;
+			}else{
+				loadedJNI=0;
+				System.err.println("Native library can not be found in java.library.path.");
+				new Exception().printStackTrace();
+				System.exit(1);
+			}
+		}
+		return loadedJNI==1;
+	}
+	
+	/*--------------------------------------------------------------*/
 	/*----------------           Buffers            ----------------*/
 	/*--------------------------------------------------------------*/
 	
@@ -221,12 +330,14 @@ public class Shared {
 		return setBuffers(Tools.max(4, (threads*3)/2));
 	}
 	
+	/** Number of read lists buffered in input streams */
 	public static int setBuffers(int num){
 //		assert(READ_BUFFER_NUM_BUFFERS==0 || READ_BUFFER_NUM_BUFFERS==num) : READ_BUFFER_NUM_BUFFERS+" -> "+num; //TODO: 123
 		num=Tools.max(2, num);
 		return READ_BUFFER_NUM_BUFFERS=num;
 	}
 	
+	/** Number of read lists buffered in input streams */
 	public static int numBuffers(){
 		return READ_BUFFER_NUM_BUFFERS;
 	}
@@ -328,9 +439,11 @@ public class Shared {
 			System.err.println("Memory: "+"max="+mmemory+"m, total="+tmemory+"m, "+"free="+fmemory+"m, used="+umemory+"m");
 		}catch(Throwable t){}
 	}
-	
-	public static final Random threadLocalRandom(){
+
+	public static final Random threadLocalRandom(){return threadLocalRandom(-1);}
+	public static final Random threadLocalRandom(long seed){
 		Random randy;
+		if(seed>=0){return new Random(seed);}//ThreadLocalRandom does not support seeds
 		try {
 			randy=ThreadLocalRandom.current();
 		} catch (Throwable e) {//In case the JVM does not support ThreadLocalRandom;
@@ -443,6 +556,11 @@ public class Shared {
 		}
 	}
 
+	/** 
+	 * Close this output stream if it is not stderr or stdout.
+	 * Intended for files. 
+	 * @param outstream
+	 */
 	public static void closeStream(PrintStream outstream) {
 		if(outstream!=null){
 			synchronized(outstream){

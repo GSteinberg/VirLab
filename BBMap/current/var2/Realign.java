@@ -422,7 +422,7 @@ public class Realign {
 		 */
 		boolean processRead(final Read r){
 			if(r.bases==null || r.length()<=1){return false;}
-			SamLine sl=(SamLine) r.obj;
+			final SamLine sl=r.samline;
 			final int len0=r.length();
 			
 			if(samFilter!=null && !samFilter.passesFilter(sl)){return false;}
@@ -432,7 +432,7 @@ public class Realign {
 			final Scaffold scaf=scafMap.getScaffold(sl);
 			final int scafnum=scaf.number;
 			
-			r.toLongMatchString(false); //Not necessary if scoring can be done on short match string
+//			r.toLongMatchString(false); //Not necessary if scoring can be done on short match string
 			assert(sl.cigar!=null) : sl;
 			boolean realigned=realigner.realign(r, sl, scaf, unclip);
 			if(!realigned && r.match!=null){sl.cigar=SamLine.toCigar14(r.match, r.start, r.stop, scaf.length, sl.seq);}
@@ -446,7 +446,7 @@ public class Realign {
 			}
 			if(len0-leftTrimAmount-rightTrimAmount<2){return false;}
 			
-			int trimmed=TrimRead.trimReadWithMatch(r, sl, leftTrimAmount, rightTrimAmount, 0, scaf.length, false);
+			int trimmed=(leftTrimAmount<1 && rightTrimAmount<1 ? 0 : TrimRead.trimReadWithMatch(r, sl, leftTrimAmount, rightTrimAmount, 0, scaf.length, false));
 			if(trimmed<0 || r.length()<2 || sl.cigar==null){return false;}
 			basesTrimmedT+=trimmed;
 			if(trimmed>0){sl.optional=null;}

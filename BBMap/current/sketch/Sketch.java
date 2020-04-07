@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import dna.AminoAcid;
@@ -22,28 +23,47 @@ import tax.ImgRecord;
  * @date July 7, 2016
  *
  */
-public class Sketch extends SketchObject implements Comparable<Sketch> {
+public class Sketch extends SketchObject implements Comparable<Sketch>, Cloneable {
 	
 	/*--------------------------------------------------------------*/
 	/*----------------         Constructors         ----------------*/
 	/*--------------------------------------------------------------*/
 	
-	//Array should already be hashed, sorted, unique, subtracted from Long.MAX_VALUE, then reversed.
-	public Sketch(long[] array_, int[] counts_, ArrayList<String> meta_){
-		this(array_, counts_, -1, -1, -1, -1, -1, -1, null, null, null, meta_);
+	@Override
+	public Sketch clone() {
+		Sketch copy=null;
+		try {
+			copy = (Sketch)super.clone();
+		} catch (CloneNotSupportedException e) {
+//			e.printStackTrace();
+			throw new RuntimeException(e);
+		}
+		copy.compareBitSet=null;
+		copy.indexBitSet=null;
+		return copy;
 	}
 	
+	//Array should already be hashed, sorted, unique, subtracted from Long.MAX_VALUE, then reversed.
+	public Sketch(long[] keys_, int[] keyCounts_, long[] baseCounts_, byte[] ssu_, ArrayList<String> meta_){
+		this(keys_, keyCounts_, baseCounts_, ssu_, -1, -1, -1, -1, -1, -1, null, null, null, meta_);
+	}
+
 	public Sketch(SketchHeap heap, boolean clearFname, boolean keepCounts, ArrayList<String> meta_){
-		this(heap.toSketchArray(), null, (int)heap.taxID, heap.imgID, heap.genomeSizeBases, heap.genomeSizeKmers, heap.genomeSequences,
+		this(heap, clearFname, keepCounts, meta_, -1);
+	}
+	
+	public Sketch(SketchHeap heap, boolean clearFname, boolean keepCounts, ArrayList<String> meta_, int minKeyOccuranceCount){
+		this(heap.toSketchArray_minCount(minKeyOccuranceCount), null, heap.baseCounts(false), heap.ssu(), (int)heap.taxID, heap.imgID,
+				heap.genomeSizeBases, heap.genomeSizeKmers, heap.genomeSequences,
 				heap.probCorrect(), heap.taxName(), heap.name0(), heap.fname(), meta_);
-		assert(counts==null);
+		assert(keyCounts==null);
 		if(!heap.setMode && keepCounts){
 			LongHashMap map=heap.map();
-			counts=new int[array.length];
-			for(int i=0; i<array.length; i++){
-				int count=map.get(Long.MAX_VALUE-array[i]);
-				assert(count>0) : array[i]+" -> "+count+"\n"+Arrays.toString(map.values())+"\n"+Arrays.toString(map.keys());
-				counts[i]=count;
+			keyCounts=new int[keys.length];
+			for(int i=0; i<keys.length; i++){
+				int count=map.get(Long.MAX_VALUE-keys[i]);
+				assert(count>0) : keys[i]+" -> "+count+"\n"+Arrays.toString(map.values())+"\n"+Arrays.toString(map.keys());
+				keyCounts[i]=count;
 			}
 		}
 		if(heap.setMode){heap.clearSet();}
@@ -53,11 +73,15 @@ public class Sketch extends SketchObject implements Comparable<Sketch> {
 //		assert(false) : (counts==null)+", "+heap.setMode+", "+keepCounts;
 	}
 
-	public Sketch(long[] array_, int[] counts_, int taxID_, long imgID_, long gSizeBases_, long gSizeKmers_, long gSequences_, double probCorrect_,
-			String taxName_, String name0_, String fname_, ArrayList<String> meta_){
-		array=array_;
-		counts=counts_;
-		assert(counts==null || array==null || counts.length==array.length) : (array==null ? "null" : array.length)+", "+(counts==null ? "null" : counts.length);
+	public Sketch(long[] keys_, int[] keyCounts_, long[] baseCounts_, byte[] ssu_, int taxID_, long imgID_, long gSizeBases_, 
+			long gSizeKmers_, long gSequences_, double probCorrect_, String taxName_, String name0_, String fname_, ArrayList<String> meta_){
+//		Exception e=new Exception(baseCounts_+", "+Arrays.toString(baseCounts_));
+//		e.printStackTrace();
+		keys=keys_;
+		keyCounts=keyCounts_;
+		baseCounts=baseCounts_;
+		ssu=ssu_;
+		assert(keyCounts==null || keys==null || keyCounts.length==keys.length) : (keys==null ? "null" : keys.length)+", "+(keyCounts==null ? "null" : keyCounts.length);
 		taxID=taxID_;
 		imgID=imgID_;
 		sketchID=nextSketch.getAndIncrement();
@@ -116,8 +140,8 @@ public class Sketch extends SketchObject implements Comparable<Sketch> {
 	/*--------------------------------------------------------------*/
 	
 	public void add(Sketch other, int maxlen){
-		final long[] a=array;
-		final long[] b=other.array;
+		final long[] a=keys;
+		final long[] b=other.keys;
 		if(maxlen<1){
 			assert(false);
 			maxlen=1000000;
@@ -140,13 +164,19 @@ public class Sketch extends SketchObject implements Comparable<Sketch> {
 			if(list.size()>=maxlen){break;}
 		}
 		
-		if(array.length==list.size()){
+		if(keys.length==list.size()){
 			for(int i=0; i<list.size; i++){
-				array[i]=list.array[i];
+				keys[i]=list.array[i];
 			}
 		}else{
-			array=list.toArray();
+			keys=list.toArray();
 		}
+	}
+
+	public void resize(int newSize) {
+		if(newSize>=length()){return;}
+		keys=Arrays.copyOf(keys, newSize);
+		if(keyCounts!=null){keyCounts=Arrays.copyOf(keyCounts, newSize);}
 	}
 	
 	/*--------------------------------------------------------------*/
@@ -154,7 +184,7 @@ public class Sketch extends SketchObject implements Comparable<Sketch> {
 	/*--------------------------------------------------------------*/
 	
 	public static final Sketch intersection(Sketch sa, Sketch sb){
-		Sketch shared=intersection(sa.array, sb.array, sa.counts);
+		Sketch shared=intersection(sa.keys, sb.keys, sa.keyCounts);
 		if(shared!=null){
 			shared.taxID=sb.taxID;
 			shared.taxName=sb.taxName;
@@ -189,11 +219,11 @@ public class Sketch extends SketchObject implements Comparable<Sketch> {
 		}
 		if(matches<1){return null;}
 			
-		return new Sketch(ll.toArray(), il.size>0 ? il.toArray() : null, null);
+		return new Sketch(ll.toArray(), il.size>0 ? il.toArray() : null, null, null, null);
 	}
 	
 	public static final Sketch union(Sketch sa, Sketch sb){
-		Sketch shared=union(sa.array, sb.array, sa.counts, sb.counts);
+		Sketch shared=union(sa.keys, sb.keys, sa.keyCounts, sb.keyCounts, sa.baseCounts, sb.baseCounts, sa.ssu, sb.ssu);
 		if(shared!=null){
 			shared.taxID=sa.taxID;
 			shared.taxName=sa.taxName;
@@ -206,29 +236,34 @@ public class Sketch extends SketchObject implements Comparable<Sketch> {
 		return shared;
 	}
 	
-	public static final Sketch union(long[] a, long[] b, int[] aCounts, int[] bCounts){
+	public static final Sketch union(long[] a, long[] b, int[] aCounts, int[] bCounts, long[] aBaseCounts, long[] bBaseCounts, byte[] assu, byte[] bssu){
 		int i=0, j=0, matches=0;
 		LongList ll=new LongList();
-		IntList il=new IntList();
+		IntList il=(aCounts==null || bCounts==null ? null : new IntList());
+		byte[] ssu=(bssu==null ? assu : assu==null ? bssu : assu.length>bssu.length ? assu : bssu);
+		long[] baseCounts=(aBaseCounts==null || bBaseCounts==null ? null : new long[aBaseCounts.length]);
+		if(baseCounts!=null){
+			for(int k=0; k<baseCounts.length; k++) {baseCounts[k]+=(aBaseCounts[k]+bBaseCounts[k]);}
+		}
 		for(; i<a.length && j<b.length; ){
 			final long ka=a[i], kb=b[j];
 			if(ka==kb){
 				matches++;
 				ll.add(ka);
-				if(aCounts!=null && bCounts!=null){
+				if(il!=null){
 					il.add(aCounts[i]+bCounts[i]);
 				}
 				i++;
 				j++;
 			}else if(ka<kb){
 				ll.add(ka);
-				if(aCounts!=null && bCounts!=null){
+				if(il!=null){
 					il.add(aCounts[i]);
 				}
 				i++;
 			}else{
 				ll.add(kb);
-				if(aCounts!=null && bCounts!=null){
+				if(il!=null){
 					il.add(bCounts[i]);
 				}
 				j++;
@@ -236,7 +271,7 @@ public class Sketch extends SketchObject implements Comparable<Sketch> {
 		}
 		if(matches<1){return null;}
 			
-		return new Sketch(ll.toArray(), il.size>0 ? il.toArray() : null, null);
+		return new Sketch(ll.toArray(), il.size>0 ? il.toArray() : null, baseCounts, ssu, null);
 	}
 	
 	/*--------------------------------------------------------------*/
@@ -280,7 +315,7 @@ public class Sketch extends SketchObject implements Comparable<Sketch> {
 	/*--------------------------------------------------------------*/
 	
 	public int countMatches(Sketch other, CompareBuffer buffer, AbstractBitSet present, boolean fillPresent, int[][] taxHits, int contamLevel){
-		return countMatches(array, other.array, counts, other.counts, refHitCounts, other.taxID, buffer, present, fillPresent, taxHits, contamLevel);
+		return countMatches(keys, other.keys, keyCounts, other.keyCounts, refHitCounts, other.taxID, buffer, present, fillPresent, taxHits, contamLevel);
 	}
 	
 	public static final int countMatches(long[] a, long[] b, int[] aCounts, int[] bCounts, int[] refHitCounts, int bid,
@@ -539,11 +574,11 @@ public class Sketch extends SketchObject implements Comparable<Sketch> {
 	}
 	
 	public ByteBuilder toHeader(ByteBuilder bb){
-		bb.append("#SZ:").append(array.length);
+		bb.append("#SZ:").append(keys.length);
 		bb.append("\tCD:");
 		bb.append(codingArray[CODING]);
 		if(deltaOut){bb.append('D');}
-		if(counts!=null){bb.append('C');}
+		if(keyCounts!=null){bb.append('C');}
 		if(aminoOrTranslate()){bb.append('M');}
 		if(amino8){bb.append('8');}
 
@@ -556,7 +591,11 @@ public class Sketch extends SketchObject implements Comparable<Sketch> {
 		final long ge=genomeSizeEstimate();
 		if(ge>0){bb.append("\tGE:").append(ge);}
 		if(genomeSequences>0){bb.append("\tGQ:"+genomeSequences);}
-		if(probCorrect>0){bb.append("\tPC:"+String.format("%.4f", probCorrect));}
+		if(baseCounts!=null && !aminoOrTranslate()){
+			bb.append("\tBC:").append(baseCounts[0]).append(',').append(baseCounts[1]).append(',');
+			bb.append(baseCounts[2]).append(',').append(baseCounts[3]);
+		}
+		if(probCorrect>0){bb.append("\tPC:"+String.format(Locale.ROOT, "%.4f", probCorrect));}
 		if(taxID>=0){bb.append("\tID:").append(taxID);}
 		if(imgID>=0){bb.append("\tIMG:").append(imgID);}
 		if(spid>0){bb.append("\tSPID:").append(spid);}
@@ -567,6 +606,11 @@ public class Sketch extends SketchObject implements Comparable<Sketch> {
 			for(String s : meta){
 				bb.append("\tMT_").append(s);
 			}
+		}
+		if(ssu!=null){
+			bb.append("\tSSU:").append(ssu.length);
+			bb.append('\n');
+			bb.append("#SSU:").append(ssu);
 		}
 		return bb;
 	}
@@ -582,9 +626,9 @@ public class Sketch extends SketchObject implements Comparable<Sketch> {
 		bb.append("\n");
 		byte[] temp=null;
 		if(CODING==A48){temp=new byte[12];}
-		for(int i=0; i<array.length; i++){
-			long key=array[i];
-			int count=(counts==null ? 1 : counts[i]);
+		for(int i=0; i<keys.length; i++){
+			long key=keys[i];
+			int count=(keyCounts==null ? 1 : keyCounts[i]);
 			long x=key-prev;
 			if(CODING==A48){
 				appendA48(x, bb, temp);
@@ -613,9 +657,9 @@ public class Sketch extends SketchObject implements Comparable<Sketch> {
 		bb.append("\n");
 		final byte[] temp=new byte[12];
 
-		if(counts==null){
-			for(int i=0; i<array.length; i++){
-				long key=array[i];
+		if(keyCounts==null){
+			for(int i=0; i<keys.length; i++){
+				long key=keys[i];
 				long x=key-prev;
 				if(CODING==A48){
 					appendA48(x, bb, temp);
@@ -624,9 +668,9 @@ public class Sketch extends SketchObject implements Comparable<Sketch> {
 				prev=key;
 			}
 		}else{
-			for(int i=0; i<array.length; i++){
-				long key=array[i];
-				int count=counts[i];
+			for(int i=0; i<keys.length; i++){
+				long key=keys[i];
+				int count=keyCounts[i];
 				long x=key-prev;
 				if(CODING==A48){
 					appendA48(x, bb, temp);
@@ -876,7 +920,7 @@ public class Sketch extends SketchObject implements Comparable<Sketch> {
 	/*--------------------------------------------------------------*/
 	
 	public long genomeSizeEstimate() {
-		return array.length==0 ? 0 : Tools.min(genomeSizeKmers, genomeSizeEstimate(array[array.length-1], array.length));
+		return keys.length==0 ? 0 : Tools.min(genomeSizeKmers, genomeSizeEstimate(keys[keys.length-1], keys.length));
 	}
 	
 	public long genomeSizeEstimate(int minCount) {
@@ -884,9 +928,9 @@ public class Sketch extends SketchObject implements Comparable<Sketch> {
 		if(length()==0){return 0;}
 		long max=0;
 		int num=0;
-		for(int i=0; i<counts.length; i++){
-			if(counts[i]>=minCount){
-				max=array[i];
+		for(int i=0; i<keyCounts.length; i++){
+			if(keyCounts[i]>=minCount){
+				max=keys[i];
 				num++;
 			}
 		}
@@ -895,12 +939,19 @@ public class Sketch extends SketchObject implements Comparable<Sketch> {
 		return est;
 	}
 	
+	public float gc(){
+		if(baseCounts==null){return 0;}
+		long at=baseCounts[0]+baseCounts[3];
+		long gc=baseCounts[1]+baseCounts[2];
+		return gc/(Tools.max(1.0f, at+gc));
+	}
+	
 	public String filePrefix(){return ReadWrite.stripToCore(fname);}
 	public String name(){return taxName!=null ? taxName : name0!=null ? name0 : fname;}
 	public String taxName(){return taxName;}
 	public String name0(){return name0;}
 	public String fname(){return fname;}
-	public int length(){return array.length;}
+	public int length(){return keys.length;}
 	public void setTaxName(String s){taxName=s;}
 	public void setName0(String s){name0=s;}
 	public void setFname(String s){
@@ -916,8 +967,8 @@ public class Sketch extends SketchObject implements Comparable<Sketch> {
 
 	public ArrayList<LongPair> toKhist() {
 		HashMap<Long, LongPair> map=new HashMap<Long, LongPair>();
-		for(int i=0; i<counts.length; i++){
-			int a=counts[i];
+		for(int i=0; i<keyCounts.length; i++){
+			int a=keyCounts[i];
 			Long key=(long)a;
 			LongPair value=map.get(key);
 			if(value==null){
@@ -931,6 +982,12 @@ public class Sketch extends SketchObject implements Comparable<Sketch> {
 		list.addAll(map.values());
 		Collections.sort(list);
 		return list;
+	}
+
+	public void addSSU(HashMap<Integer, byte[]> ssuMap) {
+		if(taxID>=0 && ssu==null && ssuMap!=null){
+			ssu=ssuMap.get(taxID);
+		}
 	}
 	
 	/*--------------------------------------------------------------*/
@@ -963,13 +1020,20 @@ public class Sketch extends SketchObject implements Comparable<Sketch> {
 	}
 	
 	public boolean merged(){return mergedBitSets;}
+
+	public byte[] ssu(){return ssu;}
 	
 	/*--------------------------------------------------------------*/
 	/*----------------            Fields            ----------------*/
 	/*--------------------------------------------------------------*/
 	
-	public long[] array;
-	int[] counts;
+	/** Stores sorted hashcodes, ascending, as Long.MAX_VALUE-(raw hashcode) */
+	public long[] keys;
+	/** Stores kmer (hashcode) observation counts */
+	int[] keyCounts;
+	/** Stores base (ACGTN) counts */
+	final long[] baseCounts;
+	private byte[] ssu;
 	public int taxID;
 	int sketchID;//Based on loading order
 	public final long genomeSequences;

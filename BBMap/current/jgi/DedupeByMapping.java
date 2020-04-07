@@ -75,7 +75,7 @@ public class DedupeByMapping extends BBTool_ST{
 	}
 	
 	boolean processReadPair_unsorted(Read r1) {
-		SamLine sl=(SamLine) r1.obj;
+		SamLine sl=r1.samline;
 		if(!sl.primary()){return false;}
 		if(sl.mapped()){
 			String rname=new String(sl.rname());
@@ -100,7 +100,7 @@ public class DedupeByMapping extends BBTool_ST{
 			assert(old.mate==null);
 			old.mate=r1;
 			r1.mate=old;
-			SamLine sl2=(SamLine) old.obj;
+			SamLine sl2=old.samline;
 			if(sl2.pairnum()==1){
 				nameToRead.put(r1.id, r1);
 			}
@@ -111,7 +111,7 @@ public class DedupeByMapping extends BBTool_ST{
 	
 	boolean processReadPair_sorted(Read r1) {
 		assert(false) : "TODO";
-		SamLine sl=(SamLine) r1.obj;
+		SamLine sl=r1.samline;
 		if(!sl.primary()){return false;}
 		if(sl.mapped()){
 			String rname=new String(sl.rname());
@@ -136,7 +136,7 @@ public class DedupeByMapping extends BBTool_ST{
 			assert(old.mate==null);
 			old.mate=r1;
 			r1.mate=old;
-			SamLine sl2=(SamLine) old.obj;
+			SamLine sl2=old.samline;
 			if(sl2.pairnum()==1){
 				nameToRead.put(r1.id, r1);
 			}
@@ -172,7 +172,7 @@ public class DedupeByMapping extends BBTool_ST{
 				for(int idx=0; idx<reads.size(); idx++){
 					final Read r1=reads.get(idx);
 					assert(r1.mate==null);
-					assert(r1.obj!=null);
+					assert(r1.samline!=null);
 					
 					final int initialLength1=r1.length();
 					
@@ -299,7 +299,7 @@ public class DedupeByMapping extends BBTool_ST{
 				for(int idx=0; idx<reads.size(); idx++){
 					final Read r1=reads.get(idx);
 					assert(r1.mate==null);
-					assert(r1.obj!=null);
+					assert(r1.samline!=null);
 					
 					final int initialLength1=r1.length();
 					

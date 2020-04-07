@@ -148,6 +148,11 @@ public class CoverageArray3 extends CoverageArray {
 	public void increment(int loc, int amt) {
 		increment(loc, (long)amt);
 	}
+
+	@Override
+	public synchronized void incrementRangeSynchronized(int min, int max, int amt) {
+		incrementRange(min, max, amt);
+	}
 	
 	@Override
 	public void incrementRange(int min, int max, int amt) {

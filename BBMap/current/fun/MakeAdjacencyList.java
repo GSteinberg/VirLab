@@ -5,6 +5,7 @@ import java.util.Random;
 
 import fileIO.TextStreamWriter;
 import shared.PreParser;
+import shared.Shared;
 import structures.ByteBuilder;
 
 public class MakeAdjacencyList {
@@ -49,7 +50,7 @@ public class MakeAdjacencyList {
 	
 	public static int[][] genMatrix(){
 		
-		final Random randy=(seed>=0 ? new Random(seed) : new Random());
+		final Random randy=Shared.threadLocalRandom(seed);
 		final int[][] matrix=new int[nodes][nodes];
 		final int range=maxlen-minlen+1;
 		for(int[] array : matrix){

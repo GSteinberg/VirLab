@@ -26,7 +26,7 @@ public class IndexMaker5 {
 			int MAX_ALLOWED_CHROM_INDEX, int CHROM_MASK_LOW, int CHROM_MASK_HIGH, int SITE_MASK, int SHIFT_LENGTH, boolean WRITE, boolean DISK_INVALID, Block[] index){
 		Timer t=new Timer();
 		
-		MAX_CONCURRENT_BLOCKS=(Data.WINDOWS ? 1 : Tools.max(1, Shared.threads()/4));
+		MAX_CONCURRENT_BLOCKS=(Shared.WINDOWS ? 1 : Tools.max(1, Shared.threads()/4));
 		
 		minChrom=Tools.max(1, minChrom);
 		if(genome>=0 && Data.GENOME_BUILD!=genome){
@@ -508,7 +508,7 @@ public class IndexMaker5 {
 	static final String ALLOC_SYNC=new String("ALLOC_SYNC");
 	private static final String THREAD_SYNC=new String("THREAD_SYNC");
 	
-	public static int MAX_CONCURRENT_BLOCKS=(Data.WINDOWS ? 1 : 2);
+	public static int MAX_CONCURRENT_BLOCKS=(Shared.WINDOWS ? 1 : 2);
 	private static int ACTIVE_BLOCKS=0;
 
 	public static boolean ALLOW_POLYMERS=false;

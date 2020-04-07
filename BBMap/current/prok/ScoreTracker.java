@@ -1,7 +1,8 @@
 package prok;
 
 import java.util.ArrayList;
-import java.util.Locale;
+import shared.Tools;
+import structures.ByteBuilder;
 
 public class ScoreTracker {
 	
@@ -47,12 +48,15 @@ public class ScoreTracker {
 	
 	@Override
 	public String toString(){
-		StringBuilder sb=new StringBuilder();
-		sb.append("Start Score:          \t "+String.format(Locale.ROOT, "%.4f\n", geneStartScoreSum/geneStartScoreCount));
-		sb.append("Stop Score:           \t "+String.format(Locale.ROOT, "%.4f\n", geneStopScoreSum/geneStopScoreCount));
-		sb.append("Inner Score:          \t "+String.format(Locale.ROOT, "%.4f\n", geneInnerScoreSum/geneInnerScoreCount));
-		sb.append("Length:               \t "+String.format(Locale.ROOT, "%.2f", lengthSum/(double)lengthCount));
-		return sb.toString();
+		ByteBuilder bb=new ByteBuilder();
+		bb.append("Start Score:          \t ").append(geneStartScoreSum/geneStartScoreCount, 4).nl();
+		bb.append("Stop Score:           \t ").append(geneStopScoreSum/geneStopScoreCount, 4).nl();
+		bb.append("Inner Score:          \t ").append(geneInnerScoreSum/geneInnerScoreCount, 4).nl();
+		bb.append("Length:               \t ").append(lengthSum/(double)lengthCount, 2).nl();
+		if(genomeSize>0){
+			bb.append("Approx Genic Fraction:\t ").append(Tools.min(1.0, lengthSum/(double)genomeSize), 4).nl();
+		}
+		return bb.toString();
 	}
 	
 	long geneStartScoreCount=0;
@@ -64,6 +68,8 @@ public class ScoreTracker {
 	double geneStopScoreSum=0;
 	double geneInnerScoreSum=0;
 	long lengthSum=0;
+	
+	long genomeSize=0;
 	
 	final int type;
 	

@@ -3,7 +3,7 @@
 usage(){
 echo "
 Written by Brian Bushnell
-Last modified February 19, 2019
+Last modified June 26, 2019
 
 Description:  RQCFilter2 is a revised version of RQCFilter that uses a common path for all dependencies.
 The dependencies are available at http://portal.nersc.gov/dna/microbial/assembly/bushnell/RQCFilterData.tar
@@ -98,6 +98,7 @@ Extended microbial contaminant parameters:
 detectmicrobes2=f   (detectothermicrobes) Detect an extended set of microbes that are currently being screened.  This can be used in conjunction with removemicrobes.
 
 Filtering parameters (for artificial and genomic contaminants):
+skipfilter=f        Skip this phase.  Not recommended.
 filterpolya=f       Remove reads containing poly-A sequence (for RNA-seq).
 filterpolyg=0       Remove reads that start with a G polymer at least this long (0 disables).
 trimpolyg=0         Trim reads that start or end with a G polymer at least this long (0 disables).
@@ -165,12 +166,15 @@ rcomp=t             Look for reverse-complements of kmers in addition to forward
 nexteralmp=f        Split into different files based on Nextera LMP junction sequence.  Only for Nextera LMP, not normal Nextera.
 extend=f            Extend reads during merging to allow insert size estimation of non-overlapping reads.
 monitor=f           Kill this process if it crashes.  monitor=600,0.01 would kill after 600 seconds under 1% usage.
-barcodefilter=crash Crash when improper barcodes are discovered.  Set to 'f' to disable or 't' to just remove improper barcodes.
-barcodes=           A comma-delimited list of barcodes or files of barcodes.
 pigz=t              Use pigz for compression.
 unpigz=t            Use pigz for decompression.
 khist=f             Set to true to generate a kmer-frequency histogram of the output data.
 merge=t             Set to false to skip generation of insert size histogram.
+
+Header-specific parameters:  (NOTE - Be sure to disable these if the reads have improper headers, like SRA data.)
+chastityfilter=t    Remove reads failing chastity filter.
+barcodefilter=crash Crash when improper barcodes are discovered.  Set to 'f' to disable or 't' to just remove improper barcodes.
+barcodes=           A comma-delimited list of barcodes or files of barcodes.
 
 Java Parameters:
 -Xmx                This will set Java's memory usage, overriding autodetection.
@@ -199,13 +203,13 @@ popd > /dev/null
 
 #DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/"
 CP="$DIR""current/"
-NATIVELIBDIR="$DIR""jni/"
+JNI="-Djava.library.path=""$DIR""jni/"
+JNI=""
 
 z="-Xmx40g"
 z2="-Xms40g"
-EA="-ea"
-EOOM=""
 set=0
+export TZ="America/Los_Angeles"
 
 if [ -z "$1" ] || [[ $1 == -h ]] || [[ $1 == --help ]]; then
 	usage
@@ -214,6 +218,7 @@ fi
 
 calcXmx () {
 	source "$DIR""/calcmem.sh"
+	setEnvironment
 	parseXmx "$@"
     
 	if [[ $set == 1 ]]; then
@@ -252,10 +257,8 @@ rqcfilter() {
 		module unload java
 		module load java/1.8.0_144
 		module load pigz
-		export TZ="America/Los_Angeles" 
 	fi
-	#local CMD="java -Djava.library.path=$NATIVELIBDIR $EA $z $z2 -cp $CP jgi.RQCFilter2 $@"
-	local CMD="java $EA $z $z2 -cp $CP jgi.RQCFilter2 $@"
+	local CMD="java $EA $EOOM $z $z2 $JNI -cp $CP jgi.RQCFilter2 jni=t $@"
 	echo $CMD >&2
 	eval $CMD
 }

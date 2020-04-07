@@ -80,7 +80,11 @@ public class TaxNode implements Serializable{
 	}
 	
 	public boolean isSimple(){
-		return levelExtended!=TaxTree.NO_RANK_E && (levelExtended==TaxTree.levelToExtended(level)/* || levelExtended==TaxTree.STRAIN_E*/);
+		return TaxTree.isSimple(levelExtended);
+	}
+	
+	public boolean isSimple2(){
+		return TaxTree.isSimple2(levelExtended);
 	}
 	
 //	public String levelString(){return level<0 ? "unknown" : TaxTree.levelToString(level);}
@@ -91,6 +95,16 @@ public class TaxNode implements Serializable{
 	}
 
 	public String levelToStringShort() {return level<0 ? "x" : TaxTree.levelToStringShort(level);}
+	
+
+	
+	public boolean isUnclassified(){
+		return name.startsWith("unclassified");
+	}
+	
+	public boolean isEnvironmentalSample(){
+		return name.startsWith("environmental");
+	}
 	
 	/*--------------------------------------------------------------*/
 	/*----------------        Nested Classes        ----------------*/
@@ -171,6 +185,8 @@ public class TaxNode implements Serializable{
 		String s=sb.toString().trim();
 		return s.replace(' ', '_');
 	}
+	
+	public boolean isRanked() {return levelExtended!=TaxTree.NO_RANK_E;}
 	
 	/*--------------------------------------------------------------*/
 	/*----------------           Setters            ----------------*/

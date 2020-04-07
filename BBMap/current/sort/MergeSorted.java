@@ -20,7 +20,7 @@ import stream.FastaReadInputStream;
 import stream.SamLine;
 import structures.ListNum;
 import tax.AccessionToTaxid;
-import tax.GiToNcbi;
+import tax.GiToTaxid;
 import tax.TaxTree;
 import var2.ScafMap;
 
@@ -89,6 +89,8 @@ public class MergeSorted {
 			}else if(a.equals("verbose2")){
 				assert(false) : "Verbose2 is disabled.";
 //				verbose2=Tools.parseBoolean(b);
+			}else if(a.equals("allowsubprocess")){
+				allowInputSubprocess=Tools.parseBoolean(b);
 			}else if(a.equals("delete")){
 				delete=Tools.parseBoolean(b);
 			}else if(a.equals("ascending")){
@@ -233,7 +235,7 @@ public class MergeSorted {
 		if((comparator==ReadComparatorTaxa.comparator)){
 			if(giTableFile!=null){
 				outstream.println("Loading gi table.");
-				GiToNcbi.initialize(giTableFile);
+				GiToTaxid.initialize(giTableFile);
 			}
 			if(accessionFile!=null){
 				outstream.println("Loading accession table.");
@@ -329,7 +331,7 @@ public class MergeSorted {
 	}
 	
 	public void merge(ArrayList<String> inList, FileFormat ff1, FileFormat ff2){
-		errorState|=SortByName.mergeAndDump(inList, /*null, */ff1, ff2, delete, useSharedHeader, outstream, SortByName.maxLengthObservedStatic);
+		errorState|=SortByName.mergeAndDump(inList, /*null, */ff1, ff2, delete, useSharedHeader, allowInputSubprocess, outstream, SortByName.maxLengthObservedStatic);
 	}
 	
 	/*--------------------------------------------------------------*/
@@ -367,6 +369,8 @@ public class MergeSorted {
 	private boolean delete=true;
 	
 	private boolean useSharedHeader=false;
+	
+	private boolean allowInputSubprocess=true;
 	
 	/*--------------------------------------------------------------*/
 	/*----------------         Final Fields         ----------------*/

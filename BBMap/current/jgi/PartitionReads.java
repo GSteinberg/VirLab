@@ -84,6 +84,8 @@ public class PartitionReads {
 				verbose=Tools.parseBoolean(b);
 			}else if(a.equals("ways")){
 				ways=Integer.parseInt(b);
+			}else if(a.equalsIgnoreCase("pacbio") || a.equals("subreads")){
+				pacBioMode=Tools.parseBoolean(b);
 			}else if(a.equals("parse_flag_goes_here")){
 				//Set a variable here
 			}else if(parser.parse(arg, a, b)){//Parse standard flags in the parser
@@ -319,6 +321,12 @@ public class PartitionReads {
 					readsProcessed+=r1.pairCount();
 					basesProcessed+=initialLength1+initialLength2;
 					
+					if(pacBioMode){
+						int zmw=Tools.parseZmw(r1.id);
+						assert(zmw>=0) : "Invalid zmw in "+r1.id;
+						nextIndex=(zmw%ways);
+					}
+					
 					outLists[nextIndex].add(r1);
 					nextIndex=(nextIndex+1)%ways;
 				}
@@ -389,6 +397,9 @@ public class PartitionReads {
 	
 	/** Split data into this many output files */
 	private int ways=-1;
+	
+	/** Keep PacBio subreads together in the same file */
+	private boolean pacBioMode=false;
 	
 	/*--------------------------------------------------------------*/
 	/*----------------         Final Fields         ----------------*/

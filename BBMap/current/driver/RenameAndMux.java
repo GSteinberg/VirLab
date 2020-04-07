@@ -60,6 +60,7 @@ public class RenameAndMux {
 		//Set shared static variables
 		ReadWrite.USE_PIGZ=true;
 		ReadWrite.USE_UNPIGZ=false;
+		ReadWrite.USE_UNBGZIP=false;
 		ReadWrite.MAX_ZIP_THREADS=(Shared.threads()*3+1)/4;
 		
 		//Create a parser object

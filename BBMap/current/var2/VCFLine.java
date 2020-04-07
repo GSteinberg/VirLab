@@ -2,12 +2,32 @@ package var2;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 
 import shared.Tools;
 import structures.ByteBuilder;
 
-public class VCFLine implements Comparable<VCFLine> {
+public class VCFLine implements Comparable<VCFLine>, Cloneable {
+	
+	public VCFLine(String scaf_, int pos_, byte[] id_, byte[] ref_, byte[] alt_, double qual_, 
+			byte[] filter_, byte[] info_, byte[] format_, int type_, ArrayList<byte[]> samples_) {
+		scaf=scaf_;
+		pos=pos_;
+		id=id_;
+		ref=ref_;
+		reflen=ref[0]=='.' ? 0 : ref.length;
+		alt=alt_;
+		qual=qual_;
+		filter=filter_;
+		info=info_;
+		format=format_;
+		type=type_;
+		if(samples_!=null) {
+			samples.addAll(samples_);
+		}
+		hashcode=hash();
+	}
 	
 	public VCFLine(byte[] line) {
 		int a=0, b=0;
@@ -34,6 +54,7 @@ public class VCFLine implements Comparable<VCFLine> {
 		assert(b>a) : "Missing field 3: "+new String(line);
 		if(b<=a+1){ref=Var.AL_MAP[line[a]];}
 		else{ref=Arrays.copyOfRange(line, a, b);}
+		
 		reflen=line[a]=='.' ? 0 : b-a;
 		b++;
 		a=b;
@@ -44,21 +65,6 @@ public class VCFLine implements Comparable<VCFLine> {
 		else{alt=Arrays.copyOfRange(line, a, b);}
 		b++;
 		a=b;
-		
-		//Trim matching suffixes for a canonical representation
-		if(TRIM_TO_CANONICAL && ref.length>1 && alt.length>1 && ref.length!=alt.length){
-			int suffix=0;
-			for(int rpos=ref.length-1, apos=alt.length-1; rpos>0 && apos>0 && ref[rpos]==alt[apos]; rpos--, apos--){
-				suffix++;
-			}
-			if(suffix>0){
-				reflen=ref.length-suffix;
-				int altlen=alt.length-suffix;
-				ref=(reflen==1 ? Var.AL_MAP[ref[0]] : Arrays.copyOf(ref, reflen));
-				alt=(altlen==1 ? Var.AL_MAP[alt[0]] : Arrays.copyOf(alt, altlen));
-				assert(alt.length>0  && ref.length>0);
-			}
-		}
 		
 		while(b<line.length && line[b]!='\t'){b++;}
 		assert(b>a) : "Missing field 5: "+new String(line);
@@ -83,10 +89,12 @@ public class VCFLine implements Comparable<VCFLine> {
 		assert(type>=0) : type+", "+TYP+"\n"+new String(info);
 		
 		while(b<line.length && line[b]!='\t'){b++;}
-		assert(b>a) : "Missing field 8: "+new String(line);
-		format=Arrays.copyOfRange(line, a, b);
-		b++;
-		a=b;
+//		assert(b>a) : "Missing field 8: "+new String(line);
+		if(b>a){//LoFreq does not produce Info field
+			format=Arrays.copyOfRange(line, a, b);
+			b++;
+			a=b;
+		}
 		
 		while(b<line.length){
 			while(b<line.length && line[b]!='\t'){b++;}
@@ -98,6 +106,9 @@ public class VCFLine implements Comparable<VCFLine> {
 			b++;
 			a=b;
 		}
+		
+		if(TRIM_TO_CANONICAL){trimToCanonical();}
+//		assert(false) : "a="+a+", b="+b+", "+(b<=a+1)+", ref="+new String(ref)+"\n"+new String(line)+"\n"+this;
 		
 		hashcode=hash();
 		if(AUTOCACHE){cache();}
@@ -380,6 +391,254 @@ public class VCFLine implements Comparable<VCFLine> {
 		return v;
 	}
 	
+	public ArrayList<VCFLine> split(boolean splitAlleles, boolean splitComplex, boolean splitSubs){
+		assert(splitAlleles || splitComplex || splitSubs);
+		if(isSimple()){return null;} //Should be true 90% of the time
+		if(isJunction()) {assert(false) : "TODO";}
+		
+		if(!isMulti()){splitAlleles=false;}
+//		if(type!=Var.SUB || alt.length<2){splitSubs=false;}
+		
+		assert(!splitComplex) : "splitComplex function is written, but not integrated.";
+		
+		if(splitAlleles){
+			ArrayList<VCFLine> list0=splitAlleles();
+			if(!splitSubs || list0==null){
+				if(SORT && list0!=null){Collections.sort(list0);}
+				if(CONDENSE){condense(list0);}
+				return list0;
+			}
+			ArrayList<VCFLine> list2=new ArrayList<VCFLine>();
+			for(VCFLine line0 : list0){
+				ArrayList<VCFLine> list1=null;
+				if(line0.type==Var.SUB && line0.alt.length>1){
+					list1=line0.splitSubs();
+					assert(list1!=null) : "\n"+this+"\n"+line0+"\n";
+				}
+				if(list1!=null){list2.addAll(list1);}
+				else{list2.add(line0);}
+			}
+			if(SORT && list2!=null){Collections.sort(list2);}
+			if(CONDENSE){condense(list2);}
+			return list2;
+		}
+		
+		if(type!=Var.SUB || alt.length<2){splitSubs=false;}
+		if(!splitSubs || isMulti()){return null;}//Can't split subs with commas
+		
+		ArrayList<VCFLine> list=splitSubs();
+		return list;
+	}
+	
+	/** Split into one line per allele */
+	private ArrayList<VCFLine> splitAlleles(){
+		assert(isMulti()) : this;
+		if(Tools.indexOf(alt, ',')<0){
+			assert(false);
+			return null;
+		}
+		String alleles=new String(alt);
+		String[] split=alleles.split(",");
+		ArrayList<VCFLine> list=new ArrayList<VCFLine>(split.length);
+//		System.err.println(this);
+//		System.err.println(new String(ref)+", "+new String(alt)+", "+type());
+//		System.err.println(this);
+		
+		final String[] splitInfo=(info==null || !SPLIT_INFO ? null : new String(info).split(";"));
+		
+		for(int i=0; i<split.length; i++){
+			final String s=split[i];
+			VCFLine line=this.clone();
+			line.alt=s.getBytes();
+
+//			System.err.println(line);
+//			System.err.println(line.type());
+			line.recalc();
+//			System.err.println(line);
+//			System.err.println(line.type());
+			if(!line.isRef()){
+				if(TRIM_TO_CANONICAL){line.trimToCanonical();}
+				if(SPLIT_INFO){line.info=splitInfo(splitInfo, i, split.length);}
+//				System.err.println(line);
+				list.add(line);
+			}
+		}
+		return list.size()==0 ? null : list;
+	}
+	
+	/** Splits multi-base substitutions into SNPs.
+	 * Discards resultant ref "SNPs" */ 
+	private ArrayList<VCFLine> splitSubs(){
+		assert(type==Var.SUB);
+		assert(alt.length>1);
+		assert(Tools.indexOf(alt, ',')<0) : toString();
+		assert(alt.length==ref.length) : this;
+		ArrayList<VCFLine> list=new ArrayList<VCFLine>(alt.length);
+		for(int i=0; i<alt.length; i++){
+//			VCFLine line=this.clone();
+//			line.alt=Var.AL_MAP[alt[i]];
+//			line.ref=Var.AL_MAP[ref[i]];
+//			line.pos+=i;
+//			line.reflen=1;
+//			line.rehash();
+			VCFLine line=new VCFLine(scaf, pos+i, id, Var.AL_MAP[ref[i]], Var.AL_MAP[alt[i]], qual, filter, info, format, type, samples);
+			if(!line.isRef() && (Var.CALL_NOCALL || !line.isNocall())){
+				if(TRIM_TO_CANONICAL){line.trimToCanonical();}
+				list.add(line);
+			}
+		}
+		return list.size()==0 ? null : list;
+	}
+	
+	/** Splits non-length-neutral lines into sub+del or sub+ins.
+	 * Discards resultant ref "SUBs"
+	 * Since alignment information is no longer present, this will do a bad job usually,
+	 * unless alignment is performed. 
+	 * It's OK for easy things like a 1bp substitution plus a single deletion or insertion. */
+	private ArrayList<VCFLine> splitComplex(){
+		assert(type==Var.COMPLEX);
+		assert(alt.length>1);
+		assert(Tools.indexOf(alt, ',')<0) : toString();
+		assert(alt.length!=ref.length && alt.length>1 && ref.length>1) : this;
+		
+		if(TRIM_TO_CANONICAL){this.trimToCanonical();}
+		ArrayList<VCFLine> list=new ArrayList<VCFLine>(2);
+
+		final int prefixLen=Tools.min(alt.length, ref.length)-1;
+		final byte[] prefixA=prefix(alt, prefixLen);
+		final byte[] prefixR=prefix(ref, prefixLen);
+		final byte[] suffixA=suffix(alt, alt.length-prefixLen);
+		final byte[] suffixR=suffix(ref, ref.length-prefixLen);
+		VCFLine sub=new VCFLine(scaf, pos, id, prefixR, prefixA, qual, filter, info, format, type, samples);
+		VCFLine indel=new VCFLine(scaf, pos, id, suffixR, suffixA, qual, filter, info, format, type, samples);
+		
+		assert(sub.isSub());
+		if(alt.length<ref.length){//Sub + del
+			assert(indel.isDel());
+		}else if(alt.length>ref.length){//Sub + ins
+			assert(indel.isIns());
+		}else{
+			assert(false) : this;
+			throw new RuntimeException("Unreachable");
+		}
+		
+		if(!sub.isRef() && (Var.CALL_NOCALL || !sub.isNocall())){list.add(sub);}
+		list.add(indel);
+		return list;
+	}
+	
+	/** Attempts to split comma-delimited info fields by allele
+	 * This will not always be correct as some info fields are supposed to contain commas */
+	private byte[] splitInfo(String[] splitInfo, int alleleNum, int alleles){
+		if(splitInfo==null){return null;}
+		assert(alleles>1);
+		assert(alleleNum>=0 && alleleNum<alleles);
+		ByteBuilder bb=new ByteBuilder();
+		for(String part : splitInfo){
+			if(bb.length()>0){bb.append(';');}
+			if(part.indexOf(',')<0){
+				bb.append(part);
+			}else{
+				String[] splitEquals=part.split("=");
+				String[] splitComma=splitEquals[1].split(",");
+				if(splitComma.length==alleles){
+					bb.append(splitEquals[0]).append('=').append(splitComma[alleleNum]);
+				}else{
+					bb.append(part);
+				}
+			}
+		}
+		return bb.toBytes();
+	}
+	
+	/** Assumes list is sorted; removes duplicates */
+	private static int condense(ArrayList<VCFLine> list){
+		if(list==null || list.size()<2){return 0;}
+		int removed=0;
+		VCFLine prev=list.get(0);
+		for(int i=1; i<list.size(); i++){
+			VCFLine line=list.get(i);
+			if(prev.equals(line)){
+				list.set(i, null);
+				removed++;
+			}else{
+				prev=line;
+			}
+		}
+		if(removed>0){Tools.condenseStrict(list);}
+		return removed;
+	}
+	
+	@Override
+	public VCFLine clone(){
+		try {
+			return (VCFLine)super.clone();
+		} catch (CloneNotSupportedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			throw new RuntimeException();
+		}
+	}
+	
+	
+	/** Trim matching affixes for a canonical representation */
+	private int trimToCanonical(){
+		if(isMulti() || alt.length<2 || ref.length<2 /*|| ref.length==alt.length*/){return 0;}
+		assert(Tools.indexOf(alt, ',')<0) : this;
+		
+		int s=trimSuffix();
+		int p=trimPrefix();
+		int delta=s+p;
+		if(delta>0){recalc();}
+		assert(!isRef()) : this;
+		return delta;
+	}
+	
+	private int trimPrefix(){
+		int prefix=0;
+		for(int rpos=0, apos=0; rpos<ref.length-1 && apos<alt.length-1 && ref[rpos]==alt[apos]; rpos++, apos++){
+			prefix++;
+		}
+		if(prefix>0){
+			pos+=prefix;
+			reflen=ref.length-prefix;
+			int altlen=alt.length-prefix;
+			ref=(reflen==1 ? Var.AL_MAP[ref[ref.length-1]] : Arrays.copyOfRange(ref, prefix, ref.length));
+			alt=(altlen==1 ? Var.AL_MAP[alt[alt.length-1]] : Arrays.copyOfRange(alt, prefix, alt.length));
+			assert(alt.length>0  && ref.length>0) : this;
+		}
+		return prefix;
+	}
+	
+	private int trimSuffix(){
+		int suffix=0;
+		for(int rpos=ref.length-1, apos=alt.length-1; rpos>0 && apos>0 && ref[rpos]==alt[apos]; rpos--, apos--){
+			suffix++;
+		}
+		if(suffix>0){
+			reflen=ref.length-suffix;
+			int altlen=alt.length-suffix;
+			ref=(reflen==1 ? Var.AL_MAP[ref[0]] : Arrays.copyOf(ref, reflen));
+			alt=(altlen==1 ? Var.AL_MAP[alt[0]] : Arrays.copyOf(alt, altlen));
+			assert(alt.length>0  && ref.length>0) : this;
+		}
+		return suffix;
+	}
+	
+	private byte[] prefix(byte[] array, int len){
+		assert(len>0);
+		assert(array.length>len);
+		byte[] prefix=(len==1 ? Var.AL_MAP[array[0]] : len==array.length ? array : Arrays.copyOf(array, len));
+		return prefix;
+	}
+	
+	private byte[] suffix(byte[] array, int len){
+		assert(len>0);
+		assert(array.length>len);
+		byte[] suffix=(len==1 ? Var.AL_MAP[array[array.length-1]] : len==array.length ? array : Arrays.copyOfRange(array, array.length-len, array.length));
+		return suffix;
+	}
+	
 	/*--------------------------------------------------------------*/
 	/*----------------       Contract Methods       ----------------*/
 	/*--------------------------------------------------------------*/
@@ -396,6 +655,10 @@ public class VCFLine implements Comparable<VCFLine> {
 	private int hash(){
 		return scaf.hashCode()^Integer.rotateLeft(pos, 9)^Integer.rotateRight(pos+ref.length, 9)^Var.hash(alt);
 	}
+
+//	private void rehash(){
+//		hashcode=hash();
+//	}
 	
 	@Override
 	public int hashCode(){
@@ -447,7 +710,9 @@ public class VCFLine implements Comparable<VCFLine> {
 		bb.append(qual, 2).append('\t');
 		bb.append(filter).append('\t');
 		bb.append(info).append('\t');
-		bb.append(format);
+		if(format!=null){
+			bb.append(format);
+		}
 		for(byte[] sample : samples){
 			bb.tab().append(sample);
 		}
@@ -462,7 +727,9 @@ public class VCFLine implements Comparable<VCFLine> {
 	public int readlen(){return alt.length;}
 	
 	public int type_old(){
-		int reflen=reflen(), readlen=readlen();
+		if(alt!=null && Tools.indexOf(alt, ',')>=0){return Var.MULTI;}
+		final int reflen=reflen(), readlen=readlen();
+		if(readlen!=reflen && readlen!=0 && reflen!=0){return Var.COMPLEX;}
 		if(reflen<readlen){return Var.INS;}
 		if(reflen>readlen){return Var.DEL;}
 		for(byte b : alt){
@@ -473,12 +740,45 @@ public class VCFLine implements Comparable<VCFLine> {
 	
 	public int type(){return type;}
 	
+	public boolean isRef(){
+		return Tools.equals(alt, ref);
+	}
+	
 	public boolean isJunction(){
 		return type==Var.LJUNCT || type==Var.RJUNCT || type==Var.BJUNCT;
 	}
 	
 	public boolean isIndel(){
 		return type==Var.INS || type==Var.DEL;
+	}
+	
+	public boolean isSub(){
+		return type==Var.SUB;
+	}
+	
+	public boolean isDel(){
+		return type==Var.DEL;
+	}
+	
+	public boolean isIns(){
+		return type==Var.INS;
+	}
+	
+	public boolean isNocall(){
+		return type==Var.NOCALL;
+	}
+	
+	public boolean isMulti(){
+		return type==Var.MULTI;
+	}
+	
+	public boolean isComplex(){
+		return type==Var.COMPLEX;
+	}
+	
+	public boolean isSimple(){
+		//return type<=Var.DEL;
+		return type==Var.SUB || type==Var.DEL || type==Var.INS || type==Var.NOCALL;
 	}
 	
 	void cache(){
@@ -528,22 +828,27 @@ public class VCFLine implements Comparable<VCFLine> {
 		return Tools.max(start(), pos+reflen-2);
 	}
 	
+	private void recalc(){
+		type=type_old();
+		hashcode=hash();
+	}
+	
 	/*--------------------------------------------------------------*/
 	/*----------------            Fields            ----------------*/
 	/*--------------------------------------------------------------*/
 	
 	public final String scaf;
-	public final int pos;
+	public int pos;
 	public byte[] id;
 	public byte[] ref;
 	public int reflen;
 	public byte[] alt;
 	public double qual;
 	public byte[] filter;
-	public final byte[] info;
+	public byte[] info;
 	public byte[] format;
-	public final int hashcode;
-	public final int type;
+	public int hashcode;
+	public int type;
 	public ArrayList<byte[]> samples=new ArrayList<byte[]>();
 	
 	/*--------------------------------------------------------------*/
@@ -554,6 +859,9 @@ public class VCFLine implements Comparable<VCFLine> {
 	
 	static boolean AUTOCACHE=false;
 	static boolean TRIM_TO_CANONICAL=true;
+	static boolean SORT=true;
+	static boolean CONDENSE=true;
+	static boolean SPLIT_INFO=true;
 	
 	private static final byte[] NOCALL=cache("NOCALL");
 	private static final byte[] SUB=cache("SUB");
@@ -562,6 +870,8 @@ public class VCFLine implements Comparable<VCFLine> {
 	private static final byte[] LJUNCT=cache("LJUNCT");
 	private static final byte[] RJUNCT=cache("RJUNCT");
 	private static final byte[] BJUNCT=cache("BJUNCT");
+	private static final byte[] MULTI=cache("MULTI");
+	private static final byte[] COMPLEX=cache("COMPLEX");
 	private static final byte[] DOT=cache(".");
 	private static final byte[] PASS=cache("PASS");
 	private static final byte[] FAIL=cache("FAIL");

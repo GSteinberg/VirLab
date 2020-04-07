@@ -264,8 +264,8 @@ public final class ByteBuilder implements Serializable, CharSequence {
 		x*=decimalMult[decimals];
 		x=x+0.5;
 //		long longRep=(long)x;
-//		assert(longRep==(long)(decimalMult[decimals]*Double.parseDouble((String.format("%."+decimals0+"f", x0))))) : 
-//			"\n"+longRep+"\n"+decimalMult[decimals]*Double.parseDouble((String.format("%."+decimals0+"f", x0)))+"\n"+x0;
+//		assert(longRep==(long)(decimalMult[decimals]*Double.parseDouble((String.format(Locale.ROOT, "%."+decimals0+"f", x0))))) : 
+//			"\n"+longRep+"\n"+decimalMult[decimals]*Double.parseDouble((String.format(Locale.ROOT, "%."+decimals0+"f", x0)))+"\n"+x0;
 		
 //		long upper=longRep/longMult[decimals];
 //		long lower=longRep%longMult[decimals];
@@ -315,13 +315,13 @@ public final class ByteBuilder implements Serializable, CharSequence {
 			}
 		}
 		
-//		assert(String.format("%."+decimals0+"f", x0).equals(new String(Tools.reverseAndCopy(Arrays.copyOf(numbuffer, pos))))) : 
-//			String.format("%."+decimals0+"f", x0)+"\n"+new String(Tools.reverseAndCopy(Arrays.copyOf(numbuffer, pos)));
+//		assert(String.format(Locale.ROOT, "%."+decimals0+"f", x0).equals(new String(Tools.reverseAndCopy(Arrays.copyOf(numbuffer, pos))))) : 
+//			String.format(Locale.ROOT, "%."+decimals0+"f", x0)+"\n"+new String(Tools.reverseAndCopy(Arrays.copyOf(numbuffer, pos)));
 
 //		longRep=(long)x;
-//		assert(longRep==(long)(decimalMult[decimals0]*Double.parseDouble((String.format("%."+decimals0+"f", x0))))) : 
-//			"\n"+longRep+"\n"+decimalMult[decimals0]*Double.parseDouble((String.format("%."+decimals0+"f", x0)))+
-//			"\n"+x0+"\n"+String.format("%."+decimals0+"f", x0)+"\n"+new String(Tools.reverseAndCopy(Arrays.copyOf(numbuffer, pos)));
+//		assert(longRep==(long)(decimalMult[decimals0]*Double.parseDouble((String.format(Locale.ROOT, "%."+decimals0+"f", x0))))) : 
+//			"\n"+longRep+"\n"+decimalMult[decimals0]*Double.parseDouble((String.format(Locale.ROOT, "%."+decimals0+"f", x0)))+
+//			"\n"+x0+"\n"+String.format(Locale.ROOT, "%."+decimals0+"f", x0)+"\n"+new String(Tools.reverseAndCopy(Arrays.copyOf(numbuffer, pos)));
 		
 		while(pos>0){
 			pos--;
@@ -460,9 +460,36 @@ public final class ByteBuilder implements Serializable, CharSequence {
 		length++;
 		return this;
 	}
-
+	
+	/**
+	 * Append a newline.
+	 * @return This ByteBuilder.
+	 */
 	public ByteBuilder nl(){return append('\n');}
+	
+	/**
+	 * Append a tab.
+	 * @return This ByteBuilder.
+	 */
 	public ByteBuilder tab(){return append('\t');}
+	
+	/**
+	 * Append a space.
+	 * @return This ByteBuilder.
+	 */
+	public ByteBuilder space(){return append(' ');}
+	
+	/**
+	 * Append an underscore.
+	 * @return This ByteBuilder.
+	 */
+	public ByteBuilder under(){return append('_');}
+	
+	/**
+	 * Append a comma.
+	 * @return This ByteBuilder.
+	 */
+	public ByteBuilder comma(){return append(',');}
 	
 	public byte get(int i){
 		assert(i<length);
@@ -506,6 +533,10 @@ public final class ByteBuilder implements Serializable, CharSequence {
 	
 	public final byte[] toBytes(){
 		return KillSwitch.copyOf(array, length);
+	}
+	
+	public final byte[] toBytes(int from, int to){
+		return KillSwitch.copyOfRange(array, from, to);
 	}
 	
 	public final byte[] expelAndShift(int len, int overlap){
@@ -570,8 +601,14 @@ public final class ByteBuilder implements Serializable, CharSequence {
 		return this;
 	}
 	
-	public void reverseComplementInPlace() {
+	public ByteBuilder complementInPlace() {
+		AminoAcid.complementBasesInPlace(array, length);
+		return this;
+	}
+	
+	public ByteBuilder reverseComplementInPlace() {
 		AminoAcid.reverseComplementBasesInPlace(array, length);
+		return this;
 	}
 	
 	public final void ensureExtra(int extra){

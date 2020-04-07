@@ -267,7 +267,7 @@ public class RepresentativeSet {
 				if(printSize){
 					bsw.print('\t').print(n.size);
 				}
-				if(printClusters){
+				if(printClusters && n.edges!=null){
 					bsw.print('\t').print(n.edges.size());
 					bsw.print('\t').print(n.edges.get(0).b);
 					for(int i=1; i<n.edges.size(); i++){

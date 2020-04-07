@@ -10,6 +10,7 @@ import fileIO.ByteStreamWriter;
 import fileIO.FileFormat;
 import fileIO.ReadWrite;
 import fileIO.TextStreamWriter;
+import kmer.AbstractKmerTableSet;
 import server.ServerTools;
 import shared.KillSwitch;
 import shared.Parser;
@@ -20,6 +21,7 @@ import shared.Timer;
 import shared.Tools;
 import structures.ByteBuilder;
 import structures.StringNum;
+import tax.TaxTree;
 
 /**
  * Compares one or more input sketches to a set of reference sketches.
@@ -70,6 +72,8 @@ public class SendSketch extends SketchObject {
 			PreParser pp=new PreParser(args, null, false);
 			args=pp.args;
 			outstream=pp.outstream;
+			silent=PreParser.silent;
+			if(silent){AbstractKmerTableSet.DISPLAY_PROGRESS=false;}
 		}
 		
 		//Set shared static variables
@@ -80,7 +84,7 @@ public class SendSketch extends SketchObject {
 		Parser parser=new Parser();
 		parser.out1="stdout.txt";
 		
-		defaultParams.printFileName=true;
+		defaultParams.inputVersion=Shared.BBMAP_VERSION_STRING;
 		boolean setBlacklist=false;
 		boolean setLocal=false;
 		boolean setPrintDepth=false;
@@ -108,16 +112,18 @@ public class SendSketch extends SketchObject {
 			}else if(a.equals("local")){
 				local=Tools.parseBoolean(b);
 				setLocal=true;
+			}else if(a.equals("refid") || a.equals("refids") || a.equals("refname") || a.equals("refnames")){
+				refNames=b;
 			}else if(a.equals("parse_flag_goes_here")){
 				long fake_variable=Tools.parseKMG(b);
 				//Set a variable here
 			}else if(a.equals("address")){
 				assert(b!=null) : "Bad parameter: "+arg;
-				address=toAddress(b);
-				if(blacklist==null){blacklist=Blacklist.toBlacklist(b);}
-			}
-			
-			else if(a.equalsIgnoreCase("nt")){
+				address=b;
+			}else if(a.equals("alternateaddress") || a.equals("altaddress") || a.equalsIgnoreCase("vm")){
+				boolean alt=Tools.parseBoolean(b);
+				switchDefaultAddresses(alt);
+			}else if(a.equalsIgnoreCase("nt")){
 				address=toAddress(a);
 				if(blacklist==null){blacklist=Blacklist.toBlacklist(a);}
 			}else if(a.equalsIgnoreCase("silva") || a.equalsIgnoreCase("ribo")){
@@ -144,6 +150,10 @@ public class SendSketch extends SketchObject {
 			}else if(a.equalsIgnoreCase("fungi")){
 				address=toAddress(a);
 				if(blacklist==null){blacklist=Blacklist.toBlacklist(a);}
+			}
+			
+			else if(a.equals("taxtree") || a.equals("tree")){
+				taxTreeFile=b;
 			}
 			
 			else if(a.equals("name") || a.equals("taxname")){
@@ -181,9 +191,18 @@ public class SendSketch extends SketchObject {
 				assert(false) : "Unknown parameter "+args[i];
 			}
 		}
+		if("auto".equalsIgnoreCase(taxTreeFile)){taxTreeFile=TaxTree.defaultTreeFile();}
+		
+		address=toAddress(address);
 		outMeta=SketchObject.fixMeta(outMeta);
 		
-		if(address!=null && (address.equals(refseqAddress) || address.equals(prokProtAddress)) && !SET_AUTOSIZE_FACTOR){AUTOSIZE_FACTOR=2.0f;} //High-resolution mode
+		if(address!=null && !SET_AUTOSIZE_FACTOR){
+			if(address.equals(refseqAddress)){
+				AUTOSIZE_FACTOR=2.0f;
+			}else if(address.equals(prokProtAddress)){
+				AUTOSIZE_FACTOR=3.0f;
+			}
+		}
 		
 		while(address!=null && address.endsWith("/")){
 			address=address.substring(0,  address.length()-1);
@@ -203,7 +222,7 @@ public class SendSketch extends SketchObject {
 		}
 		
 		//Ensure there is an input file
-		if(in.isEmpty()){throw new RuntimeException("Error - at least one input file is required.");}
+		if(in.isEmpty() && refNames==null){throw new RuntimeException("Error - at least one input file is required.");}
 		
 		//Adjust the number of threads for input file reading
 		if(!ByteFile.FORCE_MODE_BF1 && !ByteFile.FORCE_MODE_BF2 && Shared.threads()>2){
@@ -212,6 +231,23 @@ public class SendSketch extends SketchObject {
 		
 		ffout=FileFormat.testOutput(out, FileFormat.TEXT, null, false, overwrite, append, false);
 		if(!ffout.stdio() && !defaultParams.setColors){defaultParams.printColors=false;}
+		
+		//Ensure input files can be read
+		if(!Tools.testInputFiles(false, true, taxTreeFile)){
+			throw new RuntimeException("\nCan't read some input files.\n");  
+		}
+		
+		if(!local && refNames==null){
+			if(!Tools.testInputFiles(true, false, in.toArray(new String[0]))){
+				if(in.size()==1){
+					String s=in.get(0);
+					String s1=s.replaceFirst("#", "1"), s2=s.replaceFirst("#", "2");
+					Tools.testInputFiles(true, false, s1, s2);
+				}else{
+					throw new RuntimeException("\nCan't read some input files.\n");  
+				}
+			}
+		}
 		
 		if(!Tools.testOutputFiles(overwrite, append, false, out, outSketch)){
 			throw new RuntimeException("\n\noverwrite="+overwrite+"; Can't write to output files "+
@@ -223,7 +259,7 @@ public class SendSketch extends SketchObject {
 			throw new RuntimeException("\nSome file names were specified multiple times.\n");
 		}
 		
-		tool=new SketchTool(targetSketchSize, defaultParams.minKeyOccuranceCount, defaultParams.trackCounts(), defaultParams.mergePairs);
+		tool=new SketchTool(targetSketchSize, defaultParams);
 		
 //		assert(false) : defaultParams.toString()+"\n"+k+", "+amino+", "+HASH_VERSION;
 		if(verbose){
@@ -232,7 +268,9 @@ public class SendSketch extends SketchObject {
 			if(blacklist!=null){outstream.println("Using a blacklist.");}
 		}
 		
-		defaultParams.postParse(false);
+		if(taxTreeFile!=null){setTaxtree(taxTreeFile);}
+		defaultParams.postParse(false, false);
+		if(!defaultParams.printSSU){processSSU=false;}
 		allowMultithreadedFastq=(in.size()==1 && Shared.threads()>2);
 		if(!allowMultithreadedFastq){Shared.capBufferLen(40);}
 	}
@@ -279,6 +317,7 @@ public class SendSketch extends SketchObject {
 	
 	public void process(Timer t){
 		if(local){processLocal(t);}
+		else if(refNames!=null){processRefMode(t);}
 		else{processRemote(t);}
 	}
 	
@@ -286,10 +325,11 @@ public class SendSketch extends SketchObject {
 		Timer ttotal=new Timer();
 		
 		t.start();
-		inSketches=tool.loadSketches_MT(defaultParams.mode, defaultParams.samplerate, defaultParams.reads, defaultParams.minEntropy, in);
+		inSketches=tool.loadSketches_MT(defaultParams, in);
 		final int numLoaded=(inSketches.size());
+		
 		t.stop();
-		outstream.println("Loaded "+numLoaded+" sketch"+(numLoaded==1 ? "" : "es")+" in "+t);
+		if(!silent){outstream.println("Loaded "+numLoaded+" sketch"+(numLoaded==1 ? "" : "es")+" in "+t);}
 		assert(numLoaded<=MAX_ALLOWED_SKETCHES) : "\nSendSketch is configured to send at most "+MAX_ALLOWED_SKETCHES+" to prevent overwhelming the server.\n"
 				+ "If you need to compare more than that, please use CompareSketch locally instead.\n"
 				+ "References can be downloaded at http://portal.nersc.gov/dna/microbial/assembly/bushnell/\n";
@@ -369,7 +409,7 @@ public class SendSketch extends SketchObject {
 				e.printStackTrace();
 			}
 		}
-		tsw.println();
+		if(!silent){tsw.println();}
 		tsw.poison();
 		
 //		outstream.println("sending "+bb.toString());
@@ -392,7 +432,7 @@ public class SendSketch extends SketchObject {
 		t.stop();
 //		outstream.println("\nRan "+(inSketches.size()*refSketches.size())+" comparisons in \t"+t);
 		ttotal.stop();
-		outstream.println("Total Time: \t"+ttotal);
+		if(!silent){outstream.println("Total Time: \t"+ttotal);}
 	}
 	
 	/** For programmatic use */
@@ -469,6 +509,46 @@ public class SendSketch extends SketchObject {
 		outstream.println("Total Time: \t"+ttotal);
 	}
 	
+	private void processRefMode(Timer t){
+		Timer ttotal=new Timer();
+		
+		t.start();
+		
+		if(ffout==null){return;}
+		TextStreamWriter tsw=new TextStreamWriter(ffout);
+		tsw.start();
+		
+		final String message=defaultParams.toString(0);
+		{
+			String address2=address+"/ref/"+refNames;
+			
+			if(verbose){outstream.println("Sending:\n"+message+"\nto "+address2);}
+			try {
+//				outstream.println("Sending to "+address2+"\n"+message+"\n"); //123
+				StringNum result=ServerTools.sendAndReceive(message.getBytes(), address2);
+				if(!ServerTools.suppressErrors && (result.n<200 || result.n>299)){
+					System.err.println("ERROR: Server returned code "+result.n+" and this message:\n"+result.s);
+					KillSwitch.kill();
+				}
+				tsw.print(result.s);
+			} catch (Exception e) {
+				// TODO Auto-generated catch block
+				if(!suppressErrors){e.printStackTrace();}
+			}
+		}	
+		tsw.println();
+		
+//		outstream.println("sending "+bb.toString());
+		
+		tsw.poisonAndWait();
+		errorState|=tsw.errorState;
+		
+		t.stop();
+//		outstream.println("\nRan "+(inSketches.size()*refSketches.size())+" comparisons in \t"+t);
+		ttotal.stop();
+		outstream.println("Total Time: \t"+ttotal);
+	}
+	
 	
 	/*--------------------------------------------------------------*/
 	/*----------------         Inner Methods        ----------------*/
@@ -498,12 +578,16 @@ public class SendSketch extends SketchObject {
 	private String out="stdout.txt";
 	private String outSketch=null;
 	
+	private String taxTreeFile=null;
+	
 	private final SketchTool tool;
 	
 	private ArrayList<Sketch> inSketches;
 
-	private String address=refseqAddress;
+	private String address=null;
 	private boolean local=false;
+	/** List of reference names or TaxIDs to use as queries */
+	private String refNames=null;
 	
 	/*Override metadata */
 	private String outTaxName=null;
@@ -536,6 +620,8 @@ public class SendSketch extends SketchObject {
 	/** Append to existing output files */
 	private boolean append=false;
 	
+	private boolean silent=false;
+	
 	/*--------------------------------------------------------------*/
 	/*----------------        Static Fields         ----------------*/
 	/*--------------------------------------------------------------*/
@@ -543,7 +629,7 @@ public class SendSketch extends SketchObject {
 	public static final String toAddress(String b){
 		String address=b;
 		if(b==null){
-			//do nothing
+			address=refseqAddress;//default
 		}else if(b.equalsIgnoreCase("nt")){
 			address=ntAddress;
 		}else if(b.equalsIgnoreCase("refseq")){
@@ -570,13 +656,35 @@ public class SendSketch extends SketchObject {
 	/** Don't print caught exceptions */
 	public static boolean suppressErrors=false;
 	
-	private static final String ntAddress="https://nt-sketch.jgi-psf.org/sketch"; //gpweb34 port 3071
-	private static final String refseqAddress="https://refseq-sketch.jgi-psf.org/sketch"; //gpweb34 port 3072
-	private static final String silvaAddress="https://ribo-sketch.jgi-psf.org/sketch"; //gpweb34 port 3073
-	private static final String imgAddress="https://img-sketch.jgi-psf.org/sketch";
-	private static final String nrAddress="https://nr-sketch.jgi-psf.org/sketch";
-	private static final String prokProtAddress="https://protein-sketch.jgi.doe.gov/sketch";//http://gpweb35.nersc.gov:3074/sketch/
-	private static final String mitoAddress="https://mito-sketch.jgi-psf.org/sketch";
-	private static final String fungiAddress="https://fungi-sketch.jgi-psf.org/sketch";
+	public static void switchDefaultAddresses(boolean useAlternate){
+		if(useAlternate){
+			ntAddress="https://nt-sketch-2.jgi.doe.gov/sketch";
+			refseqAddress="https://refseq-sketch-2.jgi.doe.gov/sketch";
+			silvaAddress="https://ribo-sketch-2.jgi.doe.gov/sketch";
+			imgAddress="https://img-sketch-2.jgi.doe.gov/sketch";
+			nrAddress="https://nr-sketch-2.jgi.doe.gov/sketch";
+			prokProtAddress="https://protein-sketch-2.jgi.doe.gov/sketch";
+			mitoAddress="https://mito-sketch-2.jgi.doe.gov/sketch";
+			fungiAddress="https://fungi-sketch-2.jgi.doe.gov/sketch";
+		}else{
+			ntAddress="https://nt-sketch.jgi.doe.gov/sketch";
+			refseqAddress="https://refseq-sketch.jgi.doe.gov/sketch";
+			silvaAddress="https://ribo-sketch.jgi.doe.gov/sketch";
+			imgAddress="https://img-sketch.jgi.doe.gov/sketch";
+			nrAddress="https://nr-sketch.jgi.doe.gov/sketch";
+			prokProtAddress="https://protein-sketch.jgi.doe.gov/sketch";
+			mitoAddress="https://mito-sketch.jgi.doe.gov/sketch";
+			fungiAddress="https://fungi-sketch.jgi.doe.gov/sketch";
+		}
+	}
+	
+	private static String ntAddress="https://nt-sketch.jgi.doe.gov/sketch"; //gpweb34 port 3071
+	private static String refseqAddress="https://refseq-sketch.jgi.doe.gov/sketch"; //gpweb34 port 3072
+	private static String silvaAddress="https://ribo-sketch.jgi.doe.gov/sketch"; //gpweb34 port 3073
+	private static String imgAddress="https://img-sketch.jgi.doe.gov/sketch";
+	private static String nrAddress="https://nr-sketch.jgi.doe.gov/sketch";
+	private static String prokProtAddress="https://protein-sketch.jgi.doe.gov/sketch";//http://gpweb35.nersc.gov:3074/sketch/
+	private static String mitoAddress="https://mito-sketch.jgi.doe.gov/sketch";
+	private static String fungiAddress="https://fungi-sketch.jgi.doe.gov/sketch";
 	
 }

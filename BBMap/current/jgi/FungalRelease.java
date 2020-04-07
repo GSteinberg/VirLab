@@ -4,9 +4,9 @@ import java.io.PrintStream;
 import java.util.ArrayList;
 
 import fileIO.ByteFile;
+import fileIO.ByteStreamWriter;
 import fileIO.FileFormat;
 import fileIO.ReadWrite;
-import fileIO.TextStreamWriter;
 import shared.MetadataWriter;
 import shared.Parser;
 import shared.PreParser;
@@ -256,9 +256,9 @@ public class FungalRelease {
 		ArrayList<Read> scaffolds = getReads(cris);
 
 		final boolean makeLegend = (legendFile != null);
-		TextStreamWriter tswl = (makeLegend ? new TextStreamWriter(legendFile, overwrite, append, false) : null);
-		if (tswl != null) {
-			tswl.start();
+		ByteStreamWriter bswLegend = (makeLegend ? new ByteStreamWriter(legendFile, overwrite, append, false) : null);
+		if (bswLegend != null) {
+			bswLegend.start();
 		}
 
 		if (ros != null) {
@@ -269,31 +269,31 @@ public class FungalRelease {
 				for (Read r : scaffolds) {
 					String old = r.id;
 					r.id = "scaffold_" + scafNum;
-					if (tswl != null) {
-						tswl.println(old + "\t" + r.id);
+					if (bswLegend != null) {
+						bswLegend.println(old + "\t" + r.id);
 					}
 					scafNum++;
 				}
 			}
 			ros.add(scaffolds, 0);
 		}
-		if (tswl != null) {
-			tswl.poisonAndWait();
+		if (bswLegend != null) {
+			bswLegend.poisonAndWait();
 		}
 
 		final boolean makeAgp = (agpFile != null);
-		TextStreamWriter tsw = (makeAgp ? new TextStreamWriter(agpFile, overwrite, append, false) : null);
-		if (tsw != null) {
-			tsw.start();
+		ByteStreamWriter bswAgp = (makeAgp ? new ByteStreamWriter(agpFile, overwrite, append, false) : null);
+		if (bswAgp != null) {
+			bswAgp.start();
 		}
 
 		if (rosc != null || makeAgp) {// Process contigs
 			ArrayList<Read> contigs = new ArrayList<Read>();
 			for (Read r : scaffolds) {
 				ArrayList<Read> temp = r.breakAtGaps(makeAgp, minContig);
-				if (tsw != null) {
-					tsw.print((String) r.obj);
-					r.obj = null;
+				if (bswAgp != null) {
+					bswAgp.print((byte[]) r.obj);
+					r.obj=null;
 				}
 				contigs.addAll(temp);
 			}
@@ -311,8 +311,8 @@ public class FungalRelease {
 			}
 		}
 
-		if (tsw != null) {
-			tsw.poisonAndWait();
+		if (bswAgp != null) {
+			bswAgp.poisonAndWait();
 		}
 
 	}

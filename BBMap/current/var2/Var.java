@@ -24,12 +24,13 @@ import structures.ByteBuilder;
  * @date November 4, 2016
  *
  */
-public class Var implements Comparable<Var>, Serializable {
-	
+public class Var implements Comparable<Var>, Serializable, Cloneable {
+
 	/**
 	 * 
 	 */
-	private static final long serialVersionUID = 3536617113257471595L;
+	private static final long serialVersionUID = 3328626403863586829L;
+
 
 	public static void main(String[] args){
 		if(args.length>1){
@@ -46,9 +47,9 @@ public class Var implements Comparable<Var>, Serializable {
 		FileFormat ff=FileFormat.testInput(args[0], FileFormat.VAR, null, true, true);
 		if(ff.vcf()){
 			ScafMap smap=ScafMap.loadVcfHeader(ff);
-			vmap=VcfLoader.loadVcf(args[0], smap, false, false);
+			vmap=VcfLoader.loadVcfFile(args[0], smap, false, false);
 		}else{
-			vmap=VcfLoader.loadVars(args[0], null);
+			vmap=VcfLoader.loadVarFile(args[0], null);
 		}
 		t.stop("Loaded "+vmap.size()+" variants.\nTime: \t");
 	}
@@ -56,6 +57,17 @@ public class Var implements Comparable<Var>, Serializable {
 	/*--------------------------------------------------------------*/
 	/*----------------         Constructors         ----------------*/
 	/*--------------------------------------------------------------*/
+	
+	@Override
+	public Var clone(){
+		try {
+			return (Var)super.clone();
+		} catch (CloneNotSupportedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			throw new RuntimeException();
+		}
+	}
 	
 	public Var(int scafnum_, int start_, int stop_, int allele_, int type_){
 		this(scafnum_, start_, stop_, AL_MAP[allele_], type_);
@@ -74,7 +86,7 @@ public class Var implements Comparable<Var>, Serializable {
 		hashcode=hash();
 //		stamp=stamper.getAndIncrement();
 		assert(allele.length>1 || allele==AL_0 ||
-				allele==AL_A || allele==AL_C || allele==AL_G || allele==AL_T || allele==AL_N) : new String(allele_+", "+allele_.length);
+				allele==AL_A || allele==AL_C || allele==AL_G || allele==AL_T || allele==AL_N) : new String(new String(allele_)+", "+allele_.length);
 		assert(start<=stop) : "\n"+Var.toBasicHeader()+"\n"+this+"\n";
 //		if(type()==SUB && allele.length==1){ //TODO: 123 - mainly for testing
 //			final byte call=allele[0];
@@ -290,16 +302,16 @@ public class Var implements Comparable<Var>, Serializable {
 //		a=b;
 		
 		final int start;
-		final int readlen;
-		if(alt.length!=reflen && alt.length>0){
+		if(alt.length!=reflen && alt.length>0){//For indels, which have an extra base
 			alt=Arrays.copyOfRange(alt, 1, alt.length);
 			start=pos;
 			if(alt.length==0){alt=AL_0;}
 			else if(alt.length==1 && AL_MAP[alt[0]]!=null){alt=AL_MAP[alt[0]];}
+			if(reflen==1){reflen--;}//insertion
 		}else{
 			start=pos-1;
 		}
-		readlen=alt.length;
+		final int readlen=(alt==null || alt.length==0 || alt[0]=='.' ? 0 : alt.length);
 		final int stop=start+reflen;
 		assert(scaf!=null);
 		assert(scafMap!=null);
@@ -310,11 +322,13 @@ public class Var implements Comparable<Var>, Serializable {
 		int type=-1;
 		if(parseExtended){
 			type=Tools.max(type, parseVcfIntDelimited(line, "TYP=", infoStart));
-			if(type<0){type=type(start, stop, alt);}
+			if(type<0){type=typeStartStop(start, stop, alt);}
 		}else{
-			type=type(start, stop, alt);
+			type=typeStartStop(start, stop, alt);
 		}
 		Var v=new Var(scafNum, start, stop, alt, type);
+//		System.err.println(new String(line)+"\n"+v.toString()+"\nstart="+start+", stop="+stop+", type="+type+"\n");
+//		assert(false);
 		
 		if(parseCoverage){
 			infoStart=Tools.indexOfDelimited(line, "R1P=", infoStart, (byte)';');
@@ -426,6 +440,35 @@ public class Var implements Comparable<Var>, Serializable {
 	/*--------------------------------------------------------------*/
 	/*----------------           Mutators           ----------------*/
 	/*--------------------------------------------------------------*/
+
+	public Var clear() {
+		coverage=-1;
+		minusCoverage=-1;
+		
+		r1plus=0;
+		r1minus=0;
+		r2plus=0;
+		r2minus=0;
+		properPairCount=0;
+		
+		mapQSum=0;
+		mapQMax=0;
+		
+		baseQSum=0;
+		baseQMax=0;
+		
+		endDistSum=0;
+		endDistMax=0;
+		
+		idSum=0;
+		idMax=0;
+		
+		lengthSum=0;
+		
+		revisedAlleleFraction=-1;
+		forced=false;
+		return this;
+	}
 	
 	//Only called by MergeSamples from VCFLine arrays.
 	public void addCoverage(Var b){
@@ -467,7 +510,7 @@ public class Var implements Comparable<Var>, Serializable {
 	}
 	
 	public void add(Read r){
-		SamLine sl=(SamLine)r.obj;
+		final SamLine sl=r.samline;
 		final int bstart=calcBstart(r, sl);
 		final int bstop=calcBstop(bstart, r);
 		add(r, bstart, bstop);
@@ -476,8 +519,7 @@ public class Var implements Comparable<Var>, Serializable {
 	public void add(Read r, final int bstart, final int bstop){
 
 		final int oldReads=alleleCount();
-		
-		SamLine sl=(SamLine)r.obj;
+		final SamLine sl=r.samline;
 		
 		if(sl.strand()==0){
 			if(sl.pairnum()==0){
@@ -686,8 +728,60 @@ public class Var implements Comparable<Var>, Serializable {
 		return list;
 	}
 	
+	/** Short or long match */
+	private static int countLeftClip(byte[] match){
+		
+		byte mode=match[0];
+		if(mode!='C'){return 0;}
+		int current=0;
+		boolean hasDigit=false;
+		
+		for(int mpos=0; mpos<match.length; mpos++){
+			byte c=match[mpos];
+			
+			if(mode==c){
+				current++;
+			}else if(Tools.isDigit(c)){
+				current=(hasDigit ? current : 0)*10+c-'0';
+				hasDigit=true;
+			}else{
+				break;
+			}
+		}
+		return current;
+	}
+
+	/** Short or long match */
+	private static int countRightClip(byte[] match){
+		int mpos=match.length-1;
+		boolean hasDigit=false;
+		while(mpos>=0 && Tools.isDigit(match[mpos])){
+			hasDigit=true;
+			mpos--;
+		}
+		if(!hasDigit){return countRightClipLong(match);}//Necessary line
+		
+		byte mode=match[mpos];
+		if(mode!='C'){return 0;}
+		int current=0;
+		
+		for(; mpos<match.length; mpos++){
+			byte c=match[mpos];
+			
+			if(mode==c){
+				current++;
+			}else if(Tools.isDigit(c)){
+				current=(hasDigit ? current : 0)*10+c-'0';
+				hasDigit=true;
+			}else{
+				break;
+			}
+		}
+		return current;
+	}
+	
 	/** Long-match */
-	private static int countLeftClip(byte[] longmatch){
+	private static int countLeftClipLong(byte[] longmatch){
 		for(int i=0; i<longmatch.length; i++){
 			if(longmatch[i]!='C'){return i;}
 		}
@@ -695,7 +789,7 @@ public class Var implements Comparable<Var>, Serializable {
 	}
 	
 	/** Long-match */
-	private static int countRightClip(byte[] longmatch){
+	private static int countRightClipLong(byte[] longmatch){
 		for(int i=0, j=longmatch.length-1; i<longmatch.length; i++, j--){
 			if(longmatch[j]!='C'){return i;}
 		}
@@ -799,9 +893,19 @@ public class Var implements Comparable<Var>, Serializable {
 	public int calcEndDist(int bstart, int bstop, Read r){
 		int dist=Tools.min(bstart, r.length()-bstop);
 		assert(dist>=0 && dist<=r.length()/2) : dist+", "+r.length()+", "+bstart+", "+bstop+"\n"+this+"\n"+
-			"\n"+new String(r.match)+"\n"+r.obj+"\n";
-		assert(dist<=(r.length()-readlen())/2);
+			"\n"+new String(r.match)+"\n"+r.samline+"\n";
+		assert(dist<=(r.length()-readlen())/2) : "\ndist="+dist+", r.len="+r.length()+", readlen="+readlen()+", allele='"+new String(allele)+
+			"', allele.length="+allele.length+"\n"+"allele2="+toString(allele)+"\n(r.length()-readlen())/2="+((r.length()-readlen())/2)+"bstart="+bstart+", bstop="+bstop+
+			"\nthis="+this+"\nmatch="+new String(r.match)+"\nsamline="+r.samline+"\n";
 		return dist;
+	}
+	
+	String toString(byte[] array) {
+		StringBuilder sb=new StringBuilder();
+		for(byte b : array){
+			sb.append((int)b).append(',');
+		}
+		return sb.toString();
 	}
 	
 	public int calcBaseQ(final int bstart0, final int bstop0, Read r, SamLine sl){
@@ -829,7 +933,7 @@ public class Var implements Comparable<Var>, Serializable {
 			}else{
 				assert(bstop==bstart) : bstart0+", "+bstop0+", "+bstart+", "+bstop+"\n"+
 						r.length()+", "+r.swapped()+", "+type()+", "+readlen()+", "+reflen()+
-						"\n"+this+"\n"+new String(r.match)+"\n"+r.obj+"\n";
+						"\n"+this+"\n"+new String(r.match)+"\n"+r.samline+"\n";
 				
 //				-1, 73, -1, 73
 //				151, true, 2, 0, 1
@@ -851,17 +955,23 @@ public class Var implements Comparable<Var>, Serializable {
 	}
 	
 	int readlen(){
-		return allele.length;
+		return (allele==null || allele.length==0 || allele[0]=='.' ? 0 : allele.length);
 	}
 	
 	public int type(){return type;}
 	
 	int type_old(){
 		int reflen=reflen(), readlen=readlen();
-		return type(reflen(), readlen(), allele);
+		return typeReadlenReflen(readlen, reflen, allele);
 	}
 	
-	static int type(int reflen, int readlen, byte[] allele){
+	static int typeStartStop(int start, int stop, byte[] allele){
+		final int readlen=(allele.length==0 || allele[0]=='.' ? 0 : allele.length);
+		final int reflen=stop-start;
+		return typeReadlenReflen(readlen, reflen, allele);
+	}
+	
+	static int typeReadlenReflen(int readlen, int reflen, byte[] allele){
 		if(reflen<readlen){return INS;}
 		if(reflen>readlen){return DEL;}
 //		assert(readlen>0) : start+", "+stop+", "+reflen+", "+readlen+", "+new String(allele);
@@ -898,8 +1008,12 @@ public class Var implements Comparable<Var>, Serializable {
 	}
 	
 	public long toKey() {
-		long key=Long.rotateLeft(start, 30)^Long.rotateLeft(scafnum, 10)^hash(allele);
-		return key&0x3FFFFFFFFFFFFFFFL;
+		final int len=(type==DEL ? reflen() : readlen()); 
+		final long key=type^((hash(allele)&0x3F)>>alleleShift)^(len>>lenShift)^(Long.rotateRight(start, startShift));
+		return key&0x7FFFFFFFFFFFFFFFL;
+		
+//		long key=Long.rotateLeft(start, 30)^Long.rotateLeft(scafnum, 10)^hash(allele);
+//		return key&0x3FFFFFFFFFFFFFFFL;
 	}
 	
 	@Override
@@ -926,7 +1040,11 @@ public class Var implements Comparable<Var>, Serializable {
 	
 	@Override
 	public String toString(){
-		return toText(new ByteBuilder(), 0.99f, 30, 30, 150, 1, 2, null).toString();
+		return toTextQuick(new ByteBuilder()).toString();
+	}
+
+	public ByteBuilder toTextQuick(ByteBuilder bb){
+		return toText(bb, 0.99f, 30, 30, 150, 1, 2, null);
 	}
 	
 	public static String toVarHeader(double properPairRate, double totalQualityAvg, double mapqAvg, double rarity, double minAlleleFraction, int ploidy, 
@@ -956,6 +1074,7 @@ public class Var implements Comparable<Var>, Serializable {
 		if(extendedText){
 			sb.append("\treadCount\talleleFraction\trevisedAF\tstrandRatio\tbaseqAvg\tmapqAvg\tedistAvg\tidentityAvg");
 			sb.append("\tedistScore\tidentityScore\tqualityScore\tpairedScore\tbiasScore\tcoverageScore\thomopolymerScore\tscore");
+//			sb.append("\tforced");
 		}
 		return sb.toString();
 	}
@@ -1049,6 +1168,7 @@ public class Var implements Comparable<Var>, Serializable {
 			bb.append(coverageScore(ploidy, rarity, readLengthAvg), 4).append('\t');
 			bb.append(homopolymerScore(map), 4).append('\t');
 			bb.append(score, 4).append('\t');
+//			bb.append((forced() ? 1 : 0), 4).append('\t');
 		}
 		
 		bb.length--;
@@ -1198,8 +1318,8 @@ public class Var implements Comparable<Var>, Serializable {
 		final double strandBias=strandBiasScore(scafEndDist);
 
 		{//INFO
-			assert(Scaffold.trackStrand==(minusCoverage>=0)) : Scaffold.trackStrand+", "+minusCoverage;
-			final int covMinus=(Scaffold.trackStrand ? minusCoverage : coverage/2);
+			assert(Scaffold.trackStrand()==(minusCoverage>=0)) : Scaffold.trackStrand()+", "+minusCoverage;
+			final int covMinus=(Scaffold.trackStrand() ? minusCoverage : coverage/2);
 			final int covPlus=Tools.max(0, coverage-covMinus);
 			final int refMinus=Tools.max(0, covMinus-alleleMinusCount());
 			final int refPlus=Tools.max(0, covPlus-allelePlusCount());
@@ -1237,8 +1357,10 @@ public class Var implements Comparable<Var>, Serializable {
 			bb.append("HMP=").append(homopolymerCount(map)).append(';');
 			bb.append("SB=").append(strandBias,4).append(';');
 			
-			bb.append("DP4=").append(refPlus).append(',').append(refMinus).append(',');
-			bb.append(allelePlusCount()).append(',').append(alleleMinusCount()).append(';');
+			if(Scaffold.trackStrand()){
+				bb.append("DP4=").append(refPlus).append(',').append(refMinus).append(',');
+				bb.append(allelePlusCount()).append(',').append(alleleMinusCount()).append(';');
+			}
 			
 			bb.length--;
 		}
@@ -1297,8 +1419,8 @@ public class Var implements Comparable<Var>, Serializable {
 			}
 			return sb.toString();
 		}
-		if(ploidy==1){return "1";}
 		int copies=calcCopies(ploidy);
+		if(ploidy==1){return copies==0 ? "0" : "1";}
 		if(ploidy==2){
 			if(copies==0){return "0/0";}
 			if(copies==1){return "0/1";}
@@ -1334,7 +1456,7 @@ public class Var implements Comparable<Var>, Serializable {
 		
 		Scaffold scaf=map.getScaffold(scafnum);
 		coverage=scaf.calcCoverage(this);
-		if(Scaffold.trackStrand){minusCoverage=scaf.minusCoverage(this);}
+		if(Scaffold.trackStrand()){minusCoverage=scaf.minusCoverage(this);}
 		return coverage;
 	}
 	
@@ -1396,8 +1518,18 @@ public class Var implements Comparable<Var>, Serializable {
 	public double baseQualityScore(double totalBaseqAvg){
 		double bqAvg=baseQAvg();
 		
+		if(totalBaseqAvg<32 && bqAvg<32){//Fudge factor for recalibrated quality scores, since this was calibrated for raw Illumina scores.
+			//This section is not well-tested, though.
+			double fudgeFactor1=0.75*(32-totalBaseqAvg);
+			double fudgeFactor2=0.75*(32-bqAvg);
+			totalBaseqAvg+=fudgeFactor1;
+			bqAvg+=Tools.min(fudgeFactor1, fudgeFactor2);
+		}
+		
+		//Difference between this variation's quality and average quality.
+		//Positive delta means that this is lower quality
 		final double delta=totalBaseqAvg-bqAvg;
-		if(delta>0){
+		if(delta>0){//This is kind of mysterious, but appears to normally reduce bqAvg for low-quality vars
 			bqAvg=Tools.max(bqAvg*0.5, bqAvg-0.5*delta);
 		}
 		
@@ -1673,14 +1805,46 @@ public class Var implements Comparable<Var>, Serializable {
 	}
 	
 	public double strandBiasScore(int scafEndDist){
-		double x=eventProb(allelePlusCount(), alleleMinusCount());
-		return modifyByEndDist(x, scafEndDist);
+		int plus=allelePlusCount();
+		int minus=alleleMinusCount();
+		final double x=eventProb(plus, minus);
+		final double x2=modifyByEndDist(x, scafEndDist);
+		
+		//TODO:
+		//This should correct strand bias based on whether the overall read distribution is biased,
+		//for homozygous variations when minus coverage is being tracked
+		
+		double result=x2;
+		if(plus+minus>=20 && x2<0.9){//This block added based on analyzing NIST GIAB diff
+			int min=Tools.min(plus, minus);
+			int max=Tools.max(plus, minus);
+			if(min>1 && min>0.06f*max){//Seen on both strands; relax stringency
+				double y=0.15+(0.2*min)/max; //Higher constants (maximum of 1.0 combined) push the end result closer to 1
+				result=y+(1-y)*x2;
+			}
+		}
+//		if(start==15699277){System.err.println(plus+", "+minus+", "+x+", "+x2+", "+result);}
+		return result;
 	}
 	
+	//This seems to cause trouble with some NIST GIAB Illumina data...  not clear why
 	public double readBiasScore(double properPairRate){
 		if(properPairRate<0.5){return 0.95f;}
+		final int r1=r1AlleleCount(), r2=r2AlleleCount();
+		final double x=eventProb(r1, r2);
 		
-		return eventProb(r1AlleleCount(), r2AlleleCount());
+		//This block added based on analyzing NIST GIAB diff
+		final double x2=0.10+0.90*x;
+		double result=x2;
+		if(r1+r2>=20 && x2<0.9){
+			int min=Tools.min(r1, r2);
+			int max=Tools.max(r1, r2);
+			if(min>1 && min>0.07f*max){//Seen on both reads; relax stringency
+				double y=0.15+(0.2*min)/max; //Higher constants (maximum of 1.0 combined) push the end result closer to 1
+				result=y+(1-y)*x2;
+			}
+		}
+		return result;
 	}
 	
 	/** Adjusted probability of a binomial event being at least this lopsided. */
@@ -1821,6 +1985,9 @@ public class Var implements Comparable<Var>, Serializable {
 	public String scafName(ScafMap map){
 		return map.getScaffold(scafnum).name;
 	}
+
+	public Var setForced(boolean b){forced=b; return this;}
+	public boolean forced(){return forced;}
 	
 	/*--------------------------------------------------------------*/
 	/*----------------         Final Fields         ----------------*/
@@ -1861,6 +2028,7 @@ public class Var implements Comparable<Var>, Serializable {
 	long lengthSum;
 	
 	double revisedAlleleFraction=-1;
+	private boolean forced=false;
 	
 	/*--------------------------------------------------------------*/
 	/*----------------        Static Fields         ----------------*/
@@ -1896,9 +2064,30 @@ public class Var implements Comparable<Var>, Serializable {
 
 	private static final byte colon=';';
 	private static final byte tab='\t';
-	public static final String[] typeArray=new String[] {"INS","NOCALL","SUB","DEL","LJUNCT","RJUNCT","BJUNCT"};
-	public static final int INS=0, NOCALL=1, SUB=2, DEL=3, LJUNCT=4, RJUNCT=5, BJUNCT=6;
-	public static final int VAR_TYPES=7;
+	public static final String[] typeArray=new String[] {"INS","NOCALL","SUB","DEL","LJUNCT","RJUNCT","BJUNCT","MULTI","COMPLEX"};
+	/** Insertion */
+	public static final int INS=0;
+	/** No-call (length-neutral, ref N) */
+	public static final int NOCALL=1;
+	/** Substitution (length-neutral) */
+	public static final int SUB=2;
+	/** Deletion */
+	public static final int DEL=3;
+	/** Left-junction (left side clipped, right side normal) */
+	public static final int LJUNCT=4;
+	/** Right-junction (right side clipped, left side normal) */
+	public static final int RJUNCT=5;
+	/** Bidirectional junction (both sides clipped) */
+	public static final int BJUNCT=6;
+	/** Multiallelic (dominates all other types) */
+	public static final int MULTI=7;
+	/** Left-junction (left-side clipped, right side normal) */
+	public static final int COMPLEX=8;
+	
+	/** Number of variant types; same as typeArray.length */
+	public static final int VAR_TYPES=COMPLEX+1;
+	
+	/** Initial letter for abbreviating type names */
 	static final byte[] typeInitialArray=new byte[128];
 	
 	static final byte[] AL_0=new byte[0];
@@ -1910,6 +2099,18 @@ public class Var implements Comparable<Var>, Serializable {
 	static final byte[][] AL_MAP=makeMap();
 	static final int[] codes=makeCodes();
 
+	//For 64-bit hash keys
+	private static final int typeBits=2;
+	private static final int alleleBits=6;
+	private static final int scafBits=16;
+	private static final int lenBits=8;
+
+	private static final int alleleShift=typeBits;
+	private static final int scafShift=alleleShift+alleleBits;
+	private static final int lenShift=scafShift+scafBits;
+	private static final int startShift=lenShift+lenBits;
+	
+	
 //	public static ScafMap scafMap;
 	
 	static final int[] makeCodes(){
@@ -1937,7 +2138,7 @@ public class Var implements Comparable<Var>, Serializable {
 	
 	/** factorial[n]=n! */
 	private static final double[] factorial=makeFactorialArray(PROBLEN+1);
-	/** binomial[n][k] = combinations in n pick k */
+	/** binomial[n][k] = combinations in n pick k (no replacement, order-insensitive) */
 	private static final double[][] binomial=makeBinomialMatrix(PROBLEN+1);
 	/** prob[n][k] = probability of an event this lopsided or worse. */
 	private static final double[][] prob=makeProbMatrix(PROBLEN+1);
@@ -1966,6 +2167,31 @@ public class Var implements Comparable<Var>, Serializable {
 			}
 		}
 		return matrix;
+	}
+	
+	/** Combinations in n pick k, allowing somewhat higher max values... perhaps? */
+	private static double bigBinomial(int n, int k){
+		
+		double combinations=1;
+		for(int a=-1, b=-1, c=-1; a<=n || b<=k || c<=n-k; ) {
+			double mult=1;
+			if(combinations<1000000000 && a<=n){//Increase combinations
+				a++;
+				mult=Tools.max(1, a);
+			}else if(b<=k){//Decrease combinations
+				b++;
+				mult=1.0/Tools.max(1, a);
+			}else if(c<=n-k){//Decrease combinations
+				c++;
+				mult=1.0/Tools.max(1, a);
+			}else{
+				assert(false) : a+", "+b+", "+c+", "+n+", "+k+", "+(n-k)+", "+combinations;
+			}
+			combinations*=mult;
+			assert(combinations<Double.MAX_VALUE) : a+", "+b+", "+c+", "+n+", "+k+", "+(n-k)+", "+combinations;
+		}
+		
+		return combinations;
 	}
 
 	private static double[][] makeProbMatrix(int len) {
@@ -1999,8 +2225,10 @@ public class Var implements Comparable<Var>, Serializable {
 		typeInitialArray['L']=LJUNCT;
 		typeInitialArray['R']=RJUNCT;
 		typeInitialArray['B']=BJUNCT;
+		typeInitialArray['M']=MULTI;
+		typeInitialArray['C']=COMPLEX;
 	}
 	
-	public static final String varFormat="1.1";
+	public static final String varFormat="1.3";
 	
 }

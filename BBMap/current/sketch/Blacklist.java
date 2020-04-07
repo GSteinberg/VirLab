@@ -5,6 +5,7 @@ import java.util.ArrayList;
 
 import dna.Data;
 import kmer.AbstractKmerTable;
+import shared.PreParser;
 
 public class Blacklist extends SketchObject {
 	
@@ -83,11 +84,11 @@ public class Blacklist extends SketchObject {
 				fname=Blacklist.mitoBlacklist();
 			}
 		}
-		System.err.println("Adding "+fname+" to blacklist.");
+		if(!PreParser.silent){System.err.println("Adding "+fname+" to blacklist.");}
 		assert(!added.contains(fname));
 		added.add(fname);
 		SketchTool tool=new SketchTool(1000000, 1, false, false);
-		ArrayList<Sketch> sketches=tool.loadSketchesFromFile(fname, null, ONE_SKETCH, 1, 1f, -1, defaultParams.minEntropy, false);
+		ArrayList<Sketch> sketches=tool.loadSketchesFromFile(fname, null, 1, -1, ONE_SKETCH, 1f, 0f, 0f, (byte)0, false);
 		return sketches;
 	}
 	
@@ -105,7 +106,7 @@ public class Blacklist extends SketchObject {
 //			keySets=AbstractKmerTable.preallocate(ways, AbstractKmerTable.ARRAY1D, (int)size2, -1L, true);
 		}
 		for(Sketch sk : sketches){
-			for(long key : sk.array){
+			for(long key : sk.keys){
 				increment(Long.MAX_VALUE-key);
 			}
 		}
@@ -149,15 +150,15 @@ public class Blacklist extends SketchObject {
 		return blacklist;
 	}
 
-	static synchronized String ntBlacklist(){return ntBlacklist!=null ? ntBlacklist : (ntBlacklist=Data.findPath("?blacklist_nt_species_500.sketch"));}
+	static synchronized String ntBlacklist(){return ntBlacklist!=null ? ntBlacklist : (ntBlacklist=Data.findPath("?blacklist_nt_genus_100.sketch"));}
 //	static synchronized String silvaBlacklist(){return silvaBlacklist!=null ? silvaBlacklist : (silvaBlacklist=Data.findPath("?blacklist_silva_species_500.sketch"));}
 	static synchronized String silvaBlacklist(){return silvaBlacklist!=null ? silvaBlacklist : (silvaBlacklist=Data.findPath("?blacklist_silva_merged.sketch"));}
-	static synchronized String refseqBlacklist(){return refseqBlacklist!=null ? refseqBlacklist : (refseqBlacklist=Data.findPath("?blacklist_refseq_species_250.sketch"));}
+	static synchronized String refseqBlacklist(){return refseqBlacklist!=null ? refseqBlacklist : (refseqBlacklist=Data.findPath("?blacklist_refseq_genus_140.sketch"));}
 	static synchronized String imgBlacklist(){return imgBlacklist!=null ? imgBlacklist : (imgBlacklist=Data.findPath("?blacklist_img_species_300.sketch"));}
 	static synchronized String nrBlacklist(){return null;}//Data.findPath("?blacklist_nr_species_1000.sketch");
 	static synchronized String prokProtBlacklist(){return prokProtBlacklist!=null ? prokProtBlacklist : (prokProtBlacklist=Data.findPath("?blacklist_prokprot_merged.sketch"));}
-	static synchronized String mitoBlacklist(){return mitoBlacklist!=null ? mitoBlacklist : (mitoBlacklist=Data.findPath("?blacklist_refseq_species_250.sketch"));}
-	static synchronized String fungiBlacklist(){return fungiBlacklist!=null ? fungiBlacklist : (fungiBlacklist=Data.findPath("?blacklist_refseq_species_250.sketch"));}
+	static synchronized String mitoBlacklist(){return mitoBlacklist!=null ? mitoBlacklist : (mitoBlacklist=Data.findPath("?blacklist_refseq_genus_140.sketch"));}
+	static synchronized String fungiBlacklist(){return fungiBlacklist!=null ? fungiBlacklist : (fungiBlacklist=Data.findPath("?blacklist_refseq_genus_140.sketch"));}
 
 	private static String ntBlacklist;
 	private static String silvaBlacklist;

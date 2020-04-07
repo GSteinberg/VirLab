@@ -150,7 +150,7 @@ public class PrintTaxonomy {
 		
 		if(giTableFile!=null){
 			outstream.println("Loading gi table.");
-			GiToNcbi.initialize(giTableFile);
+			GiToTaxid.initialize(giTableFile);
 		}
 		if(accessionFile!=null){
 			outstream.println("Loading accession table.");

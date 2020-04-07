@@ -1114,9 +1114,6 @@ public class BBSplitter {
 		String memstring=null;
 		if(set.size()>0){
 			tsw.println("#!/bin/bash");
-//			tsw.println("module unload samtools");
-//			tsw.println("module load samtools/0.1.19");
-			if(Data.GENEPOOL){tsw.println("module load samtools"+(Data.SAMTOOLS_VERSION_1x ? "/1.4" : ""));}
 			
 			long mem=Runtime.getRuntime().maxMemory()/3400000;
 			mem=Tools.min(100000, mem);

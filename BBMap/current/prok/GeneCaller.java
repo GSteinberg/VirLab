@@ -25,12 +25,12 @@ public class GeneCaller {
 	/*----------------             Init             ----------------*/
 	/*--------------------------------------------------------------*/
 	
-	GeneCaller(int minLen_, int maxOverlapSameStrand_, int maxOverlapOppositeStrand_, 
-			float minStartScore_, float minStopScore_, float minInnerScore_, 
-			float minOrfScore_, float minAvgScore_){
-		this(minLen_, maxOverlapSameStrand_, maxOverlapOppositeStrand_, 
-				minStartScore_, minStopScore_, minInnerScore_, minOrfScore_, minAvgScore_, null);
-	}
+//	GeneCaller(int minLen_, int maxOverlapSameStrand_, int maxOverlapOppositeStrand_, 
+//			float minStartScore_, float minStopScore_, float minInnerScore_, 
+//			float minOrfScore_, float minAvgScore_){
+//		this(minLen_, maxOverlapSameStrand_, maxOverlapOppositeStrand_, 
+//				minStartScore_, minStopScore_, minInnerScore_, minOrfScore_, minAvgScore_, null);
+//	}
 	
 	GeneCaller(int minLen_, int maxOverlapSameStrand_, int maxOverlapOppositeStrand_, 
 			float minStartScore_, float minStopScore_, float minInnerScore_,
@@ -45,6 +45,15 @@ public class GeneCaller {
 		minInnerScore=minInnerScore_;
 		minOrfScore=minOrfScore_;
 		minAvgScore=minAvgScore_;
+		if(pgm!=null){
+			synchronized(pgm){//This is not the best place to but this but better than where it was before
+				pgm.statsCDS.enabled=callCDS;
+				pgm.statstRNA.enabled=calltRNA;
+				pgm.stats16S.enabled=call16S;
+				pgm.stats23S.enabled=call23S;
+				pgm.stats5S.enabled=call5S;
+			}
+		}
 	}
 	
 	/*--------------------------------------------------------------*/
@@ -57,12 +66,12 @@ public class GeneCaller {
 	
 	public ArrayList<Orf> callGenes(Read r, GeneModel pgm_){
 		pgm=pgm_;
-
-		pgm.statsCDS.enabled=callCDS;
-		pgm.statstRNA.enabled=calltRNA;
-		pgm.stats16S.enabled=call16S;
-		pgm.stats23S.enabled=call23S;
-		pgm.stats5S.enabled=call5S;
+		
+		assert(pgm.statsCDS.enabled==callCDS);
+		assert(pgm.statstRNA.enabled==calltRNA);
+		assert(pgm.stats16S.enabled==call16S);
+		assert(pgm.stats23S.enabled==call23S);
+		assert(pgm.stats5S.enabled==call5S);
 		
 		final String name=r.id;
 		final byte[] bases=r.bases;
@@ -73,7 +82,8 @@ public class GeneCaller {
 		ArrayList<Orf>[] brokenLists=breakOrfs(frameLists, bases);
 		
 		ArrayList<Orf>[] rnaLists=null;
-		if(calltRNA || call16S || call23S || call5S){
+		final int rlen=r.length();
+		if(calltRNA || (call16S && rlen>800) || call23S || call5S){
 			rnaLists=makeRnas(name, bases);
 
 			brokenLists[0].addAll(rnaLists[0]);
@@ -106,7 +116,7 @@ public class GeneCaller {
 		
 		//Find the optimal path through Orfs
 		ArrayList<Orf> path=findPath(brokenLists, bases);
-		geneStartsOut+=path.size();
+//		geneStartsOut+=path.size();
 		
 		stCdsPass.add(path);
 		
@@ -128,7 +138,7 @@ public class GeneCaller {
 		array[0]=new ArrayList<Orf>();
 		array[1]=new ArrayList<Orf>();
 		final float[] scores=new float[bases.length];
-		final int[] kmersSeen=(pgm.lsuKmers==null && pgm.ssuKmers==null && pgm.trnaKmers==null) ? null : new int[bases.length];
+		final int[] kmersSeen=(pgm.lsuKmers==null && pgm.ssuKmers==null && pgm.trnaKmers==null && pgm.r5SKmers==null) ? null : new int[bases.length];
 		for(int strand=0; strand<2; strand++){
 			for(StatsContainer sc : pgm.rnaContainers){
 				if(sc.enabled){
@@ -146,6 +156,30 @@ public class GeneCaller {
 			AminoAcid.reverseComplementBasesInPlace(bases);
 		}
 		return array;
+	}
+	
+	/** Designed for quickly calling a single SSU */
+	public Orf makeRna(String name, byte[] bases, int type){
+		final float[] scores=new float[bases.length];//Big and slow
+		StatsContainer sc=pgm.allContainers[type];
+		final int[] kmersSeen=(sc.kmerSet==null ? null : new int[bases.length]);
+		
+		int strand=0;
+		ArrayList<Orf> list=makeRnasForStrand(name, bases, strand, sc, scores, kmersSeen);
+		if(list!=null && list.size()>0){return list.get(0);}
+		
+		strand++;
+		AminoAcid.reverseComplementBasesInPlace(bases);
+		list=makeRnasForStrand(name, bases, strand, sc, scores, kmersSeen);
+		AminoAcid.reverseComplementBasesInPlace(bases);
+		if(strand==1 && list!=null){
+			for(Orf orf : list){
+				assert(orf.strand==strand);
+				orf.flip();
+			}
+		}
+		if(list!=null && list.size()>0){return list.get(0);}
+		return null;
 	}
 	
 	/** 
@@ -231,6 +265,11 @@ public class GeneCaller {
 		ArrayList<Orf> bestPath=new ArrayList<Orf>();
 		for(Orf orf=best; orf!=null; orf=orf.prev()){
 			bestPath.add(orf);
+			if(orf.type==Orf.CDS){geneStartsOut++;}
+			else if(orf.type==Orf.tRNA){tRNAOut++;}
+			else if(orf.type==Orf.r16S){r16SOut++;}
+			else if(orf.type==Orf.r23S){r23SOut++;}
+			else if(orf.type==Orf.r5S){r5SOut++;}
 		}
 		Collections.sort(bestPath);
 		return bestPath;
@@ -466,7 +505,7 @@ public class GeneCaller {
 	 * */
 	ArrayList<Orf> makeRnasForStrand(String name, byte[] bases, int strand, StatsContainer sc, float[] scores, int[] kmersSeen){
 		final int window=sc.lengthAvg;
-		if(bases==null || bases.length<window/2){return null;}
+		if(bases==null || bases.length*2<window){return null;}
 		ArrayList<Orf> orfs=new ArrayList<Orf>(sc.type==Orf.tRNA ? 32 : 8);
 		
 		final FrameStats inner=sc.inner;
@@ -850,12 +889,12 @@ public class GeneCaller {
 					float prob=innerStats.probs[currentFrame][kmer];
 					float dif=prob-0.99f;//Prob above 1 is more likely than average
 					currentScore+=dif;
-//					outstream.println("pos="+pos+"\tdif="+String.format("%.4f", dif)+",\tscore="+String.format("%.4f", currentScore)+
-//							"\tasStart="+String.format("%.4f", pgm.calcStartScore(pos-2, bases))+"\tasStop="+String.format("%.4f", stopStats.scorePoint(pos, bases))+
+//					outstream.println("pos="+pos+"\tdif="+String.format(Locale.ROOT, "%.4f", dif)+",\tscore="+String.format(Locale.ROOT, "%.4f", currentScore)+
+//							"\tasStart="+String.format(Locale.ROOT, "%.4f", pgm.calcStartScore(pos-2, bases))+"\tasStop="+String.format(Locale.ROOT, "%.4f", stopStats.scorePoint(pos, bases))+
 //							"\tcodon="+AminoAcid.kmerToString(kmer, 3)+" frame="+(currentFrame));
 				}else{
-//					outstream.println("pos="+pos+"\tdif="+String.format("%.4f", 0.0)+",\tscore="+String.format("%.4f", 0.0)+
-//							"\tasStart="+String.format("%.4f", pgm.calcStartScore(pos-2, bases))+"\tasStop="+String.format("%.4f", stopStats.scorePoint(pos, bases))+
+//					outstream.println("pos="+pos+"\tdif="+String.format(Locale.ROOT, "%.4f", 0.0)+",\tscore="+String.format(Locale.ROOT, "%.4f", 0.0)+
+//							"\tasStart="+String.format(Locale.ROOT, "%.4f", pgm.calcStartScore(pos-2, bases))+"\tasStop="+String.format(Locale.ROOT, "%.4f", stopStats.scorePoint(pos, bases))+
 //							"\tcodon="+AminoAcid.kmerToString(kmer, 3)+" frame="+(currentFrame));
 				}
 			}else{
@@ -1024,6 +1063,11 @@ public class GeneCaller {
 	long geneStartsRetained=0;
 	long geneStopsRetained=0;
 	long geneStartsOut=0;
+
+	long r16SOut=0;
+	long r23SOut=0;
+	long r5SOut=0;
+	long tRNAOut=0;
 
 	ScoreTracker stCds=new ScoreTracker(Orf.CDS);
 	ScoreTracker stCds2=new ScoreTracker(Orf.CDS);

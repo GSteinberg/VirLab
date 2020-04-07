@@ -1,8 +1,10 @@
 package sketch;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Locale;
+import java.util.Map.Entry;
 
 import json.JsonObject;
 import shared.Colors;
@@ -19,9 +21,13 @@ public class DisplayParams implements Cloneable {
 	public DisplayParams clone(){
 		try {
 			DisplayParams copy=(DisplayParams)super.clone();
-			if(taxFilter!=null){
-				copy.taxFilter=taxFilter.deepCopy();
+			if(taxFilterWhite!=null){
+				copy.taxFilterWhite=taxFilterWhite.deepCopy();
 			}
+			if(taxFilterBlack!=null){
+				copy.taxFilterBlack=taxFilterBlack.deepCopy();
+			}
+			copy.postParsed=false;
 			return copy;
 		} catch (CloneNotSupportedException e) {
 			// TODO Auto-generated catch block
@@ -32,6 +38,7 @@ public class DisplayParams implements Cloneable {
 	
 	public DisplayParams parseDoubleHeader(String s){
 		if(!s.startsWith("##")){return this;}
+//		if(!s.startsWith("##")){return this.clone();}
 		StringBuilder sb=new StringBuilder();
 		for(int i=2; i<s.length(); i++){
 			char c=s.charAt(i);
@@ -60,9 +67,9 @@ public class DisplayParams implements Cloneable {
 //			assert(x) : "Unknown parameter "+arg+"\n"+line;
 			if(!x){System.err.println("Warning: Unknown parameter "+arg);}
 		}
-		if(SketchObject.verbose2){System.err.println("Made it to post-parse.  taxFilter="+params.taxFilter);}
-		params.postParse(true);
-		if(SketchObject.verbose2){System.err.println("Passed post-parse.  taxFilter="+params.taxFilter);}
+		if(SketchObject.verbose2){System.err.println("Made it to post-parse.  taxFilterWhite="+params.taxFilterWhite);}
+		params.postParse(true, true);
+		if(SketchObject.verbose2){System.err.println("Passed post-parse.  taxFilterWhite="+params.taxFilterWhite);}
 		
 		return params;
 	}
@@ -99,6 +106,12 @@ public class DisplayParams implements Cloneable {
 				format=Integer.parseInt(b);
 			}else if(b.equalsIgnoreCase("json")){
 				format=FORMAT_JSON;
+			}else if(b.equalsIgnoreCase("jsonarray")){
+				format=FORMAT_JSON;
+				jsonArray=true;
+			}else if(b.equalsIgnoreCase("d3")){
+				format=FORMAT_JSON;
+				printD3=true;
 			}else if(b.equalsIgnoreCase("constellation")){
 				format=FORMAT_CONSTELLATION;
 			}else{
@@ -110,22 +123,69 @@ public class DisplayParams implements Cloneable {
 			}else{
 				if(format==FORMAT_JSON){format=default_format;}
 			}
+		}else if(a.equalsIgnoreCase("jsonarray") || a.equalsIgnoreCase("jsonarrays")){
+			if(Tools.parseBoolean(b)){
+				format=FORMAT_JSON;
+				jsonArray=true;
+			}else{
+				jsonArray=false;
+			}
+		}else if(a.equalsIgnoreCase("d3") || a.equalsIgnoreCase("printd3")){
+			if(Tools.parseBoolean(b)){
+				format=FORMAT_JSON;
+				printD3=true;
+			}else{
+				printD3=false;
+			}
+		}else if(a.equalsIgnoreCase("jsonarray") || a.equalsIgnoreCase("jsonarrays")){
+			if(Tools.parseBoolean(b)){
+				jsonArray=true;
+			}else{
+				jsonArray=false;
+			}
+		}else if(a.equalsIgnoreCase("d3levelnodes")){
+			D3LevelNodes=Tools.parseBoolean(b);
+		}else if(a.equalsIgnoreCase("d3hitsize")){
+			if(Tools.parseBoolean(b)){D3sizeMode=D3_HIT_SIZE;}
+		}else if(a.equalsIgnoreCase("d3anisize")){
+			if(Tools.parseBoolean(b)){D3sizeMode=D3_ANI_SIZE;}
+		}else if(a.equalsIgnoreCase("d3wkidsize")){
+			if(Tools.parseBoolean(b)){D3sizeMode=D3_WKID_SIZE;}
+		}else if(a.equalsIgnoreCase("d3depthsize")){
+			if(Tools.parseBoolean(b)){
+				D3sizeMode=D3_DEPTH_SIZE;
+				printDepth=true;
+			}
+		}else if(a.equalsIgnoreCase("d3kidsize")){
+			if(Tools.parseBoolean(b)){D3sizeMode=D3_KID_SIZE;}
+		}else if(a.equalsIgnoreCase("D3sizeMode")){
+			D3sizeMode=Integer.parseInt(b);
 		}else if(a.equals("level") || a.equals("taxlevel") || a.equals("minlevel")){
 			taxLevel=TaxTree.parseLevel(b);//TODO: Change to extended
 		}
 		
 		else if(a.equalsIgnoreCase("printtax") || a.equalsIgnoreCase("printtaxa")){
 			printTax=Tools.parseBoolean(b);
+		}else if(a.equalsIgnoreCase("printssu") || a.equalsIgnoreCase("print16s")){
+			printSSU=Tools.parseBoolean(b);
+		}else if(a.equalsIgnoreCase("printqueryfilename") || a.equalsIgnoreCase("printqfname") || a.equalsIgnoreCase("printqfile") || a.equalsIgnoreCase("qfname")){
+			printQueryFileName=Tools.parseBoolean(b);
+		}else if(a.equalsIgnoreCase("printreffilename") || a.equalsIgnoreCase("printrfname") || a.equalsIgnoreCase("printrfile") || a.equalsIgnoreCase("rfname")){
+			printRefFileName=Tools.parseBoolean(b);
+		}else if(a.equalsIgnoreCase("printfilename") || a.equalsIgnoreCase("printfname") || a.equalsIgnoreCase("printfile")){
+			printQueryFileName=printRefFileName=Tools.parseBoolean(b);
 		}else if(a.equalsIgnoreCase("printoriginalname") || a.equalsIgnoreCase("printseqname") || a.equalsIgnoreCase("printname0") || a.equals("pn0")){
 			printOriginalName=Tools.parseBoolean(b);
-		}else if(a.equalsIgnoreCase("printfilename") || a.equalsIgnoreCase("printfname")){
-			printFileName=Tools.parseBoolean(b);
 		}else if(a.equalsIgnoreCase("printimg")){
 			printImg=Tools.parseBoolean(b);
 		}else if(a.equalsIgnoreCase("printcompleteness") || a.equalsIgnoreCase("completeness") || a.equalsIgnoreCase("printcomplt")){
 			printCompleteness=Tools.parseBoolean(b);
 		}else if(a.equalsIgnoreCase("printani") || a.equalsIgnoreCase("ani")){
 			printAni=Tools.parseBoolean(b);
+		}else if(a.equalsIgnoreCase("printkid") || a.equalsIgnoreCase("kid")){
+			printKID=Tools.parseBoolean(b);
+		}else if(a.equalsIgnoreCase("printwkid") || a.equalsIgnoreCase("wkid")){
+			printWKID=Tools.parseBoolean(b);
 		}else if(a.equalsIgnoreCase("printscore") || a.equalsIgnoreCase("score")){
 			printScore=Tools.parseBoolean(b);
 		}else if(a.equalsIgnoreCase("printevalue") || a.equalsIgnoreCase("evalue")){
@@ -158,6 +218,16 @@ public class DisplayParams implements Cloneable {
 		}else if(a.equalsIgnoreCase("sortByScore")){
 			boolean x=Tools.parseBoolean(b);
 			if(x){comparator=Comparison.scoreComparator;}
+		}
+		else if(a.equalsIgnoreCase("sortByKID")){
+			boolean x=Tools.parseBoolean(b);
+			if(x){comparator=Comparison.KIDComparator;}
+		}else if(a.equalsIgnoreCase("sortByWKID") || a.equalsIgnoreCase("sortByANI")){
+			boolean x=Tools.parseBoolean(b);
+			if(x){comparator=Comparison.WKIDComparator;}
+		}else if(a.equalsIgnoreCase("sortByHits") || a.equalsIgnoreCase("sortByMatches")){
+			boolean x=Tools.parseBoolean(b);
+			if(x){comparator=Comparison.HitsComparator;}
 		}
 		
 		else if(a.equalsIgnoreCase("printUMatches") || a.equalsIgnoreCase("printUHits") || a.equalsIgnoreCase("printUnique")){
@@ -208,6 +278,8 @@ public class DisplayParams implements Cloneable {
 			printGSize=Tools.parseBoolean(b);
 		}else if(a.equalsIgnoreCase("gSizeKMG")){
 			gSizeKMG=Tools.parseBoolean(b);
+		}else if(a.equalsIgnoreCase("printGC")){
+			printGC=Tools.parseBoolean(b);
 		}else if(a.equalsIgnoreCase("printGKmers")){
 			printGKmers=Tools.parseBoolean(b);
 		}else if(a.equalsIgnoreCase("printTaxName")){
@@ -220,6 +292,10 @@ public class DisplayParams implements Cloneable {
 		
 		else if(a.equalsIgnoreCase("minEntropy") || a.equalsIgnoreCase("entropy") || a.equalsIgnoreCase("efilter")){
 			minEntropy=Float.parseFloat(b);
+		}else if(a.equalsIgnoreCase("minprob") || a.equalsIgnoreCase("pfilter")){
+			minProb=(float)Double.parseDouble(b);
+		}else if(a.equalsIgnoreCase("minQual") || a.equalsIgnoreCase("minq")){
+			minQual=Byte.parseByte(b);
 		}
 		
 		else if(a.equalsIgnoreCase("printColors") || a.equalsIgnoreCase("colors") || a.equalsIgnoreCase("color")){
@@ -277,7 +353,7 @@ public class DisplayParams implements Cloneable {
 		else if(a.equals("samplerate")){
 			samplerate=Float.parseFloat(b);
 		}else if(a.equals("reads")){
-			reads=Tools.parseKMG(b);
+			maxReads=Tools.parseKMG(b);
 		}else if(a.equals("mode") || a.equalsIgnoreCase("single") || a.equalsIgnoreCase("singlesketch") || a.equalsIgnoreCase("onesketch")
 				|| a.equalsIgnoreCase("persequence") || a.equalsIgnoreCase("sequence") || a.equalsIgnoreCase("pertaxa") 
 				|| a.equalsIgnoreCase("perheader") || a.equalsIgnoreCase("perfile")){
@@ -295,30 +371,28 @@ public class DisplayParams implements Cloneable {
 			useFilePrefixName=Tools.parseBoolean(b);
 		}
 		
-		else if(a.equalsIgnoreCase("taxfilter") || a.equalsIgnoreCase("taxfilterset")){
-			if(b==null){taxFilter=null;}
-			else{
-				if(taxFilter==null){taxFilter=new TaxFilter(SketchObject.taxtree);}
-				taxFilter.clearSet();
-				taxFilter.makeSet();
-				taxFilter.addNumbers(b, false);
-//				System.err.println("A:\t"+this);
-			}
-		}else if(a.equalsIgnoreCase("taxfilterlevel")){//TODO:  Change to extended
-			int temp=TaxTree.parseLevel(b);
-			if(taxFilter==null){taxFilter=new TaxFilter(SketchObject.taxtree);}
-			taxFilter.setLevel(temp, false);
-//			System.err.println("B:\t"+this);
-		}else if(a.equalsIgnoreCase("taxfilterinclude") || a.equalsIgnoreCase("taxfilterexclude")){
-			boolean temp=Tools.parseBoolean(b);
-			if(a.equalsIgnoreCase("taxfilterexclude")){temp=!temp;}
-			if(taxFilter==null){taxFilter=new TaxFilter(SketchObject.taxtree);}
-			taxFilter.setInclude(temp);
-//			System.err.println("C:\t"+this);
-		}else if(a.equalsIgnoreCase("taxfilterstring")){
-			if(taxFilter==null){taxFilter=new TaxFilter(SketchObject.taxtree);}
-			taxFilter.setContainsString(b);
-//			System.err.println("D:\t"+this);
+		else if(a.equalsIgnoreCase("taxfilterincludelevel") || a.equalsIgnoreCase("includelevel") 
+				|| a.equalsIgnoreCase("taxlevelwhite") || a.equalsIgnoreCase("ilevel") || a.equalsIgnoreCase("whitelevel")){
+			taxLevelWhite=TaxTree.parseLevel(b);//TODO:  Change to extended
+		}else if(a.equalsIgnoreCase("taxfilterinclude") || a.equalsIgnoreCase("include") || a.equalsIgnoreCase("taxfilterwhitelist")){
+			taxFilterWhiteList=b;
+		}else if(a.equalsIgnoreCase("taxfilterincludestring") || a.equalsIgnoreCase("includestring")
+				|| a.equalsIgnoreCase("taxfilterwhitestring") || a.equalsIgnoreCase("istring")){
+			taxFilterWhiteString=b;
+		}else if(a.equalsIgnoreCase("banUnclassified") || a.equalsIgnoreCase("noUnclassified")){
+			banUnclassified=Tools.parseBoolean(b);
+		}else if(a.equalsIgnoreCase("banVirus") || a.equalsIgnoreCase("noVirus") || a.equalsIgnoreCase("banViruses") || a.equalsIgnoreCase("noViruses")){
+			banVirus=Tools.parseBoolean(b);
+		}
+		
+		else if(a.equalsIgnoreCase("taxfilterexcludelevel") || a.equalsIgnoreCase("excludelevel") 
+				|| a.equalsIgnoreCase("taxlevelblack") || a.equalsIgnoreCase("elevel") || a.equalsIgnoreCase("blacklevel")){
+			taxLevelBlack=TaxTree.parseLevel(b);//TODO:  Change to extended
+		}else if(a.equalsIgnoreCase("taxfilterexclude") || a.equalsIgnoreCase("exclude") || a.equalsIgnoreCase("taxfilterblacklist")){
+			taxFilterBlackList=b;
+		}else if(a.equalsIgnoreCase("taxfilterexcludestring") || a.equalsIgnoreCase("excludestring")
+				|| a.equalsIgnoreCase("taxfilterblackstring") || a.equalsIgnoreCase("estring")){
+			taxFilterBlackString=b;
 		}
 		
 		else if(a.equalsIgnoreCase("minkmercount") || a.equalsIgnoreCase("minkeycount") || a.equalsIgnoreCase("mincount") || a.equalsIgnoreCase("minKeyOccuranceCount")){
@@ -407,30 +481,54 @@ public class DisplayParams implements Cloneable {
 			requiredMetaAnd=!Tools.parseBoolean(b);
 		}
 		
+		else if(a.equalsIgnoreCase("bbversion")){
+			inputVersion=b;
+		}
+		
 		else{
 			return false;
 		}
 		return true;
 	}
 	
-	public void postParse(boolean requireTree){
+	public void postParse(boolean requireTree, boolean makeTaxFilters){
 		assert(!postParsed);
 		synchronized(this){
 			if(postParsed){return;}
-			if(taxFilter!=null){
-				if(taxFilter.size()==0 && taxFilter.containsString()==null){
-					System.err.println("Eliminating empty TaxFilter.");
-					taxFilter=null;
+			
+			if(makeTaxFilters){
+				if(taxFilterWhiteList!=null || taxFilterWhiteString!=null){
+					taxFilterWhite=new TaxFilter(SketchObject.taxtree, true);
+					taxFilterWhite.setLevel(taxLevelWhite, false);
+					taxFilterWhite.makeSet();
+					taxFilterWhite.addNamesOrNumbers(taxFilterWhiteList, false);
+					taxFilterWhite.setContainsString(taxFilterWhiteString);
+					if(requireTree){
+						assert(SketchObject.taxtree!=null) : "No taxtree loaded.";
+						taxFilterWhite.setTree(SketchObject.taxtree);
+						taxFilterWhite.promote();
+					}
+				}
+				
+				if(taxFilterBlackList!=null || taxFilterBlackString!=null){
+					taxFilterBlack=new TaxFilter(SketchObject.taxtree, false);
+					taxFilterBlack.setLevel(taxLevelBlack, false);
+					taxFilterBlack.makeSet();
+					taxFilterBlack.addNamesOrNumbers(taxFilterBlackList, false);
+					taxFilterBlack.setContainsString(taxFilterBlackString);
+					if(requireTree){
+						assert(SketchObject.taxtree!=null) : "No taxtree loaded.";
+						taxFilterBlack.setTree(SketchObject.taxtree);
+						taxFilterBlack.promote();
+					}
 				}
 			}
-			if(taxFilter!=null && requireTree){
-				assert(SketchObject.taxtree!=null) : "No taxtree loaded.";
-				taxFilter.setTree(SketchObject.taxtree);
-				taxFilter.promote();
-			}
+			noFilters=(!hasMetaFilters() && !hasTaxFilters());
 			postParsed=true;
 		}
 	}
+	
+	public boolean postParsed(){return postParsed;}
 	
 	@Override
 	public String toString(){
@@ -449,6 +547,7 @@ public class DisplayParams implements Cloneable {
 		sb.append(" records=").append(maxRecords);
 		sb.append(" format=").append(format);
 		sb.append(" level=").append(taxLevel);
+		if(inputVersion!=null){sb.append(" bbversion=").append(inputVersion);}
 		
 		if(k!=SketchObject.defaultK || k2!=0 || k!=SketchObject.k || k2!=SketchObject.k2){
 			assert(k>0 && k2>=0 && k2<k) : "Bad values for k: "+k+", "+k2+", "+SketchObject.k+", "+SketchObject.k2;
@@ -459,12 +558,17 @@ public class DisplayParams implements Cloneable {
 		if(SketchObject.translate){sb.append(" translate=").append(SketchObject.translate);}
 		if(SketchObject.sixframes){sb.append(" sixframes=").append(SketchObject.sixframes);}
 		if(SketchObject.HASH_VERSION>1){sb.append(" hashversion=").append(SketchObject.HASH_VERSION);}
-		
+
+		if(true){sb.append(" printSSU=").append(printSSU);}
 		if(true || printTax!=default_printTax){sb.append(" printTax=").append(printTax);}
+//		if(true || printFileName!=default_printFileName){sb.append(" printfname=").append(printFileName);}
+		if(true || printQueryFileName!=default_printQueryFileName){sb.append(" printqfname=").append(printQueryFileName);}
+		if(true || printRefFileName!=default_printRefFileName){sb.append(" printrfname=").append(printRefFileName);}
 		if(true || printOriginalName!=default_printOriginalName){sb.append(" pn0=").append(printOriginalName);}
-		if(true || printFileName!=default_printFileName){sb.append(" printfname=").append(printFileName);}
 		if(true || printImg!=default_printImg){sb.append(" printImg=").append(printImg);}
 		if(true || printAni!=default_printAni){sb.append(" printAni=").append(printAni);}
+		if(!printKID){sb.append(" printKID=").append(printKID);}
+		if(!printWKID){sb.append(" printWKID=").append(printWKID);}
 		if(true || printCompleteness!=default_printCompleteness){sb.append(" printCompleteness=").append(printCompleteness);}
 
 		if(true || printUnique!=default_printUnique){sb.append(" printUMatches=").append(printUnique);}
@@ -489,28 +593,34 @@ public class DisplayParams implements Cloneable {
 		if(true || printTaxID!=default_printTaxID){sb.append(" printTaxID=").append(printTaxID);}
 		if(true || printGSize!=default_printGSize){sb.append(" printGSize=").append(printGSize);}
 		if(true || gSizeKMG!=default_gSizeKMG){sb.append(" gSizeKMG=").append(gSizeKMG);}
+		if(true || printGC!=default_printGC){sb.append(" printGC=").append(printGC);}
 		if(true || printGKmers!=default_printGKmers){sb.append(" printGKmers=").append(printGKmers);}
 		if(true || printTaxName!=default_printTaxName){sb.append(" printTaxName=").append(printTaxName);}
 		if(true || printGSeqs!=default_printGSeqs){sb.append(" printGSeqs=").append(printGSeqs);}
 		if(true || printGBases!=default_printGBases){sb.append(" printGBases=").append(printGBases);}
-		if(true || minEntropy!=default_minEntropy){sb.append(" minEntropy=").append(String.format("%.4f", minEntropy));}
+		if(true || minEntropy!=default_minEntropy){sb.append(" minEntropy=").append(String.format(Locale.ROOT, "%.4f", minEntropy));}
+		if(true || minProb!=default_minProb){sb.append(" minProb=").append(String.format(Locale.ROOT, "%.4f", minProb));}
+		if(true || minQual!=default_minQual){sb.append(" minQual=").append((int)minQual);}
+		if(jsonArray!=default_jsonArray){sb.append(" jsonArray=").append(jsonArray);}
+		if(printD3!=default_printD3){sb.append(" d3=").append(printD3);}
+		if(printD3){
+			sb.append(" D3sizeMode=").append(D3sizeMode);
+			sb.append(" D3LevelNodes=").append(D3LevelNodes);
+		}
 		if(comparator!=Comparison.scoreComparator){sb.append(" ").append(comparator.toString());}
 		
-		if(taxFilter!=null){
-			sb.append(" taxfilterlevel=").append(taxFilter.taxLevel());
-			sb.append(" taxfilterinclude=").append(taxFilter.include());
-			if(taxFilter.containsString()!=null){
-				sb.append(" taxfilterstring=").append(taxFilter.containsString());
-			}
-			Integer[] temp=taxFilter.taxSet();
-			sb.append(" taxfilterset=");
-			if(temp!=null){
-				for(int i=0; i<temp.length; i++){
-					if(i>0){sb.append(',');}
-					sb.append(temp[i]);
-				}
-			}
+		if(taxFilterWhiteList!=null || taxFilterWhiteString!=null){
+			if(taxFilterWhiteList!=null){sb.append(" taxfilterwhitelist=").append(taxFilterWhiteList);}
+			if(taxFilterWhiteString!=null){sb.append(" taxfilterwhitestring=").append(taxFilterWhiteString);}
+			sb.append(" taxlevelwhite=").append(taxLevelWhite);
 		}
+		if(taxFilterBlackList!=null || taxFilterBlackString!=null){
+			if(taxFilterBlackList!=null){sb.append(" taxfilterblacklist=").append(taxFilterBlackList);}
+			if(taxFilterBlackString!=null){sb.append(" taxfilterblackstring=").append(taxFilterBlackString);}
+			sb.append(" taxlevelblack=").append(taxLevelBlack);
+		}
+		if(banUnclassified){sb.append(" banunclassified");}
+		if(banVirus){sb.append(" banvirus");}
 		
 		if(useTaxidName){sb.append(" useTaxidName=").append(useTaxidName);}
 		if(useImgName){sb.append(" useImgName=").append(useImgName);}
@@ -531,7 +641,7 @@ public class DisplayParams implements Cloneable {
 		if(printIntersection){sb.append(" printIntersection=").append(printIntersection);}
 		if(mergePairs){sb.append(" mergePairs=").append(mergePairs);}
 		
-		if(reads>-1){sb.append(" reads=").append(reads);}
+		if(maxReads>-1){sb.append(" reads=").append(maxReads);}
 		if(mode!=default_mode){sb.append(" mode=").append(mode);}
 		if(samplerate!=default_samplerate){sb.append(" samplerate=").append(String.format(Locale.ROOT, "%.4f",samplerate));}
 
@@ -578,10 +688,15 @@ public class DisplayParams implements Cloneable {
 	}
 	
 	public void setPrintAll(){
+		printSSU=true;
 		printTax=true;
+		printQueryFileName=true;
+		printRefFileName=true;
 		printOriginalName=true;
 		printImg=true;
 		printAni=true;
+		printKID=true;
+		printWKID=true;
 		printCompleteness=true;
 		printScore=true;
 		printEValue=true;
@@ -594,6 +709,7 @@ public class DisplayParams implements Cloneable {
 		printLength=true;
 		printTaxID=true;
 		printGSize=true;
+		printGC=true;
 		printGKmers=true;
 		printTaxName=true;
 		printGSeqs=true;
@@ -623,14 +739,61 @@ public class DisplayParams implements Cloneable {
 	public JsonObject toJson(SketchResults sr){
 		JsonObject j=toJson(sr.sketch);
 		if(sr.list!=null){
+			int i=0;
 			for(Comparison c : sr.list){
 				JsonObject jc=toJson(c);
 				j.add(c.name(), jc);
+				i++;
+				if(i>=maxRecords){break;}
 			}
 		}
+		
+		if(jsonArray){
+			toJsonArrayForm(j);
+		}
+		
+		if(printD3){
+			j.add("D3", toD3(sr));
+		}
+		
 		return j;
 	}
+	
+	public void toJsonArrayForm(JsonObject j0){
+		if(j0.jmapSize()<1){return;}
+		ArrayList<Object> list1=new ArrayList<Object>(j0.jmapSize());
+		Object[] keys=null;
+		for(Entry<String, JsonObject> e1 : j0.jmap.entrySet()){
+			JsonObject j1=e1.getValue();
+			ArrayList<Object> list2=new ArrayList<Object>(j1.omapSize());
+			for(Entry<String, Object> e2 : j1.omap.entrySet()){
+				Object o2=e2.getValue();
+				list2.add(o2);
+			}
+			list1.add(list2.toArray());
+			if(keys==null){
+				ArrayList<Object> keyList=new ArrayList<Object>(j1.omapSize());
+				for(Entry<String, Object> e2 : j1.omap.entrySet()){
+					Object o2=e2.getKey();
+					keyList.add(o2);
+				}
+				keys=keyList.toArray();
+			}
+		}
 
+		JsonObject title=new JsonObject();
+		for(Entry<String, Object> e : j0.omap.entrySet()){
+			title.add(e.getKey(), e.getValue());
+		}
+
+		j0.clearJson();
+		j0.clearOmap();
+
+		j0.add("title", title);
+		j0.add("header", keys);
+		j0.add("rows", list1.toArray());
+	}
+	
 	public JsonObject toJson(Sketch sk){
 		assert(format==FORMAT_JSON);
 		
@@ -642,19 +805,20 @@ public class DisplayParams implements Cloneable {
 		j.add("Seqs", sk.genomeSequences);
 		j.add("Bases", sk.genomeSizeBases);
 		j.add("gSize", sk.genomeSizeEstimate());
+		if(sk.baseCounts!=null){j.addLiteral("GC", sk.gc(), 3);}
 		if(sk.probCorrect<1 && sk.probCorrect>0){j.add("Quality", sk.probCorrect);}
-		if(sk.counts!=null){
-			double d=Tools.averageDouble(sk.counts);
+		if(sk.keyCounts!=null){
+			double d=Tools.averageDouble(sk.keyCounts);
 			j.add("AvgCount", d);
-			j.add("Depth", d);
+			j.add("Depth", Tools.observedToActualCoverage(d));
 		}
 		
 		if(sk.imgID>0){j.add("IMG", sk.imgID);}
 		if(sk.spid>0){j.add("spid", sk.spid);}
 		if(sk.taxID>0 && sk.taxID<SketchObject.minFakeID){j.add("TaxID", sk.taxID);}
 
-		if(printFileName && sk.fname()!=null && !sk.fname().equals(sk.name())){j.add("File", sk.fname());}
-		if(printOriginalName && sk.name0()!=null && !sk.name0().equals(sk.name())){j.add("SeqName", sk.name0());}
+		if((printRefFileName) && sk.fname()!=null){j.add("file", sk.fname());}
+		if(printOriginalName && sk.name0()!=null){j.add("SeqName", sk.name0());}
 		
 		if(sk.meta!=null){
 			for(String st : sk.meta){
@@ -662,6 +826,7 @@ public class DisplayParams implements Cloneable {
 				j.add(st.substring(0,  colon), st.substring(colon+1));
 			}
 		}
+		
 		return j;
 	}
 	
@@ -672,6 +837,7 @@ public class DisplayParams implements Cloneable {
 		
 		//Text fields
 		if(printTaxName){j.add("taxName", c.taxName()==null ? "." : c.taxName());}
+		if(printRefFileName){j.add("file", c.fname()==null ? "." : c.fname());}
 		if(printOriginalName){j.add("seqName", c.name0()==null ? "." : c.name0());}
 		if(printTax && SketchObject.taxtree!=null){
 			TaxNode tn=null;
@@ -686,17 +852,18 @@ public class DisplayParams implements Cloneable {
 			}
 		}
 		
-		j.add("WKID", 100*c.wkid());
-		j.add("KID", 100*c.kid());
+		if(printWKID){j.addLiteral("WKID", 100*c.wkid(), 4);}
+		if(printKID){j.addLiteral("KID", 100*c.kid(), 4);}
+		if(printSSU && c.ssuIdentity()>0){j.addLiteral("SSU", 100*c.ssuIdentity(), 4);}
 		
 		//Primary fields
-		if(printAni){j.add((aminoOrTranslate() ? "AAI" : "ANI"), 100*c.ani());}
-		if(printCompleteness){j.add("Complt", 100*c.completeness());}
-		if(printContam){j.add("Contam", 100*c.contamFraction());}
-		if(printContam2){j.add("Contam2", 100*c.contam2Fraction());}
-		if(printUContam){j.add("uContam", 100*c.uContamFraction());}
+		if(printAni){j.addLiteral((aminoOrTranslate() ? "AAI" : "ANI"), 100*c.ani(), 3);}
+		if(printCompleteness){j.addLiteral("Complt", 100*c.completeness(), 3);}
+		if(printContam){j.addLiteral("Contam", 100*c.contamFraction(), 3);}
+		if(printContam2){j.addLiteral("Contam2", 100*c.contam2Fraction(), 3);}
+		if(printUContam){j.addLiteral("uContam", 100*c.uContamFraction(), 3);}
 		if(printScore){j.add("Score", c.score());}
-		if(printEValue){j.add("E-Val", String.format("%5.2e", c.eValue()));}
+		if(printEValue){j.add("E-Val", String.format(Locale.ROOT, "%5.2e", c.eValue()));}
 		
 		if(printDepth){j.add("Depth", c.depth(printActualDepth));}
 		if(printDepth2){j.add("Depth2", c.depth2(printActualDepth));}
@@ -710,11 +877,12 @@ public class DisplayParams implements Cloneable {
 		if(printNoHit){j.add("noHit", c.noHits());}
 		if(printLength){j.add("Length", c.maxDivisor());}
 		if(printTaxID){j.add("TaxID", tid>=SketchObject.minFakeID ? -1 : tid);}
-		if(printImg){j.add("ImgID", String.format(Locale.ROOT, "\t%d", c.imgID()));}
+		if(printImg){j.add("ImgID", c.imgID());}
 		if(printGBases){j.add("gBases", c.genomeSizeBases());}
 		if(printGKmers){j.add("gKmers", c.genomeSizeKmers());}
 		if(printGSize){j.add("gSize", c.genomeSizeEstimate());}
 		if(printGSeqs){j.add("gSeqs", c.genomeSequences());}
+		if(c.hasGC()){j.addLiteral("GC", c.gc(), 3);}
 		
 		//Raw fields
 		if(printRefDivisor){j.add("rDiv", c.refDivisor());}
@@ -730,49 +898,260 @@ public class DisplayParams implements Cloneable {
 		
 		return j;
 	}
-	
+
 	public boolean json(){return format==FORMAT_JSON;}
+	
+	/*--------------------------------------------------------------*/
+	/*----------------              D3              ----------------*/
+	/*--------------------------------------------------------------*/
+	
+	public JsonObject toD3(SketchResults sr){
+		if(sr==null || sr.isEmpty()){return new JsonObject("name", "no hits");}
+		JsonObject root=new JsonObject("name", "life");
+		root.add("level", TaxTree.LIFE_E);
+		if(sr.list!=null){
+			int i=0;
+			for(Comparison c : sr.list){
+				ArrayList<JsonObject> tax=toD3List(c);
+				addToLevel(root, tax, 0);
+				i++;
+				if(i>=maxRecords){break;}
+			}
+		}
+		if(D3LevelNodes){
+			root=converToD3ArrayFormat_LevelNode(root);
+		}else{
+			root=converToD3ArrayFormat_SingleNodeRoot(root);
+		}
+		return root;
+	}
+	
+	private JsonObject converToD3ArrayFormat_SingleNodeRoot(JsonObject root){
+		JsonObject children=root.removeJson("children");
+		if(children==null){return root;}
+		Object[] array=children.toJmapArray();
+		root=(JsonObject)array[0];//Life node
+		
+		assert(root.getString("name").equalsIgnoreCase("Life")) : root;
+		return converToD3ArrayFormat_SingleNode(root);
+	}
+	
+	private JsonObject converToD3ArrayFormat_SingleNode(JsonObject nameNode){
+		Object[] levelNodes=nameNode.toJmapArray();
+		if(levelNodes==null){return nameNode;}
+		nameNode.clearJson();
+		
+		ArrayList<JsonObject> fixed=new ArrayList<JsonObject>();
+		for(Object o : levelNodes){
+			JsonObject levelNode=(JsonObject)o;
+			String level=levelNode.getString("name");
+			JsonObject children=levelNode.removeJson("children");
+			if(children!=null){
+				Object[] childArray=children.toJmapArray();
+				for(Object o2 : childArray){
+					JsonObject child=(JsonObject)o2;//Now a name node
+					String name=(String)child.removeObject("name");
+					child.add("name", level+": "+name);
+					converToD3ArrayFormat_SingleNode(child);
+					fixed.add(child);
+				}
+			}
+		}
+		Object[] children=fixed.toArray();
+		nameNode.add("children", children);
+		return nameNode;
+	}
+	
+	private JsonObject converToD3ArrayFormat_LevelNode(JsonObject levelNode){
+		JsonObject children=levelNode.removeJson("children");
+		if(children==null){return levelNode;}
+		
+		Object[] array=children.toJmapArray();
+		levelNode.add("children", array);
+		for(Object o : array){
+			converToD3ArrayFormat_NameNode((JsonObject)o);
+		}
+		return levelNode;
+	}
+	
+	private JsonObject converToD3ArrayFormat_NameNode(JsonObject nameNode){
+		Object[] array=nameNode.toJmapArray();
+		if(array==null){return nameNode;}
+		
+		nameNode.clearJson();
+		nameNode.add("children", array);
+		for(Object o : array){
+			converToD3ArrayFormat_LevelNode((JsonObject)o);
+		}
+		return nameNode;
+	}
+	
+	void addToLevel(JsonObject levelNode, ArrayList<JsonObject> list, int pos){
+		JsonObject jo=list.get(pos);
+		int rootLevel=levelNode.getInt("level");
+		int joLevel=jo.getInt("level");
+		if(rootLevel==joLevel){
+			assert(levelNode.getString("name").equalsIgnoreCase(jo.getString("levelname"))) : levelNode+"\n"+jo;
+			addAsChild(levelNode, list, pos);
+		}else{
+			assert(joLevel<rootLevel) : levelNode+"\n"+jo;
+			assert(false) : levelNode+"\n"+jo;
+		}
+	}
+		
+	void addAsChild(JsonObject levelNode, ArrayList<JsonObject> list, int pos){
+		JsonObject children=levelNode.getJson("children");
+		if(children==null){
+			children=new JsonObject();
+			levelNode.add("children", children);
+		}
+		JsonObject jo=list.get(pos);
+		String taxName=jo.getString("name");
+		JsonObject nameNode=children.getJson(taxName);
+		if(nameNode==null){
+			nameNode=new JsonObject("name", taxName);
+			children.add(taxName, nameNode);
+		}
+		Number size=jo.getNumber("size");
+		Number oldSize=nameNode.getNumber("size");
+		if(size!=null && (oldSize==null || oldSize.doubleValue()<size.doubleValue())){
+			nameNode.add("size", jo.getNumber("size"));
+			nameNode.add("kid", jo.getNumber("kid"));
+			nameNode.add("wkid", jo.getNumber("wkid"));
+			nameNode.add("ani", jo.getNumber("ani"));
+			nameNode.add("hits", jo.getNumber("hits"));
+			nameNode.add("depth", jo.getNumber("depth"));
+		}
+
+		if(pos<list.size()-1){//recur
+			jo=list.get(pos+1);
+			String levelName=jo.getString("levelname");
+			int level=jo.getInt("level");
+			JsonObject nextLevelNode=nameNode.getJson(levelName);
+			if(nextLevelNode==null){
+				nextLevelNode=new JsonObject("name", levelName);
+				nextLevelNode.add("level", level);
+				nameNode.add(levelName, nextLevelNode);
+			}
+			addAsChild(nextLevelNode, list, pos+1);
+		}
+	}
+	
+	int promote(int levelE) {
+		if(levelE<0){return levelE;}
+		while(!TaxTree.isSimple2(levelE) && levelE<TaxTree.LIFE){
+			levelE++;
+		}
+		return levelE;
+	}
+	
+	public ArrayList<JsonObject> toD3List(Comparison c){
+		final ArrayList<TaxNode> nodes=toTNList(c.taxID);
+		ArrayList<JsonObject> list=new ArrayList<JsonObject>(nodes.size());
+		for(TaxNode tn : nodes){
+			JsonObject jo=new JsonObject("name", tn.name);
+			int levelE=promote(tn.levelExtended);
+			jo.add("level", levelE);
+			jo.add("levelname", TaxTree.levelToStringExtended(levelE));
+			list.add(jo);
+		}
+		if(list.size()>0){
+			JsonObject tail=list.get(list.size()-1);
+			tail.add("size", toD3Size(c));
+			tail.add("kid", c.kid());
+			tail.add("wkid", c.wkid());
+			tail.add("ani", c.ani());
+			tail.add("hits", c.hits());
+			tail.add("depth", c.depth(printActualDepth));
+		}
+		return list;
+	}
+	
+	private Number toD3Size(Comparison c){
+		if(D3sizeMode==D3_ANI_SIZE){
+			return c.ani();
+		}else if(D3sizeMode==D3_KID_SIZE){
+			return c.kid();
+		}else if(D3sizeMode==D3_WKID_SIZE){
+			return c.wkid();
+		}else if(D3sizeMode==D3_HIT_SIZE){
+			return c.hits();
+		}else if(D3sizeMode==D3_DEPTH_SIZE){
+			return c.depth(printActualDepth);
+		}
+		assert(false) : "Invalid D3sizeMode "+D3sizeMode;
+		return c.hits();
+	}
+	
+	public ArrayList<TaxNode> toTNList(final int tid){
+		final TaxTree tree=TaxTree.getTree();
+		
+		final ArrayList<TaxNode> list=new ArrayList<TaxNode>();
+		int nulls=0;
+		{
+			TaxNode tn=tree.getNode(tid);
+			if(tn.isRanked() && !tn.cellularOrganisms()){list.add(tn);}
+			while(tn.pid!=tn.id){
+				tn=tree.getNode(tn.pid);
+				if(tn.isRanked() && !tn.cellularOrganisms()){list.add(tn);}
+			}
+		}
+		Collections.reverse(list);
+		int prevLevelE=TaxTree.LIFE;
+		for(int i=0; i<list.size(); i++){
+			TaxNode tn=list.get(i);
+			int levelE=promote(tn.levelExtended);
+			
+			if(!TaxTree.isSimple2(levelE) || (i>0 && levelE>=prevLevelE)){
+				list.set(i, null);
+				nulls++;
+			}else{prevLevelE=levelE;}
+		}
+		if(nulls>0){Tools.condenseStrict(list);}
+		return list;
+	}
 	
 	/*--------------------------------------------------------------*/
 	/*----------------          Formatting          ----------------*/
 	/*--------------------------------------------------------------*/
 
 	ByteBuilder queryHeader(Sketch sk){
-		ByteBuilder sb=new ByteBuilder();
-		if(format>2){return sb;}
+		ByteBuilder bb=new ByteBuilder();
+		if(format>2){return bb;}
 		
 		String color=toColor(sk.taxID);
-		if(color!=null){sb.append(color);}
+		if(color!=null){bb.append(color);}
 		
-		sb.append("\nQuery: ").append(sk.name()==null ? "." : sk.name());
-		if(dbName!=null){sb.append("\tDB: ").append(dbName);}
-		sb.append("\tSketchLen: ").append(sk.length());
-		sb.append("\tSeqs: ").append(sk.genomeSequences).append(' ');
-		sb.append("\t"+(aminoOrTranslate() ? "SeqLen" : "Bases")+": ").append(sk.genomeSizeBases);
-		sb.append("\tgSize: ").append(sk.genomeSizeEstimate());
-		if(sk.probCorrect<1 && sk.probCorrect>0){sb.append("\tQuality: ").append(sk.probCorrect, 4);}
-		if(sk.counts!=null){
-			double d=Tools.averageDouble(sk.counts);
-			sb.append("\tAvgCount: ").append(d, 3);
-			sb.append("\tDepth: ").append(Tools.observedToActualCoverage(d), 3);
+		bb.append("\nQuery: ").append(sk.name()==null ? "." : sk.name());
+		if(dbName!=null){bb.append("\tDB: ").append(dbName);}
+		bb.append("\tSketchLen: ").append(sk.length());
+		bb.append("\tSeqs: ").append(sk.genomeSequences).append(' ');
+		bb.append("\t"+(aminoOrTranslate() ? "SeqLen" : "Bases")+": ").append(sk.genomeSizeBases);
+		bb.append("\tgSize: ").append(sk.genomeSizeEstimate());
+		if(sk.baseCounts!=null){bb.append("\tGC: ").append(sk.gc(), 3);}
+		if(sk.probCorrect<1 && sk.probCorrect>0){bb.append("\tQuality: ").append(sk.probCorrect, 4);}
+		if(sk.keyCounts!=null){
+			double d=Tools.averageDouble(sk.keyCounts);
+			bb.append("\tAvgCount: ").append(d, 3);
+			bb.append("\tDepth: ").append(Tools.observedToActualCoverage(d), 3);
 		}
 
-		if(sk.imgID>0){sb.append("\tIMG: ").append(sk.imgID);}
-		if(sk.spid>0){sb.append("\tspid: ").append(sk.spid);}
-		if(sk.taxID>0 && sk.taxID<SketchObject.minFakeID){sb.append("\tTaxID: ").append(sk.taxID);}
+		if(sk.imgID>0){bb.append("\tIMG: ").append(sk.imgID);}
+		if(sk.spid>0){bb.append("\tspid: ").append(sk.spid);}
+		if(sk.taxID>0 && sk.taxID<SketchObject.minFakeID){bb.append("\tTaxID: ").append(sk.taxID);}
 
-		if(printFileName && sk.fname()!=null && !sk.fname().equals(sk.name())){sb.append("\tFile: "+sk.fname());}
-		if(printOriginalName && sk.name0()!=null && !sk.name0().equals(sk.name())){sb.append("\tSeqName: "+sk.name0());}
+		if(printQueryFileName && sk.fname()!=null){bb.append("\tFile: "+sk.fname());}
+		if(printOriginalName && sk.name0()!=null && !sk.name0().equals(sk.name())){bb.append("\tSeqName: "+sk.name0());}
 		
 		if(sk.meta!=null){
 			for(String st : sk.meta){
-				sb.append("\t").append(st.replaceFirst(":", ": "));
+				bb.append("\t").append(st.replaceFirst(":", ": "));
 			}
 		}
 		
-		if(color!=null){sb.append(Colors.RESET);}
+		if(color!=null){bb.append(Colors.RESET);}
 		
-		return sb;
+		return bb;
 	}
 	
 	int toColorTid(final int taxID){
@@ -808,57 +1187,71 @@ public class DisplayParams implements Cloneable {
 		final String ani=(aminoOrTranslate() ? "AAI" : "ANI");
 		if(format==FORMAT_QUERY_REF_ANI || format==FORMAT_CONSTELLATION){
 			if(reportAniOnly){return "#Query\tRef\t"+ani;}
-			if(format==FORMAT_QUERY_REF_ANI){return "#Query\tRef\t"+ani+"\tQSize\tRefSize\tQBases\tRBases"+(printTaxID ? "\tQTaxID\tRTaxID" : "");}
+			if(format==FORMAT_QUERY_REF_ANI){
+				return "#Query\tRef\t"+ani+
+				"\tQSize\tRefSize\tQBases\tRBases"+
+				(printTaxID ? "\tQTaxID\tRTaxID" : "")+(printKID ? "\tKID" : "")+(printWKID ? "\tWKID" : "");
+			}
 			if(format==FORMAT_CONSTELLATION){return "#Query\tRef\tKID\tWKID\t"+ani+"\tCmplt\tQSize\tRefSize\tQBases\tRefBases";}
 		}
+		return columnwiseHeader();
+	}
+	
+	String columnwiseHeader(){
+		final String ani=(aminoOrTranslate() ? "AAI" : "ANI");
 		
 		StringBuilder sb=new StringBuilder();
 		
 		//Numeric fields
-		if(true){sb.append("WKID");}
-		if(true){sb.append("\tKID");}
-		if(printAni){sb.append("\t"+ani);}
-		if(printCompleteness){sb.append("\tComplt");}
-		if(printContam){sb.append("\tContam");}
-		if(printContam2){sb.append("\tContam2");}
-		if(printUContam){sb.append("\tuContam");}
-		if(printScore){sb.append("\tScore");}
-		if(printEValue){sb.append("\tE-Val\t");}
+		if(printKID){sb.append("WKID\t");}
+		if(printWKID){sb.append("KID\t");}
+		if(printAni){sb.append(ani+"\t");}
+		if(printSSU){sb.append("SSU\t");}
+		if(printCompleteness){sb.append("Complt\t");}
+		if(printContam){sb.append("Contam\t");}
+		if(printContam2){sb.append("Contam2\t");}
+		if(printUContam){sb.append("uContam\t");}
+		if(printScore){sb.append("Score\t");}
+		if(printEValue){sb.append("E-Val\t");}
 		
-		if(printDepth){sb.append("\tDepth");}
-		if(printDepth2){sb.append("\tDepth2");}
-		if(printVolume){sb.append("\tVolume");}
-		if(printRefHits){sb.append("\tRefHits");}
-		if(printMatches){sb.append("\tMatches");}
-		if(printUnique){sb.append("\tUnique");}
-		if(printUnique2){sb.append("\tUnique2");}
-		if(printUnique3){sb.append("\tUnique3");}
-		if(printNoHit){sb.append("\tnoHit");}
-		if(printLength){sb.append("\tLength");}
-		if(printTaxID){sb.append("\tTaxID");}
-		if(printImg){sb.append("\tImgID    ");}
-		if(printGBases){sb.append("\tgBases");}
-		if(printGKmers){sb.append("\tgKmers");}
-		if(printGSize){sb.append("\tgSize");}
-		if(printGSeqs){sb.append("\tgSeqs");}
+		if(printDepth){sb.append("Depth\t");}
+		if(printDepth2){sb.append("Depth2\t");}
+		if(printVolume){sb.append("Volume\t");}
+		if(printRefHits){sb.append("RefHits\t");}
+		if(printMatches){sb.append("Matches\t");}
+		if(printUnique){sb.append("Unique\t");}
+		if(printUnique2){sb.append("Unique2\t");}
+		if(printUnique3){sb.append("Unique3\t");}
+		if(printNoHit){sb.append("noHit\t");}
+		if(printLength){sb.append("Length\t");}
+		if(printTaxID){sb.append("TaxID\t");}
+		if(printImg){sb.append("ImgID    \t");}
+		if(printGBases){sb.append("gBases\t");}
+		if(printGKmers){sb.append("gKmers\t");}
+		if(printGSize){sb.append("gSize\t");}
+		if(printGSeqs){sb.append("gSeqs\t");}
+		if(printGC){sb.append("GC\t");}
 		
 		
 		//Raw fields
-		if(printRefDivisor){sb.append("\trDiv");}
-		if(printQueryDivisor){sb.append("\tqDiv");}
-		if(printRefSize){sb.append("\trSize");}
-		if(printQuerySize){sb.append("\tqSize");}
-		if(printContamHits){sb.append("\tcHits");}
+		if(printRefDivisor){sb.append("rDiv\t");}
+		if(printQueryDivisor){sb.append("qDiv\t");}
+		if(printRefSize){sb.append("rSize\t");}
+		if(printQuerySize){sb.append("qSize\t");}
+		if(printContamHits){sb.append("cHits\t");}
 		
 		//Text fields
-		if(printTaxName){sb.append("\ttaxName");}
-		if(printOriginalName){sb.append("\tseqName");}
-		if(printTax && SketchObject.taxtree!=null){sb.append("\ttaxonomy");}
+		if(printTaxName){sb.append("taxName\t");}
+		if(printRefFileName){sb.append("file\t");}
+		if(printOriginalName){sb.append("seqName\t");}
+		if(printTax && SketchObject.taxtree!=null){sb.append("taxonomy\t");}
+		
+		if(sb.length()>1){sb.setLength(sb.length()-1);}//trim trailing tab
 		
 		return sb.toString();
 	}
 	
-	void formatComparisonColumnwise(Comparison c, ByteBuilder sb, int prevTid){
+	void formatComparisonColumnwise(Comparison c, ByteBuilder bb, int prevTid){
 		final int tid=c.taxID;
 		boolean reset=false;
 		
@@ -872,8 +1265,8 @@ public class DisplayParams implements Cloneable {
 			String color=toColor(tid);
 			String underline=(printColors && cnum==prevCnum && ctid!=prevCtid && (ctid>1 && prevCtid>1) ? Colors.UNDERLINE : null);
 
-			if(color!=null){sb.append(color);}
-			if(underline!=null){sb.append(underline);}
+			if(color!=null){bb.append(color);}
+			if(underline!=null){bb.append(underline);}
 			reset=(color!=null || underline!=null);
 			
 //			System.err.println((color==null ? "" : color)+(underline==null ? "" : underline)+
@@ -882,8 +1275,8 @@ public class DisplayParams implements Cloneable {
 		}
 		
 //		sb.append(String.format(Locale.ROOT, "%.2f%%\t%.2f%%", 100*c.idMinDivisor(), 100*c.idMaxDivisor()));
-		sb.append(100*c.wkid(), 2).append('%').append('\t');
-		sb.append(100*c.kid(), 2).append('%');
+		if(printWKID){bb.append(100*c.wkid(), 2).append('%').tab();}
+		if(printKID){bb.append(100*c.kid(), 2).append('%');}
 		
 //		if(printAni){sb.append(String.format(Locale.ROOT, "\t%.2f%%", 100*c.ani()));}
 //		if(printCompleteness){sb.append(String.format(Locale.ROOT, "\t%.2f%%", 100*c.completeness()));}
@@ -891,72 +1284,81 @@ public class DisplayParams implements Cloneable {
 //		if(printContam2){sb.append(String.format(Locale.ROOT, "\t%.2f%%", 100*c.contam2Fraction()));}
 //		if(printUContam){sb.append(String.format(Locale.ROOT, "\t%.2f%%", 100*c.uContamFraction()));}
 		
-		if(printAni){sb.append('\t').append(100*c.ani(), 2).append('%');}
-		if(printCompleteness){sb.append('\t').append(100*c.completeness(), 2).append('%');}
-		if(printContam){sb.append('\t').append(100*c.contamFraction(), 2).append('%');}
-		if(printContam2){sb.append('\t').append(100*c.contam2Fraction(), 2).append('%');}
-		if(printUContam){sb.append('\t').append(100*c.uContamFraction(), 2).append('%');}
-		if(printScore){sb.append('\t').append(c.scoreS());}
-		if(printEValue){sb.append('\t').append(String.format("%5.2e", c.eValue()));}
+		if(printAni){bb.tab().append(100*c.ani(), 2).append('%');}
+		if(printSSU){
+			if(c.ssuIdentity()>0){
+				bb.tab().append(100*c.ssuIdentity(), 2).append('%');
+			}else{
+				bb.tab().append('.');
+			}
+		}
+		if(printCompleteness){bb.tab().append(100*c.completeness(), 2).append('%');}
+		if(printContam){bb.tab().append(100*c.contamFraction(), 2).append('%');}
+		if(printContam2){bb.tab().append(100*c.contam2Fraction(), 2).append('%');}
+		if(printUContam){bb.tab().append(100*c.uContamFraction(), 2).append('%');}
+		if(printScore){bb.tab().append(c.scoreS());}
+		if(printEValue){bb.tab().append(String.format(Locale.ROOT, "%5.2e", c.eValue()));}
 		
-		if(printDepth){sb.append('\t').append(c.depthS(printActualDepth));}
-		if(printDepth2){sb.append('\t').append(c.depth2S(printActualDepth));}
-		if(printVolume){sb.append('\t').append(c.volumeS());}
-		if(printRefHits){sb.append('\t').append(c.avgRefHitsS());}
+		if(printDepth){bb.tab().append(c.depthS(printActualDepth));}
+		if(printDepth2){bb.tab().append(c.depth2S(printActualDepth));}
+		if(printVolume){bb.tab().append(c.volumeS());}
+		if(printRefHits){bb.tab().append(c.avgRefHitsS());}
 		
-		if(printMatches){sb.append('\t').append(c.hits());}
-		if(printUnique){sb.append('\t').append(c.uHits());}
-		if(printUnique2){sb.append('\t').append(c.unique2());}
-		if(printUnique3){sb.append('\t').append(c.unique3());}
-		if(printNoHit){sb.append('\t').append(c.noHits());}
-		if(printLength){sb.append('\t').append( c.maxDivisor());}
-		if(printTaxID){sb.append('\t').append(tid>=SketchObject.minFakeID ? -1 : tid);}
-		if(printImg){sb.append('\t').append(c.imgID());}
-		if(printGBases){sb.append('\t').append(c.genomeSizeBases());}
-		if(printGKmers){sb.append('\t').append(c.genomeSizeKmers());}
+		if(printMatches){bb.tab().append(c.hits());}
+		if(printUnique){bb.tab().append(c.uHits());}
+		if(printUnique2){bb.tab().append(c.unique2());}
+		if(printUnique3){bb.tab().append(c.unique3());}
+		if(printNoHit){bb.tab().append(c.noHits());}
+		if(printLength){bb.tab().append( c.maxDivisor());}
+		if(printTaxID){bb.tab().append(tid>=SketchObject.minFakeID ? -1 : tid);}
+		if(printImg){bb.tab().append(c.imgID());}
+		if(printGBases){bb.tab().append(c.genomeSizeBases());}
+		if(printGKmers){bb.tab().append(c.genomeSizeKmers());}
 		if(printGSize){
 			long size=c.genomeSizeEstimate();
 			if(gSizeKMG){
-				sb.append('\t').append(toKMG(size));
+				bb.tab().append(toKMG(size));
 			}else{
-				sb.append('\t').append(size);
+				bb.tab().append(size);
 			}
 		}
-		if(printGSeqs){sb.append('\t').append(c.genomeSequences());}
+		if(printGSeqs){bb.tab().append(c.genomeSequences());}
+		if(printGC){bb.tab().append(c.gc(),3);}
 		
 		//Raw fields
-		if(printRefDivisor){sb.append('\t').append(c.refDivisor());}
-		if(printQueryDivisor){sb.append('\t').append(c.queryDivisor());}
-		if(printRefSize){sb.append('\t').append(c.refSize());}
-		if(printQuerySize){sb.append('\t').append(c.querySize());}
-		if(printContamHits){sb.append('\t').append(c.contamHits());}
+		if(printRefDivisor){bb.tab().append(c.refDivisor());}
+		if(printQueryDivisor){bb.tab().append(c.queryDivisor());}
+		if(printRefSize){bb.tab().append(c.refSize());}
+		if(printQuerySize){bb.tab().append(c.querySize());}
+		if(printContamHits){bb.tab().append(c.contamHits());}
 		
 		//Text fields
-		if(printTaxName){sb.append('\t').append(c.taxName()==null ? "." : c.taxName());}
-		if(printOriginalName){sb.append('\t').append(c.name0()==null ? "." : c.name0());}
+		if(printTaxName){bb.tab().append(c.taxName()==null ? "." : c.taxName());}
+		if(printRefFileName){bb.tab().append(c.fname()==null ? "." : c.fname());}
+		if(printOriginalName){bb.tab().append(c.name0()==null ? "." : c.name0());}
 		if(printTax && SketchObject.taxtree!=null){
-			sb.append('\t');
+			bb.tab();
 			TaxNode tn=null;
 			if(tid>0 && tid<SketchObject.minFakeID){
 				tn=SketchObject.taxtree.getNode(tid);
 			}
 
 			if(tn!=null){
-				sb.append(SketchObject.taxtree.toSemicolon(tn, SketchObject.skipNonCanonical));
+				bb.append(SketchObject.taxtree.toSemicolon(tn, SketchObject.skipNonCanonical));
 			}else{
-				sb.append('.');
+				bb.append('.');
 			}
 		}
-		if(printTaxName && !printOriginalName && c.taxName()==null && c.name0()!=null){sb.append('\t').append(c.name0());} //Extra column
+		if(printTaxName && !printOriginalName && !printRefFileName && c.taxName()==null && c.name0()!=null){bb.tab().append(c.name0());} //Extra column
 		
-		if(reset){sb.append(Colors.RESET);}
+		if(reset){bb.append(Colors.RESET);}
 		
-		sb.append('\n');
+		bb.append('\n');
 		
 		if(printIntersection){
 			Sketch intersection=Sketch.intersection(c.a, c.b);
-			sb.append(intersection.toString());
-			sb.append('\n');
+			bb.append(intersection.toString());
+			bb.append('\n');
 		}
 		
 	}
@@ -1012,6 +1414,7 @@ public class DisplayParams implements Cloneable {
 		float wkid=100*c.wkid();
 		float ani=100*c.ani();
 		float complt=100*c.completeness();
+		float ssu=printSSU ? 100*c.ssuIdentity() : 0;
 		
 		sb.append(rName).append('\t');
 		if(reportAniOnly){
@@ -1033,6 +1436,9 @@ public class DisplayParams implements Cloneable {
 			sb.append(bb).append('\t');
 			if(printTaxID){sb.append(c.a.taxID).append('\t');}
 			if(printTaxID){sb.append(c.b.taxID).append('\t');}
+			if(printKID){sb.append(kid, 2).append('\t');}
+			if(printWKID){sb.append(wkid, 2).append('\t');}
+			if(printSSU){sb.append(ssu, 2).append('\t');}
 		}
 		sb.setLength(sb.length()-1);
 		if(reset){sb.append(Colors.RESET);}
@@ -1089,7 +1495,8 @@ public class DisplayParams implements Cloneable {
 			sb.append("\ttaxID ").append(c.taxID()).append('\t');
 			if(printImg){sb.append("\timgID ").append(c.imgID()).append('\t');}
 			sb.append(c.taxName()).append('\t');
-			if(printOriginalName || (c.taxName()==null && c.name0()!=null)){sb.append(c.name0()).append('\t');}
+			if(printRefFileName){sb.append(c.fname()).append('\t');}
+			if(printOriginalName || (c.taxName()==null && c.name0()!=null && !printRefFileName)){sb.append(c.name0()).append('\t');}
 			
 			if(printTax){
 				for(int i=tnl.size()-1; i>=0; i--){
@@ -1102,6 +1509,40 @@ public class DisplayParams implements Cloneable {
 			
 			tnl.clear();
 		}
+	}
+	
+	/*--------------------------------------------------------------*/
+	/*----------------           Filtering          ----------------*/
+	/*--------------------------------------------------------------*/
+	
+	public boolean passesFilter(Sketch sk){
+		assert(postParsed);
+		if(noFilters){return true;}
+		return passesTaxFilter(sk) && passesMetaFilter(sk);
+	}
+	
+	private boolean passesTaxFilter(Sketch sk){
+		if(taxFilterWhite==null && taxFilterBlack==null){return true;}
+		int id=sk.taxID;
+		if(id>0){
+			if(banUnclassified && SketchObject.taxtree.isUnclassified(id)){return false;}
+			if(banVirus && SketchObject.taxtree.isVirus(id)){return false;}
+		}
+		String s=sk.name();
+		return passesTaxFilter(taxFilterWhite, id, s) && passesTaxFilter(taxFilterBlack, id, s);
+	}
+	
+	private boolean passesTaxFilter(TaxFilter filter, int id, String s){
+		if(filter==null){return true;}
+		if(id>0 && !filter.passesFilter(id)){return false;}
+//		if(id>0 && !filter.passesFilterFast(id)){return false;}
+		if(s!=null && !filter.passesFilterByNameOnly(s)){return false;}
+		return true;
+	}
+	
+	private boolean passesMetaFilter(Sketch sk){
+		if(requiredMeta==null && bannedMeta==null){return true;}
+		return sk.passesMeta(requiredMeta, bannedMeta, requiredMetaAnd);
 	}
 	
 	/*--------------------------------------------------------------*/
@@ -1118,6 +1559,7 @@ public class DisplayParams implements Cloneable {
 	boolean sixframes=SketchObject.sixframes;
 	private boolean aminoOrTranslate(){return amino | translate;}
 	
+	boolean noFilters=false;
 	boolean postParsed=false;
 	
 	boolean amino(){return amino;}
@@ -1136,27 +1578,32 @@ public class DisplayParams implements Cloneable {
 	public int taxLevel=default_taxLevel;
 	public int mode=default_mode;
 	public float samplerate=default_samplerate;
-	public long reads=default_reads;
+	public long maxReads=default_maxReads;
 	public int minKeyOccuranceCount=default_minKeyOccuranceCount;
+	public String inputVersion=null;
 	
 	public String dbName=null;
 
 	boolean hasMetaFilters(){return requiredMeta!=null || bannedMeta!=null/* || requiredTaxid!=null || bannedTaxid!=null*/;}
+	boolean hasTaxFilters(){return taxFilterWhite!=null || taxFilterBlack!=null || banUnclassified || banVirus;}
 	
 	boolean requiredMetaAnd=true;
 	ArrayList<String> requiredMeta=null;
 	ArrayList<String> bannedMeta=null;
-//	IntList requiredTaxid=null;
-//	IntList bannedTaxid=null;
 	
 	/*--------------------------------------------------------------*/
 	/*----------------         Print Columns        ----------------*/
 	/*--------------------------------------------------------------*/
+
+	public boolean printKID=true;
+	public boolean printWKID=true;
+	public boolean printSSU=false;
 	
 	//For format 2
 	public boolean printTax=default_printTax;
 	public boolean printOriginalName=default_printOriginalName;
-	public boolean printFileName=default_printFileName;
+	public boolean printQueryFileName=default_printQueryFileName;
+	public boolean printRefFileName=default_printRefFileName;
 	public boolean printImg=default_printImg;
 	public boolean printAni=default_printAni;
 	public boolean printCompleteness=default_printCompleteness;
@@ -1173,13 +1620,28 @@ public class DisplayParams implements Cloneable {
 	public boolean printLength=default_printLength;
 	public boolean printTaxID=default_printTaxID;
 	public boolean printGSize=default_printGSize;
+	public boolean printGC=default_printGC;
 	public boolean gSizeKMG=default_gSizeKMG;
 	public boolean printGKmers=default_printGKmers;
 	public boolean printTaxName=default_printTaxName;
 	public boolean printGSeqs=default_printGSeqs;
 	public boolean printGBases=default_printGBases;
 	
+	public boolean jsonArray=default_jsonArray;
+	public boolean printD3=default_printD3;
+	public boolean D3LevelNodes=false;
+	public int D3sizeMode=D3_HIT_SIZE;
+	public static final int D3_HIT_SIZE=0, D3_ANI_SIZE=1, D3_KID_SIZE=2, D3_WKID_SIZE=3, D3_DEPTH_SIZE=4;
+	
 	public float minEntropy=default_minEntropy;
+	
+	//For k=32:
+	//0.000095f is >=Q6 (75%); 0.0008 is >=Q7 (80%); 0.0039 is >=Q8 (84%).
+	//0.002f is >=Q7.53 (82.3%)
+	//0.0017f is >=Q7.44 (82.0%)
+	//0.6f works better for Illumina reads but this is more robust for PacBio. 
+	public float minProb=0.0008f;
+	public byte minQual=0;
 
 	public boolean printUnique=default_printUnique;
 	public boolean printUnique2=default_printUnique2;
@@ -1214,8 +1676,21 @@ public class DisplayParams implements Cloneable {
 	public boolean useTaxName=false;
 	public boolean useFilePrefixName=false;
 	public boolean reportAniOnly=false;
+
+	public int taxLevelWhite=0;
+	public int taxLevelBlack=0;
+
+	public String taxFilterWhiteList=null;
+	public String taxFilterBlackList=null;
+
+	public String taxFilterWhiteString=null;
+	public String taxFilterBlackString=null;
 	
-	public TaxFilter taxFilter=null;
+	public TaxFilter taxFilterWhite=null;
+	public TaxFilter taxFilterBlack=null;
+
+	public boolean banUnclassified=false;
+	public boolean banVirus=false;
 
 	/** Make sure the settings are consistent, for CompareSketch.
 	 * This is not yet complete. */
@@ -1236,7 +1711,8 @@ public class DisplayParams implements Cloneable {
 	}
 	
 	public boolean trackCounts() {
-		return trackCounts || printDepth || printDepth2 || printVolume || comparator!=Comparison.scoreComparator; //|| minKeyOccuranceCount>1;
+		return trackCounts || printDepth || printDepth2 || printVolume 
+				|| comparator!=Comparison.scoreComparator || printD3; //|| minKeyOccuranceCount>1;
 	}
 	
 	public boolean needContamCounts() {
@@ -1262,13 +1738,16 @@ public class DisplayParams implements Cloneable {
 	/*--------------------------------------------------------------*/
 	
 	public static final int FORMAT_OLD=0, FORMAT_MULTICOLUMN=2, FORMAT_QUERY_REF_ANI=3, FORMAT_JSON=4, FORMAT_CONSTELLATION=5;
+	public static final boolean default_printD3=false;
+	public static final boolean default_jsonArray=false;
 	
 	public static final int default_maxRecords=20;
 	public static final float default_minWKID=0.0001f;
 	public static final int default_format=FORMAT_MULTICOLUMN;
 	public static final boolean default_printTax=false;
 	public static final boolean default_printOriginalName=false;
-	public static final boolean default_printFileName=false;
+	public static final boolean default_printQueryFileName=true;
+	public static final boolean default_printRefFileName=false;
 	public static final boolean default_printImg=false;
 	public static final boolean default_printAni=true;
 	public static final boolean default_printCompleteness=true;
@@ -1289,6 +1768,7 @@ public class DisplayParams implements Cloneable {
 	public static final boolean default_printLength=false;
 	public static final boolean default_printTaxID=true;
 	public static final boolean default_printGSize=true;
+	public static final boolean default_printGC=false;
 	public static final boolean default_gSizeKMG=true;
 	public static final boolean default_printGKmers=false;
 	public static final boolean default_printTaxName=true;
@@ -1297,6 +1777,8 @@ public class DisplayParams implements Cloneable {
 
 	public static final float default_minEntropy=0.66f;
 	public static final float default_minEntropy_amino=0.70f;
+	public static final float default_minProb=0.0008f;
+	public static final byte default_minQual=0;
 
 	public static final boolean default_printUnique=true;
 	public static final boolean default_printUnique2=false;
@@ -1314,7 +1796,7 @@ public class DisplayParams implements Cloneable {
 	
 	public static final int default_minHits=3;
 	public static final float default_samplerate=1;
-	public static final long default_reads=-1;
+	public static final long default_maxReads=-1;
 	public static final int default_minKeyOccuranceCount=1;
 	
 }

@@ -390,7 +390,470 @@ Fixed a bug in BBDuk amino mode (failure to support k=12).
 Fixed a bug in bhist (no newlines!).
 Sketch and Tax servers now tracks single versus bulk queries.
 Converted several ReadStats histograms from TextStreamWriter to ByteStreamWriter.
+38.40
+Replaced some obsolete StringBuilder methods (mainly for read printing) with ByteBuilder.
+Deleted obsolete classes ReadStreamStringWriter and SortByMapping.
+Replaced many instances of StringBuilder with ByteBuilder.
+Moved some fields from Gene to Shared.
+Made Header class.
+Fixed a float-to-int rounding-down problem making BBMerge not strictly obey the maxmismatches flag.
+Redid RandomReads naming format to be pair-capable in sam format.
+Converted all known header-parsing functions to use the new format.
+Wrote SuperLongList.toString
+Added Reformat prioritizelength flag for subsampling variable-length reads.
+Fixed trailing whitespace in bhist.
+38.41
+Fixed a compile error.
+38.42
+Wrote SubSketch and subsketch.sh to pull partial sketches out of larger sketches (e.g. to shrink RefSeq).
+Added stats handler to TaxServer, with version and quantity tracking.
+Added bbversion field to sendsketch header.
+Fixed SendSketch address parsing.
+Added p and q suffixes to parseKMG.
+Added PacBio read length modelling to RandomReads.
+Fixed a CallVariants assertion with SamLine.RNAME_AS_BYTES.
+Fixed major bug in vcf line reading, misinterpreting variant types, preventing BBDuk from parsing vcf properly.
+Wrote SamStreamerMF, a multifile SamStreamer.
+Integrated SamStreamerMF into CallVariants.  Now, with 8 sam.gz files, CallVariants is about 5x as fast on a 32-core node.
+Fixed CallVariants vcf output MCOV reporting -1 when out= is set instead of vcf=.
+Fixed ihist not working in BBDuk.
+38.43
+Wrote var2.VarKey for hashing.  May not use it.
+Added indel processing to fixVars, and Read.containsVars().
+Fixed bugs in reading insertions from VCF files.
+TaxServer usage no longer displays stats (stats are on the /stats page).
+Added ref flag to CompareVCF.
+Added shist to FilterVCF (for vars passing filter).
+FilterVCF no longer requires a reference (in most cases) if the VCF has a correct header.
+CallVariants modified to reduce negative impact of strand bias and read bias on score, in cases that otherwise appear fine.
+Demuxbyname can now do 1 file per sequence header, but it does not close the streams as soon as a sequence is written.  This would be better as a custom program.
+Removed a mysterious automatic newline from Read.toSam(bb).
+Wrote CoverageArray3A, Atomic version.
+Added atomic flag to CallVariants, which increases speed by up to 300 percent.
+Increased speed of multithreaded coverage calculation even without atomic flag.
+Fixed stranded coverage default to false.
+Added CoverageArray.incrementRangeSynchronized.
+CallVariants trackstrand now correctly defaults to false, which disables the DP4 field.
+CalcTrueQuality should now ignore indels declared in a VCF.
+38.44
+Fixed a bug in Tools.parseKMG.
+Added qualhist to CallVariants.
+Added code in CallVariants to deal with recalibrated base quality.
+CallVariants no longer needs ref= prefix before fasta reference.
+FilterVCF can now split alleles.
+Modified mutate.sh to allow variable-length indels, and not put them too close together (to allow better grading).
+Major: Fixed BBDuk/Seal/Clumpify issue in failure to correctly reverse-complement some kmers.
+38.45
+Last restarted timestamp fixed for TaxServer stats page.
+Clarified randomreads.sh description of generating twin files versus interleaved.
+Added Read.countVars, CallVariants.findUniqueVars.
+Added support for indels and border to FilterSam.
+CallVariants can now force calls of specific alleles with an input vcf.
+VarMap is now iterable over values.
+Modified ShrinkAccession to optionally retain GI numbers.
+Fixed VCF genotype call of 1 for haploids failing filters.
+Updated GiToNcbi to read gi numbers from accession files since gi files will disappear soon.
+Clarified bbduk.sh comment on maxlength.
+Added unzip.sh script.
+Split Sketch displayfname into rfname and qfname.
+Fixed file column being enabled by default for sendsketch.
+Changed VarMap WAYS to 8, allowing 16 billion variants.
+Short match strings no longer generate consecutive symbols like mm because it is hard to parse.
+MSA.score() now accepts short or long match strings.
+CallVariants no longer generates long match strings prior to trimming, for perfect matches; 5-10% faster.
+FilterVCF can now split long substitutions into SNPs with the splitsubs flag.
+Fixed CalcTrueQuality ploidy unset warning.
+Add ls to testfilesystem.  May be inaccurate due to cache effects.
+Added amino acid codes B and Z, mapped to ANY (same as X).
+CallVariants now integrated into FilterSam.
+BBCMS now supports sam files, if error-correction is disabled (depth filtering is allowed).
+Added some columns to CallVariants screen output for average allele depth.
+Added taxonomic levels series and section.
+Added RenameGiToTaxid badheaders flag for logging.
+Added RenameGiToTaxid maxbadheaders flag for early termination when exceeded, and included it in the download scripts (at 5000 since recent nt contains 2440 headers with no TaxID).
+Removed sharedVarMap from CallVariants2; replace with forcedVars1 or forcedVars2 for the two passes.
+FungalRelease agp generation now uses ByteStreamWriter over tsw and Read.breakAtGaps uses ByteBuilder over sb to save memory.
+Fully commented MSA11ts fullUnlimited.
+38.46
+Added Unzip.java and fixed unzip.sh.  It is pretty resource-intensive, though, for a program that does nothing.  This is possible to improve.
+Added KID and WKID to Sketch format 3, and flags to disable them.
+CompareVCF now prints results to screen correctly when there is no output file.
+TaxServer now defaults to 200k max reads in local mode.
+In local mode, TaxServer no longer reads files with pigz.
+FilterVCF now correctly observes del and ins flags.
+Added Var.COMPOUND type for multiallelic variations.
+Added VCFLine.trimPrefix() and trimSuffix().
+Fixed bugs in trimToCanonical handling of compound variations.
+VCFLines split by allele now split INFO fields as well.
+Wrote demuxbyname2, to support massively multiplexed Novaseq runs.
+Splitting alleles now also splits the info field of VCFLines.
+38.47
+Added demuxbyname2 hamming distance support.
+Renamed Var.COMPOUND to Var.MULTI and added Var.COMPLEX.
+Modified demuxbyname2.sh to use pigz.
+Increased compiler error level (@Override, shadowing) and fixed resulting errors.
+Wrote MultiCros3, which supports concurrent streams; this makes DemuxByName2 faster.
+Made BufferedMultiCross an abstract superclass of MultiCros2 and MultiCros3.
+38.48
+Added samline field to Read.  obj field is no longer used for SamLines.  Caused substantial refactoring; may have introduced bugs when processing sam files (they will not be subtle if present).
+BufferedMultiCross now offers a threaded mode, but this has not improved performance.
+BufferedMultiCross now supports minReadsToDump and puts residual reads into unknown.
+Fixed DemuxByName2 hamming distance code, and improved it to only remove colliding keys.
+38.49
+Fully commented DemuxByName2, BufferedMultiCros, MultiCros2, and MultiCros3.
+Fixed a bug in MultiCros3 that created some duplicate reads.  Speed is now >950MB/s for twin files.
+38.50
+Added bgzip control flags and version parsing.
+.vcf.gz files now default to being written and read by bgzip.
+All gzip files now default to being read with bgzip over pigz.
+Non-vcf files will only be written with bgzip if the bgzip flag is added (for now).
+Added alternate Sketch addresses via vm flag.
+minProb and minQual moved from SketchObject to DisplayParams, requiring the modification of many methods.
+Simplified some Sketch method signatures by allowing DisplayParams to substitute for multiple parameters.
+Added Locale to all String formatting without it.
+Refactored DemuxByName2.
+Improved commenting of DemuxByName2 and related classes.
+Added PacBio subread support to PartionReads (partition.sh).
+Disabled ByteFile1 being forced outside of JGI.  ByteFile2 caused some problems, but those should be resolved now, I think...
+Added loglog and barcode flags to DemuxByName2.
+Fixed order of SendSketch setting server address to allow alternate (VM) server use.
+Fixed DemuxByName2 order of parsing parser args, allowing the barcode flag to trigger.
+Unified DemuxByName2 modes under a single mode field.
+Fixed maxrecords not being observed in Sketch JSON format.
+TaxServer sketch handler now does full parsing of URL arguments.
+Added D3 support to Sketch results.
+38.51
+Changed handling of same-name JSON keys; by default they are now replaced.
+Improved Sketch D3 output - added more keys, fixed depth handling.
+Subprocess testing now returns false for exit codes 126 and higher (missing libraries yield 127).
+Turned bgzip and pigz on by default for all programs.
+Made bgzip the default for RQCFilter.
+Modified TaxServer sketch portion to prevent carryover of parameters from subsequent queries.
+Fixed Sketch header reporting observed depth as actual depth.
+Wrote IceCreamFinder, IceCreamAligner, and icecreamfinder.sh.
+Wrote A_Sample_Generator, IceCreamMaker, and icecreammaker.sh.
+Moved A_Sample classes to new templates package.
+Changed some new Random() calls to Shared.threadLocalRandom().
+Added jsonarrays flag to Sketch.
+Wrote IceCreamGrader and icecreamgrader.sh.
+Renamed demuxbyname2.sh to demuxbyname.sh.
+38.52
+Made IceCreamFinder ~50% faster by debranching loops and optimizing cache footprint.
+Added IceCreamFinder junction output.
+Simplified shell scripts by centralizing path-setting commands.
+Moved JNI library loading to Shared.
+Wrote IceCreamAligner JNI version.
+38.53
+Made IceCreamAligner JNI faster by adding functions for all alignments and adding 16-bit versions.
+Fixed bugs in calcmem.sh path setting and module loading on Cori.
+Automated jni library path setting (-Djava.library.path flag is no longer required).
+Disabled BBMerge attempt to load JNI libraries.
+Added magic number detection for .gz files.
+Disabled bgzip reading of non-bgzip .gz files, awaiting new bgzip release, because current bgzip breaks on concatenated gzip files (supposedly addressed after v1.9).
+38.54
+Changed a method to avoid a Java 11 dependency.
+Added ZMW stats to IceCreamFinder.
+Added preliminary adapter detection to IceCreamFinder.
+38.55
+Fixed a JNI bug in RQCFilter with BBMerge.
+38.56
+Improved and accelerated IceCreamFinder adapter detection.
+Reduced discarding of reads with adapters only at the tips.
+38.57
+Greatly improved IceCreamFinder adapter detection sensitivity by aligning to more reads.
+Increased speed of adapter aligner.
+Added less-specific adapter-screening phases to reduce calls to the adapter aligner.
+Added ambig output stream and changed the logic for determining ambiguous inverted repeats.
+Adapter-containing inverted repeats no longer go to junctions output.
+Improved timeless adapter aligner and made it default.
+Added start location to low bits of timeless aligner score, but it does not seem to work.
+38.58
+Fixed PreParser failure when encountering a standalone equals sign.
+Fixed a bug in automatically setting Sketch blacklists for known databases.
+Updated server-starting shellscripts to point to the new URLs.
+Renamed Missing Adapter as Absent Adapter.
+Changed ambiguity logic to better classify reads when there are 2 passes.
+Adapter alignment is slightly more lenient when an inverted repeat is detected.
+Slightly accelerated adapter detection by changing conditionals to array lookups in the inner loop.
+SendSketch can now load TaxTree.
+Increased Sketch number of comparisons returned, to compensate for potential losses during TaxFilter.
+38.59
+Added json output and stats redirection to IceCreamFinder.
+Added preliminary SamStreamer support to IceCreamFinder.
+SamStreamer now supports a limited number of reads.
+Added libbbtools.dylib (Mac version) to jni folder.  Thanks Jie Wang for compiling it!
+Updated makefile.osx and jni readme.
+CoveragePileup now detects and aborts when a scaffold is specified multiple times with different lengths.
+Added ByteBuilder.print(float x, int decimals).
+Added asrhist and irsrhist to IceCreamFinder.
+Fixed an unnecessary array copy in adapter detection; X is now properly added to reads with adapters detected.
+Added trim support to IceCreamFinder.
+38.60
+maxReads is now a required parameter for SamStreamer; this allows acceleration of some other tools when reads are limited.
+Redid Sketch taxfilter.  Now there are two different taxfilters, white (include) and black (exclude).  The flags have changed.
+Organism names are now acceptable for TaxFilter.
+JNI mode for IceCreamFinder and BBMap is now automatic on NERSC or Mac/Linux AMD64 systems.
+Moved OS/CPU environment detection from Data to Shared.
+Restarted Sketch servers; they will no longer handle the old taxonomy filtering flags.
+Added reformat complement flag.
+Fixed spelling of complement in some cases.
+Added Sketch taxID to Sketch lookup table.
+Added Sketch server reference mode.
+Sketch taxonomy and metadata filtering are now handled by DisplayParams, and done prior to comparison, exactly once, and in threads.
+38.61
+Added Sketch KID, WKID, and hits comparators.
+Revised TaxonomyGuide.txt.
+Wrote ThreadWaiter and simplified A_SampleMT.
+Fixed an accidental use of bgzip for decompression.
+Fixed an erroneous error message (header with no bases) from splitting reads of target length in FastaReadInputStream.
+Added fixsra and addpairnum flags to RenameReads.
+Modified and moved ncbi and sketch scripts to pipelines/fetch and pipelines/server.
+38.62
+Added ACGT count tracking and printgc to Sketch.
+Sketch JSON format now caps decimals places of some numbers.
+MergeSorted can now use subprocess for decompression.
+Added linear sketch sizing via the density flag.
+Added polyploid support for MutateGenome (ploidy and hetrate flags).
+Added nohomopolymers flag to MutateGenome.
+Updated calcmem.sh with path for pigz.
+Revised fetch pipeline scripts again.
+Added plasmids to prokprot; removed viroids which no longer exist.
+Sambamba should no longer print the banner.
+Wrote FetchProks and fetchproks.sh, for downloading one genome assembly and gff per prokaryotic genus.
+Updated model.pgm with all archaea and one bacteria per genus.
+Deleted spurious copy of GffLine.
+Split VcfToGff off of GffLine.
+Moved Gff-related classes to gff package.
+Wrote GbffFile, GbffLocus, and GbffFeature.
+Fixed equals method in StringNum.
+Rewrote CompareGff to take sequence name and type into account.
+Generated pgms for plastid and plasmid, but they made bacterial calling worse.
+Enabled 5S long kmer support (9-mers) for CallGenes.  Might be worthwhile ignoring the 1-count kmers.
+38.63
+Gene-calling long kmers are now uncompressed.
+tRNA and 5S now use 10-mers instead of 9-mers; plastid, plasmid, and viral sources are included.
+Fixed some remaining crash bugs from adding GC content to Sketches.
+Updated RefSeq protein sketching pipeline.
+38.64
+Added TaxTree methods for determining if a node descends from unclassified or environmental samples.
+Added banUnclassified and banVirus Sketch flags.
+Reduced TaxServer startup time by around 60% by multithreading AccessionToTaxid per-file reading.
+Wrote GlocalAligner to perform flat alignments for SSU identity calculation, and integrated it into sketch.Comparison.
+Wrote AddSSU and addssu.sh.
+Wrote AlignmentJob and AlignmentThreadPool to maintain a growable, limited pool of shared threads for aligning SSUs.
+Added GeneModel length restrictions for RNAs based on empirical data.
+IceCreamFinder trim flag now adjusts read coordinates in headers.
+Fixed a bug where IceCreamFinder trimming SamLines corrupted their quality.
+CallVariants now automatically converts IUPAC symbols to N; before it crashed when encountering them.
+iupacton flag now works on all programs and happens during read validation.
+38.65
+Updated FindPrimers to use a different, faster aligner and perform reverse alignments.
+38.66
+Removed a debug print statement.
+Fixed a crash bug in RepresentativeSet.
+38.67
+Fixed some ssu-related issues in Sketch.
+CompareSketch and SendSketch no longer try to grab SSUs if printssu=f.
+38.68
+Added subkmer support for BloomFilter via kbig.
+Added subkmer support for BloomFilterCorrector via ksmall.
+BBCMS subkmer support improves accuracy at very high load.
+Improved FetchProks to prefer reference assemblies when available.
+FetchProks now retries when connections time out.
+Added maxidfilter to Reformat.
+Wrote A_SampleSamStreamer.
+Added comma() and under() to ByteBuilder.
+Multithreaded AnalyzeAccession; now roughly 4x faster (190 ->  42 seconds).  Speed limited by largest file.
+Wrote consensus package (BaseGraphPart, BaseNode, BaseGraph, ConsensusMaker) and consensus.sh.
+Added SamLine.calcIdentity().
+Added SamFilter minid and maxid flags.
+Added SamLine leftmost() method.
+Wrote FixScaffoldGaps and fixgaps.sh for resizing scaffold gaps based on mapped pair insert sizes.
+IceCreamFinder now discards short reads after trimming.
+Added ConsensusMaker mindepth, mafsub, mafdel, mafins, mafn, and usemapq flags.
+Wrote Lilypad and lilypad.sh (scaffolder).
+Tested ConsensusMaker with Quast and changed default parameters.
+Added ConsensusMaker nonly and noindels flags.
+Fixed deletions sometimes being counted as bases in pileup.sh when delcov=f.
+Fixed a depth-0 assertion error in Tadpole.
+Added popbubbles to Tadpole.
+38.69
+Improved Tadpole bubble-popping and fixed some assertions.
+Multithreaded FindPrimers (msa.sh).
+Improved speed of SingleStateAligner by removing mode tracking (maybe 15% impact).  But it does not produce correct tracebacks.
+Fixed a bug in FindPrimers with not swapping bases in the output.
+FindPrimers in swap mode now produces sam headers.
+Added multiple debubbling passes; may incur small misassemblies (default off).
+Added dead-end debranching; may incur small misassemblies (default off).
+PopBubbles now resets LOOP end conditions if new loops are created.
+BBSketch now automatically disables minprob if 0-quality reads are detected (due to PacBio).
+Fixed some scenarios in which Sketch would not spawn an adequate number of threads, particularly for long reads.
+TestFormat (testformat2.sh) now counts and makes a histogram of ZMWs, and provides better taxonomic identification for PacBio.
 
+TODO: Some loop-creating bubble poppings are banned.
+
+*****TODO: Fix destMap pointers when nodes are merged and so forth.
+TODO: All bubble-popping with midnodes shorter than 2k-1 via truncation.
+TODO: Inflate collapsed repeats in BubblePopper by duplicating a single fbranch/fbranch midnode.  This requires linkage information for the endnode pairs.  Does not need to be fully resolved as long as any pair of endnodes can be uniquely associated.  Should be done before popping bubbles.
+TODO: Try a second pass of bubble popping.
+TODO: Ultrafast aligner.  Could be BBMap with alignment disabled, or could use a new data structure...
+TODO: HashArrayHybridLong, associating a kmer with multiple longs.  These can be used to encode scafnum in high bits and pos in low bits.
+TODO: LilyPad should not require mapped reads; alternatively, make a map of contig end kmers (eg. 31-mers) then scan reads and pairs for those kmers to make edges.
+TODO: Consensus should pad Ns on ref start and stop, then optionally truncate at the 50th percentile depth (for 16S).
+TODO: Potentially make 3 kinds of edges in Tadpole:  A) built edges, B) captured (in a read) edges, C) and captured (in a pair, unknown length) edges.  A and B could perhaps be lumped together.
+
+TODO: Lilypad could track overhanging reads to fill in gap Ns.
+TODO: Tadpole simple tandem resolution.
+
+TODO: ByteBuilder toText and append interface.
+
+TODO: CallVariants should track strand ratio and ignore strandedness if it is highly biased.
+TODO: On Amazon, Rob had to specify path= for BBMap as otherwise it tries to write to /ref/ which is not allowed.
+TODO: Flag to Swap stats N/L50.
+*TODO: Provide a column for ssu comparison results.
+TODO: SendSketch on a 16S sequence makes a sketch that is too small.
+
+TODO: Enable auto tax server access for all programs.
+TODO: Enable server access for taxonomy.sh.
+TODO: Change taxonomy.sh to use server-style header/name parsing.
+TODO: Add more checks when parsing for invalid parameters, e.g. k>31 for bbcms.
+TODO: Rename archaeal and bacterial per-genus downloads with taxID.
+TODO: Write test harness for Sketch.
+
+
+TODO: analyzegenes is singlethreaded with 1 input file.
+
+TODO: Cori memory autodetection detects too little memory.
+TODO: Default to less memory on Cori head nodes.
+TODO: fixvcf for left or right justify of indels, etc.
+
+TODO: Shred input?
+
+TODO: Java gzip decompressor does not seem to work with multipart files streamed from stdin, for example, RefSeq.
+TODO: Convert other multithreaded programs to the ThreadWaiter pattern.
+TODO: Integrate tax server into everything as a replacement for downloading accessions (?).
+TODO: Allow partial tax tree queries from the tax server.  Or even complete tax tree downloading?  That would be convenient...
+TODO: Put taxonomy update pipeline scripts in version control.
+TODO: Update taxonomy sub-scripts.
+
+TODO: Per-organism frame ACTG composition; may allow 2-pass better gene-calling.
+TODO: tRNA folding
+TODO: Way to bulk download and organize bacteria.
+
+TODO: Indel bit for alignments.  If this bit gets set, there was an indel.  Perfect for accelerating alignments using dual arrays with no traceback.
+
+TODO: Enable silent (and json) flag for more shellscripts.
+TODO: If JNI init fails, give a useful error message.
+TODO: Compile JNI for Windows.
+TODO: SamStreamer does not support ordered output.
+
+TODO: Look for inverted repeat around suspected PacBio adapters, if there is only 1 adapter.
+TODO: Generate histograms for IceCreamFinder - ratios, lengths, and subread count.
+TODO: Re-test increasing entropy cutoff for euk sketches.
+TODO: Download all bacterial assemblies and automatically select a representative set for gene-caller training.
+
+TODO: SendSketch depth estimation is too low (e.g. 0.5x data yields 0.435x estimate).  Compensate for kmer depth based on number of bases and number of sequences.
+**TODO: SendSketch crashes and hangs with in=nonexistent file.
+TODO: Clarify comparsketch single vs perfile flag.
+TODO: Reduce impact of quality scores on BBMerge.
+TODO: BBSketch proportional-size mode (linear-size).
+TODO: Sketch callribo flag (instead of whitelist - only for proks? And only assemblies, not reads.)
+
+TODO: Trim terminal adapter sequence on PacBio reads prior to looking for inverted repeats and central adapters.  Adjust read names as needed.
+TODO: Test improved RC aligner with reduced gap extension penalties?
+TODO: Redo ambig classification of 2-pass based on proximity of junction to the other read (inner terminus).
+TODO: Combine scores of adapter and inverted repeat.  e.g., use a lower adapter threshold when inverted repeat is detected.
+TODO: Debug method of storing start loc in low bits if adapter aligner which does not seem to work properly.
+TODO: 2-array, JNI version of adapter aligner.
+
+TODO: Consider effect of only filling last querylength cells in BBMap with DEL penalty.
+TODO: Write a local aligner to refine the junction location of IceCream reads.
+
+TODO: Vary queue size
+TODO: Break alignment into a few columns
+TODO: More precisely detect junction by recording highest value in addition to last value
+
+TODO: Read-based quantification for BBSketch (basically, assign each read to a reference).
+TODO: Make Depth a better indicator of abundance.
+TODO: Make big fastas faster to sketch.
+TODO: /global/projectb/sandbox/rqc/syao/anaconda2/envs/aligners/bin/bgzip
+TODO: Include taxlevel as a key in D3 mode
+TODO: Custom fast banded aligner for PacBio triangle read detection.
+TODO: Examine align2.Block.allowSubprocess (for writing index).  Also find similar flag for reading index.
+TODO: Sketch json format - option to print stuff in arrays.
+TODO: Base limit (as opposed to read limit) would be nice for sketching PacBio data.
+TODO: BBTools Mark Duplicates.
+***TODO: Put bgzip support in all tool shellscripts.
+**TODO: Link to latest nt and restart server.
+*TODO: Add option for full taxonomy in sketch output (JSON).
+*TODO: Added order option for TaxServer (JSON).
+TODO: Benchmark DemuxByName with various buffering settings on a shuffled file.
+TODO: test bgz/gz size on clumped/non-clumped files
+TODO: Flag for generating bgzf indexes
+TODO: bgz compress/decompress speed/mem test at various levels with various numbers of threads
+TODO: Command-line zipthreads setting
+TODO: Ensure bgz is always preferred for temp files; add a FileFormat temp flag.
+TODO: Add FileFormat support to ReadWrite.
+TODO: bgzip BBMap index; allow compression level specification for BBMap index.
+TODO: Allow streaming refseq to concatenate lines under Xbp long
+TODO: Sortbyname barcode mode/comparator (can add it to obj field)
+
+
+
+
+TODO: Clumpify.main is not called by RQCFilter2 so statics are not caught and restored.  Easy solution - have a second main function that returns the constructed object?
+
+TODO: Consider adding tax info to demuxer.
+TODO: Test bgzip decompression speed.
+TODO: DemuxByName2 should also split sam files by contig.
+**TODO: Flag to skip synth contam removal in RQCFilter.
+TODO: Test to ensure refactoring did not break anything.
+
+TODO: DemuxByName2 is way faster without output; not clear why.
+
+TODO: Consider splitting extra fields of VCFLines.
+TODO: BBMap kfilter float.
+TODO: Consider making unzip more efficient.
+
+
+TODO: Modify testfilesystem to test ls on a random directory.
+TODO: gi2taxid should accept wildcards (shrunk.*.accession2taxid.gz).
+**TODO: CallVariants3 - multisample variant-caller without writing any intermediate VCF files.
+*TODO: Write CallVariants usage example that merges independent samples across nodes.
+TODO: CallVariants2 without merging VCFs.
+TODO: Update shells with new flags.
+*TODO: Add meta path flag to TestFilesystem.
+*TODO: MergeVCF shell wrapper.  Also improve it to use hashmaps rather than requiring identical input files.
+
+TODO: Var - add an optimal 63-bit hashcode for Var, using max scaffold length and num scaffolds for bit widths.
+TODO: FilterSam - add capability to run without VCF file, both via Bloom filter and calling variants internally.
+TODO: FilterSam - consider soft-clipping and ignoring soft-clipped areas.
+TODO: Error-correct indel-free sam reads with kmers (and ref provided)...  as long as a read has only mismatches, it does not need realignment.
+***TODO: Sketch multi-JSON fix (Adam R).
+TODO: BBDuk var-based filtering does not support indels or border like filtersam.
+TODO: Consider scanning the index for only long kmers, at least optionally.  Or only indexing long kmers. 
+
+TODO: CallVariants stranded and 32bit should default to auto and be enabled based on memory.
+TODO: Investigate variant-calling after removing trash reads.
+TODO: CompareVCF should be able to process and produce var files, or else, CompareVar should be written.
+TODO: In strandBiasScore, correct for bias of all reads in addition to just mapped reads, when mcov is being tracked.
+TODO: CallVariants first base is capital, later bases may be lower case, for deletion ref calls.
+TODO: Bed output for pileup?
+TODO: Tool to split multiallelic variants.  Or, ignore multiallelic in comparevcf.
+TODO: size= flag does not work sometimes: comparesketch.sh in=mruber.fa.gz ref=protein blacklist=null index=f translate size=10000
+TODO: .fa files should cause a warning when processed in amino mode (rather than translate).
+
+TODO: Mhist seems to only get 0.5 for an indel instead of 1.
+TODO: Adapter-trimming grading.
+TODO: BBDuk auto adapters.
+TODO: Test CallVariants speed with ssmf and raw sam; possibly reduce concurrent files.
+TODO: Replace Integer.parseInt with Tools.parseIntKMG.
+TODO: BBMap ecco (for adapter trimming).
+TODO: RandomReads default insert sizes sould probably not have adapter sequences.
+TODO: RandomReads should add match string to reads.
+TO DELETE?: assemble toText methods, ErrorCorrect, countFastqSplit, 
+
+TODO: Slow speed of singlethreaded sketching.  Largely caused by entropy filtering.
 TODO: Consider 1-bit encoding for CallGenes, with 10-mers recording only AT vs GC or AC vs GT.
 TODO: Allow CallGenes to report gain over coding regions with a gff; or, write a new program to do that.
 TODO: Fix CompareGFF to be robust with multifastas.

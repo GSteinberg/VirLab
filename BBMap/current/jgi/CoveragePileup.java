@@ -328,6 +328,7 @@ public class CoveragePileup {
 		refBases=0;
 		mappedBases=0;
 		mappedNonClippedBases=0;
+		mappedBasesWithDels=0;
 		mappedReads=0;
 		properPairs=0;
 		readsProcessed=0;
@@ -345,6 +346,7 @@ public class CoveragePileup {
 		refBases=0;
 		mappedBases=0;
 		mappedNonClippedBases=0;
+		mappedBasesWithDels=0;
 		mappedReads=0;
 		properPairs=0;
 		readsProcessed=0;
@@ -361,7 +363,7 @@ public class CoveragePileup {
 		table=new HashMap<String, Scaffold>(initialScaffolds);
 		
 		if(PHYSICAL_COVERAGE){
-			pairTable=new HashMap<String, Object>();
+			pairTable=new HashMap<String, SamLine>();
 			if(COUNT_GC){
 				COUNT_GC=false;
 				outstream.println("COUNT_GC disabled for physical coverage mode.");
@@ -406,7 +408,7 @@ public class CoveragePileup {
 		processReference();
 //		System.err.println("E");
 		if(maxReads<0){maxReads=Long.MAX_VALUE;}
-		if(useStreamer && !FileFormat.isStdio(in1) && maxReads==Long.MAX_VALUE){
+		if(useStreamer && !FileFormat.isStdio(in1)){
 			tf.close();
 //			System.err.println("F");
 			processViaStreamer(tsw);
@@ -428,7 +430,7 @@ public class CoveragePileup {
 	}
 	
 	private void processViaStreamer(ByteStreamWriter tsw){
-		SamLineStreamer ss=new SamLineStreamer(in1, streamerThreads, false);
+		SamLineStreamer ss=new SamLineStreamer(in1, streamerThreads, false, maxReads);
 		ss.start();
 		ByteBuilder bb=new ByteBuilder(33000);
 		for(ListNum<SamLine> ln=ss.nextLines(); ln!=null && ln.size()>0; ln=ss.nextLines()){
@@ -556,6 +558,13 @@ public class CoveragePileup {
 		for(byte[] s=bf.nextLine(); s!=null; s=bf.nextLine()){
 			if(s.length>0 && s[0]=='>'){
 				if(scaf!=null){
+					if(scaf.length>0 && scaf.length!=len){
+						outstream.println("ERROR: Scaffold "+scaf.name+" has contradictory lengths of "+scaf.length+" and "+len+"\n"
+								+ "This probably indicates a corrupt or incorrect reference.");
+						errorState=true;
+						if(Shared.EA()){KillSwitch.kill();}
+					}
+//					else{outstream.println(scaf.name+", "+scaf.length+", "+len);}
 					scaf.length=len;
 					if(addLen){
 						refBases+=scaf.length;
@@ -588,6 +597,13 @@ public class CoveragePileup {
 			}
 		}
 		if(scaf!=null){
+			if(scaf.length>0 && scaf.length!=len){
+				outstream.println("ERROR: Scaffold "+scaf.name+" has contradictory lengths of "+scaf.length+" and "+len+"\n"
+						+ "This probably indicates a corrupt or incorrect reference.");
+				errorState=true;
+				if(Shared.EA()){KillSwitch.kill();}
+			}
+//			else{outstream.println(scaf.name+", "+scaf.length+", "+len);}
 			scaf.length=len;
 			if(addLen){
 				refBases+=scaf.length;
@@ -611,6 +627,7 @@ public class CoveragePileup {
 			String pound=(headerPound ? "#" : "");
 			tsw.print(pound+"mappedBases="+mappedBases+"\n");
 			tsw.print(pound+"mappedNonClippedBases="+mappedNonClippedBases+"\n");
+			tsw.print(pound+"mappedBasesWithDels="+mappedBasesWithDels+"\n");
 			tsw.print(pound+"mappedReads="+mappedReads+"\n");
 			tsw.print(pound+"name\tlength\tdepthSum\tavgDepth\tavgDepth/mappedBases\tminDepth\tmaxDepth\tmedianDepth\tstdDevDepth\tfractionCovered\n");
 		}
@@ -699,8 +716,8 @@ public class CoveragePileup {
 	/*----------------         Inner Methods        ----------------*/
 	/*--------------------------------------------------------------*/
 	
-	public boolean addCoverage(final String scafName, final byte[] seq, byte[] match, final int start0, final int stop0, final int readlen, final int strand, int incrementFrags,
-			boolean properPair, SamLine sl){//sl is optional
+	public boolean addCoverage(final String scafName, final byte[] seq, byte[] match, final int start0, final int stop0, final int readlen, 
+			final int nonClippedBases, final int strand, int incrementFrags, boolean properPair, SamLine sl){//sl is optional
 		Scaffold scaf=table.get(scafName);
 		if(scaf==null){
 			if(ADD_FROM_READS){
@@ -714,7 +731,7 @@ public class CoveragePileup {
 				if(COUNT_GC){scaf.basecount=new long[8];}
 				table.put(scafName, scaf);
 				list.add(scaf);
-				return addCoverage(scaf, seq, match, start0, stop0, readlen, strand, incrementFrags, properPair, sl);
+				return addCoverage(scaf, seq, match, start0, stop0, readlen, nonClippedBases, strand, incrementFrags, properPair, sl);
 			}else if(EA){
 				KillSwitch.kill("ERROR: A read was mapped to unknown reference sequence "+scafName);
 			}else if(!warned){
@@ -724,11 +741,11 @@ public class CoveragePileup {
 			}
 			return false;
 		}
-		return addCoverage(scaf, seq, match, start0, stop0, readlen, strand, incrementFrags, properPair, sl);
+		return addCoverage(scaf, seq, match, start0, stop0, readlen, nonClippedBases, strand, incrementFrags, properPair, sl);
 	}
 	
-	public boolean addCoverage(final Scaffold scaf, final byte[] seq, byte match[], final int start0, final int stop0, final int readlen, final int strand, int incrementFrags,
-			boolean properPair, SamLine sl){//sl is optional
+	public boolean addCoverage(final Scaffold scaf, final byte[] seq, byte match[], final int start0, final int stop0, final int readlen, final int nonClippedBases, 
+			final int strand, int incrementFrags, boolean properPair, SamLine sl){//sl is optional
 		if(scaf==null){
 			assert(false) : "Adding coverage to a null Scaffold.";
 			return false;
@@ -750,7 +767,8 @@ public class CoveragePileup {
 			"\nstop="+stop+"\nreadlen="+readlen+"\nstrand="+strand+"\nscaf.length="+scaf.length+"\nscaf="+scaf;
 		
 		mappedBases+=readlen;
-		mappedNonClippedBases+=(stop-start+1);
+		mappedNonClippedBases+=nonClippedBases;
+		mappedBasesWithDels+=(stop-start+1);
 		mappedReads++;
 		if(properPair){properPairs++;}
 
@@ -786,7 +804,7 @@ public class CoveragePileup {
 			}else if(STOP_ONLY){
 				ca.increment(stop);
 			}else{
-				ca.incrementRange(start, stop, 1);
+				ca.incrementRange(start, stop);
 //				mappedBases+=(stop-start+1);
 //				mappedBases+=(readlen);
 //				assert(readlen==(stop-start+1)) : "readlen="+readlen+", (stop-start+1)="+(stop-start+1)+", start="+start+", stop="+stop+", start0="+start0+", stop0="+stop0+
@@ -910,7 +928,7 @@ public class CoveragePileup {
 		correctKmers+=cKmers;
 		final boolean properPair=(sl.hasMate() && sl.mapped() && sl.primary() && sl.properPair());
 		if(PHYSICAL_COVERAGE && properPair){
-			SamLine mate=(SamLine)pairTable.remove(sl.qname);
+			SamLine mate=pairTable.remove(sl.qname);
 			if(mate==null){pairTable.put(sl.qname, sl);}
 			else{
 				final int start1=sl.start(INCLUDE_SOFT_CLIP, false);
@@ -920,7 +938,7 @@ public class CoveragePileup {
 				final int strand=(sl.pairnum()==0 ? sl.strand() : mate.strand());
 				final int length=USE_TLEN ? sl.tlen : Tools.max(stop1, stop2)-Tools.min(start1, start2)+1;
 				mappedKmers+=kmers;
-				addCoverage(sl.rnameS(), null, null, Tools.min(start1, start2), Tools.max(stop1, stop2), length, strand, 2, sl.properPair(), sl);
+				addCoverage(sl.rnameS(), null, null, Tools.min(start1, start2), Tools.max(stop1, stop2), length, sl.mappedNonClippedBases(), strand, 2, sl.properPair(), sl);
 			}
 		}else if(sl.mapped() && (USE_SECONDARY || sl.primary()) && sl.mapq>=minMapq){
 			assert(sl.seq!=null || sl.cigar!=null) : "This program requires bases or a cigar string for every sam line.  Problem line:\n"+sl+"\n";
@@ -933,7 +951,7 @@ public class CoveragePileup {
 //			assert(false) : "'"+sl.rnameS()+"'";
 			final byte[] match=(INCLUDE_DELETIONS ? null : sl.toShortMatch(true));
 			mappedKmers+=kmers;
-			return addCoverage(sl.rnameS(), sl.seq, match, start, stop, length, sl.strand(), sl.hasMate() ? 1 : 2, sl.properPair(), sl);
+			return addCoverage(sl.rnameS(), sl.seq, match, start, stop, length, sl.mappedNonClippedBases(), sl.strand(), sl.hasMate() ? 1 : 2, sl.properPair(), sl);
 		}
 		return false;
 	}
@@ -964,11 +982,13 @@ public class CoveragePileup {
 					final int strand=r.strand();
 					final int length=Tools.max(stop1, stop2)-Tools.min(start1, start2)+1;
 					mappedKmers+=kmers;
-					addCoverage(new String(coords.name), null, null, Tools.min(start1, start2), Tools.max(stop1, stop2), length, strand, 2-r.mateCount(), r.paired(), null);
+					addCoverage(new String(coords.name), null, null, Tools.min(start1, start2), Tools.max(stop1, stop2), length, 
+							r.mappedNonClippedBases(), strand, 2-r.mateCount(), r.paired(), null);
 				}else{
 					if(set1){
 						mappedKmers+=kmers;
-						return addCoverage(new String(coords.name), r.bases, r.match, coords.start, coords.stop, r.length(), coords.strand, 2-r.mateCount(), r.paired(), null);
+						return addCoverage(new String(coords.name), r.bases, r.match, coords.start, coords.stop, r.length(), 
+								r.mappedNonClippedBases(), coords.strand, 2-r.mateCount(), r.paired(), null);
 					}
 				}
 			}
@@ -980,7 +1000,8 @@ public class CoveragePileup {
 	public boolean processRead(Read r, SiteScore ss){
 		if(ss!=null && r.bases!=null){
 			if(coords.set(ss)){
-				return addCoverage(new String(coords.name), r.bases, ss.match, coords.start, coords.stop, r.length(), coords.strand, 1, r.paired(), null);
+				return addCoverage(new String(coords.name), r.bases, ss.match, coords.start, coords.stop, r.length(), 
+						r.mappedNonClippedBases(), coords.strand, 1, r.paired(), null);
 			}
 		}
 		return false;
@@ -1056,6 +1077,7 @@ public class CoveragePileup {
 		final double mult=1.0/refBases;
 		double depthCovered=mappedBases*mult;
 		double depthCovered2=mappedNonClippedBases*mult;
+		double depthCovered3=mappedBasesWithDels*mult;
 		double pctScaffoldsWithCoverage=scaffoldsWithCoverage1*100.0/totalScaffolds;
 		double pctCovered=totalCoveredBases1*100*mult;
 		
@@ -1080,7 +1102,9 @@ public class CoveragePileup {
 
 			outstream.println(String.format(Locale.ROOT, "\nPercent mapped:                      \t%.3f", mappedReads*100f/readsProcessed));
 			outstream.println(String.format(Locale.ROOT, "Percent proper pairs:                \t%.3f", properPairs*100f/readsProcessed));
+//			outstream.println(depthCovered);
 			outstream.println(String.format(Locale.ROOT, "Average coverage:                    \t%.3f", depthCovered2));
+			outstream.println(String.format(Locale.ROOT, "Average coverage with deletions:     \t%.3f", depthCovered3));
 			if(USE_COVERAGE_ARRAYS && calcCovStdev){
 				double[] stdev=standardDeviation(list, 0, minscaf);
 				outstream.println(String.format(Locale.ROOT, "Standard deviation:                    \t%.3f", stdev[1]));
@@ -1093,6 +1117,7 @@ public class CoveragePileup {
 			outstream.println("reads="+readsProcessed);
 			outstream.println("mappedReads="+mappedReads);
 			outstream.println("mappedBases="+mappedNonClippedBases);
+			outstream.println("mappedBasesWithDels="+mappedBasesWithDels);
 			outstream.println("refScaffolds="+totalScaffolds);
 			outstream.println("refBases="+refBases);
 			outstream.println(String.format(Locale.ROOT, "percentMapped=%.3f", mappedReads*100f/readsProcessed));
@@ -1938,6 +1963,7 @@ public class CoveragePileup {
 	public long refBases=0;
 	public long mappedBases=0;
 	public long mappedNonClippedBases=0;
+	public long mappedBasesWithDels=0;
 	public long mappedReads=0;
 	public long properPairs=0;
 	public long readsProcessed=0;
@@ -1965,9 +1991,11 @@ public class CoveragePileup {
 	/** Don't print coverage info for scaffolds shorter than this */
 	public int minscaf=0;
 	
-	public HashMap<String, Object> pairTable=new HashMap<String, Object>();
+	public HashMap<String, SamLine> pairTable=new HashMap<String, SamLine>();
 	
 	public PrintStream outstream=System.err;
+	
+	private boolean errorState=false;
 	
 	/*--------------------------------------------------------------*/
 	/*----------------        Static Fields         ----------------*/

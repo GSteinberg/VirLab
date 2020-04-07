@@ -1,6 +1,5 @@
 package jgi;
 
-import java.io.File;
 import java.util.Arrays;
 import java.util.Locale;
 
@@ -20,33 +19,9 @@ import ukmer.Kmer;
  */
 public final class BBMergeOverlapper {
 
-	static {
-		if(Shared.USE_JNI){
-			String name = "bbtoolsjni";
-			try {
-				System.loadLibrary(name);
-			} catch (UnsatisfiedLinkError e1) {
-				// System.loadLibrary() does not work with MPI.
-				// Need to use System.load() with an explicit full
-				// path to the native library file for the MPI case.
-				boolean success = false;
-				String libpath=System.getProperty("java.library.path");
-				libpath = libpath.replace("-Djava.library.path=","");
-				String[] libpathEntries = libpath.split(File.pathSeparator);
-				for(int i = 0; i < libpathEntries.length; i++) {
-					if(success) break;
-					String lib = libpathEntries[i]+"/"+System.mapLibraryName(name);
-					try {
-						System.load(lib);
-						success = true;
-					} catch (UnsatisfiedLinkError e2) {
-						success = false;
-						if((i+1) >= libpathEntries.length) {
-							throw new RuntimeException("\n\n*****   Native library can not be found in java.library.path.   *****\n");
-						}
-					}
-				}
-			}
+	static{
+		if(false && Shared.USE_JNI){//TODO: Disabled!
+			Shared.loadJNI();
 		}
 	}
 	
@@ -89,7 +64,7 @@ public final class BBMergeOverlapper {
 //		}
 		
 		final int x;
-		if(/*false && */Shared.USE_JNI/* && !useQuality*/){
+		if(false && Shared.USE_JNI/* && !useQuality*/){
 			if(useQuality && a.quality!=null && b.quality!=null){
 				x=mateByOverlapRatioJNI_WithQualities(a.bases, b.bases, a.quality, b.quality, aprob, bprob, rvector, minOverlap0, minOverlap, minInsert0, minInsert, maxRatio, margin, offset);
 			}else{

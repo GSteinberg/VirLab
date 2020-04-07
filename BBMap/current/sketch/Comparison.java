@@ -11,15 +11,13 @@ public final class Comparison extends SketchObject implements Comparable<Compari
 	/*----------------         Constructors         ----------------*/
 	/*--------------------------------------------------------------*/
 	
-	public Comparison(){}
+//	public Comparison(CompareBuffer buffer){
+//		this(buffer, null, null);
+//	}
 	
-	public Comparison(CompareBuffer buffer){
-		this(buffer, null, null);
-	}
-	
-	public Comparison(Sketch a_, Sketch b_){
-		this(null, a_, b_);
-	}
+//	public Comparison(Sketch a_, Sketch b_){
+//		this(null, a_, b_);
+//	}
 	
 	public Comparison(CompareBuffer buffer, Sketch a_, Sketch b_){
 		
@@ -278,8 +276,8 @@ public final class Comparison extends SketchObject implements Comparable<Compari
 	}
 	
 	private long range(){//TODO Make sure these are calculated correctly; it seems like one divisor might be 1 higher than necessary.
-		long maxA=a.array[Tools.max(0, queryDivisor-1)];
-		long maxB=b.array[Tools.max(0, refDivisor-1)];
+		long maxA=a.keys[Tools.max(0, queryDivisor-1)];
+		long maxB=b.keys[Tools.max(0, refDivisor-1)];
 //		assert(false) : Tools.max(0, queryDivisor-1)+", "+Tools.max(0, refDivisor-1)+
 //			", "+a.array[Tools.max(0, queryDivisor-1)]+", "+b.array[Tools.max(0, refDivisor-1)]+", "+Tools.max(maxA, maxB);//+"\n\n"+Arrays.toString(a.array)+"\n\n"+Arrays.toString(b.array);
 		return Tools.min(maxA, maxB);
@@ -402,6 +400,20 @@ public final class Comparison extends SketchObject implements Comparable<Compari
 	/*--------------------------------------------------------------*/
 	/*----------------            Getters           ----------------*/
 	/*--------------------------------------------------------------*/
+	
+//	public boolean passesFilter(TaxFilter white, TaxFilter black){
+//		if(white==null && black==null){return true;}
+//		int id=taxID();
+//		String s=name();
+//		return passesFilter(white, id, s) && passesFilter(black, id, s);
+//	}
+//	
+//	private boolean passesFilter(TaxFilter filter, int id, String s){
+//		if(filter==null){return true;}
+//		if(id>0 && !filter.passesFilter(id)){return false;}
+//		if(s!=null && !filter.passesFilterByNameOnly(s)){return false;}
+//		return true;
+//	}
 
 	public String name(){return taxName!=null ? taxName : name0()!=null ? name0() : fname()!=null ? fname() : ""+taxID();}
 	public String taxName(){return taxName;}
@@ -416,6 +428,19 @@ public final class Comparison extends SketchObject implements Comparable<Compari
 	long genomeSizeKmers(){return b.genomeSizeKmers;}
 	long genomeSequences(){return b.genomeSequences;}
 	long genomeSizeEstimate(){return b.genomeSizeEstimate();}
+	float gc(){return b.gc();}
+	boolean hasGC(){return b.baseCounts!=null;}
+
+	public boolean hasSSU() {
+		return a.ssu()!=null && b.ssu()!=null;
+	}
+	public boolean hasSSUIdentity() {
+		return ssuIdentity>=0;
+	}
+	public boolean needsAlignment() {
+		return hasSSU() && !hasSSUIdentity();
+	}
+	
 
 	public int uHits() {return hits-multiHits;}
 	
@@ -525,6 +550,45 @@ public final class Comparison extends SketchObject implements Comparable<Compari
 		
 	}
 	
+	static class KIDComparator implements Comparator<Comparison>{
+
+		@Override
+		public int compare(Comparison a, Comparison b) {
+			final float sa=a.kid(), sb=b.kid();
+			return sa>sb ? 1 : sa<sb ? -1 : scoreComparator.compare(a, b);
+		}
+		
+		@Override
+		public String toString(){return "sortByKID";}
+		
+	}
+	
+	static class WKIDComparator implements Comparator<Comparison>{
+
+		@Override
+		public int compare(Comparison a, Comparison b) {
+			final float sa=a.wkid(), sb=b.wkid();
+			return sa>sb ? 1 : sa<sb ? -1 : scoreComparator.compare(a, b);
+		}
+		
+		@Override
+		public String toString(){return "sortByWKID";}
+		
+	}
+	
+	static class HitsComparator implements Comparator<Comparison>{
+
+		@Override
+		public int compare(Comparison a, Comparison b) {
+			final float sa=a.hits(), sb=b.hits();
+			return sa>sb ? 1 : sa<sb ? -1 : scoreComparator.compare(a, b);
+		}
+		
+		@Override
+		public String toString(){return "sortByHits";}
+		
+	}
+	
 	@Override
 	public int compareTo(Comparison b) {
 		assert(false) : "Please use comparators instead.";
@@ -541,6 +605,9 @@ public final class Comparison extends SketchObject implements Comparable<Compari
 	public static final DepthComparator depthComparator=new DepthComparator();
 	public static final Depth2Comparator depth2Comparator=new Depth2Comparator();
 	public static final VolumeComparator volumeComparator=new VolumeComparator();
+	public static final KIDComparator KIDComparator=new KIDComparator();
+	public static final WKIDComparator WKIDComparator=new WKIDComparator();
+	public static final HitsComparator HitsComparator=new HitsComparator();
 	private static final boolean sqrt=false;
 	private static final double aaBitValue=0.86438561897747246957406388589788; //(log(20)/log(2))/5;
 	
@@ -565,6 +632,18 @@ public final class Comparison extends SketchObject implements Comparable<Compari
 	
 	int querySize(){return querySize;}
 	int refSize(){return refSize;}
+	
+	float ssuIdentity(){
+		if(ssuIdentity<0 && hasSSU()){
+			ssuIdentity=calcSsuIdentity(a.ssu(), b.ssu());
+		}
+		return ssuIdentity<0 ? 0 : ssuIdentity;
+	}
+	
+	private float calcSsuIdentity(byte[] a, byte[] b){
+		GlocalAligner ga=new GlocalAligner();
+		return ga.alignForward(a, b);
+	}
 	
 	/*--------------------------------------------------------------*/
 	/*----------------            Fields            ----------------*/
@@ -599,5 +678,7 @@ public final class Comparison extends SketchObject implements Comparable<Compari
 	private int hits1;
 	private int qSeen1;
 	private int rSeen1;
+	
+	private float ssuIdentity=-1;
 	
 }

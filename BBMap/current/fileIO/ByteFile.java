@@ -3,7 +3,6 @@ import java.io.File;
 import java.io.InputStream;
 import java.util.ArrayList;
 
-import dna.Data;
 import shared.Shared;
 import structures.ListNum;
 
@@ -122,9 +121,15 @@ public abstract class ByteFile {
 	public final boolean allowSubprocess(){return ff.allowSubprocess();}
 	
 	public final FileFormat ff;
-
-	public static boolean FORCE_MODE_BF1=!(Data.GENEPOOL || Data.DENOVO || Data.CORI || Data.WINDOWS);
+	
+	/** Force usage of ByteFile1 */
+	public static boolean FORCE_MODE_BF1=false;//!(Data.GENEPOOL || Data.DENOVO || Data.CORI || Shared.WINDOWS);
+	
+	/** Force usage of ByteFile2 */
 	public static boolean FORCE_MODE_BF2=false;
+	
+	/** Unused */
+	@Deprecated
 	public static boolean FORCE_MODE_BF3=false;
 	
 	protected final static byte slashr='\r', slashn='\n', carrot='>', plus='+', at='@';//, tab='\t';

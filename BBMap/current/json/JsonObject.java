@@ -14,16 +14,16 @@ public class JsonObject {
 		JsonObject joe=new JsonObject("name", "joe");
 		JsonObject sue=new JsonObject("name", "sue");
 		JsonObject dan=new JsonObject("name", "dan");
-		bob.add("joe", joe);
-		bob.add("sue", sue);
-		joe.add("dan", dan);
-		bob.add("a",1);
-		bob.add("b",2);
-		bob.add("c","3");
-		bob.add("a","4");
-		dan.add("e",5);
-		dan.add("f","6");
-		sue.add("g","7");
+		bob.add("joe", joe, true);
+		bob.add("sue", sue, true);
+		joe.add("dan", dan, true);
+		bob.add("a",1, true);
+		bob.add("b",2, true);
+		bob.add("c","3", true);
+		bob.add("a","4", true);
+		dan.add("e",5, true);
+		dan.add("f","6", true);
+		sue.add("g","7", true);
 
 		System.out.println("dan:\n"+dan);
 		System.out.println("sue:\n"+sue);
@@ -40,7 +40,7 @@ public class JsonObject {
 	public JsonObject(){}
 	
 	public JsonObject(String key, Object value){
-		add(key, value);
+		add(key, value, true);
 	}
 	
 //	public JsonObject(String name_){
@@ -52,7 +52,7 @@ public class JsonObject {
 //		add(key, value);
 //	}
 
-	/** Does not add quotes for strings */
+	/** Adds a formatted value with specified decimal places */
 	public void addLiteral(String key0, double value, int decimals){
 		omap.put(key0, new JsonLiteral(value, decimals));
 	}
@@ -63,26 +63,32 @@ public class JsonObject {
 		omap.put(key0, new JsonLiteral(value));
 	}
 
-	public void add(String key0, Object value){
+	public void add(String key0, Object value){add(key0, value, true);}
+	public void addAndRename(String key0, Object value){add(key0, value, false);}
+
+	private void add(String key0, Object value, boolean replace){
 		if(value!=null && value.getClass()==JsonObject.class){
-			add(key0, (JsonObject)value);
+			add(key0, (JsonObject)value, replace);
 			return;
 		}
 		int x=2;
 		String key=key0;
 		if(omap==null){omap=new LinkedHashMap<String, Object>(8);}
-		while(omap.containsKey(key)){
+		while(!replace && omap.containsKey(key)){
 			key=key0+" "+x;
 			x++;
 		}
 		omap.put(key, value);
 	}
 
-	public void add(final String key0, JsonObject value){
+	public void add(String key0, JsonObject value){add(key0, value, true);}
+	public void addAndRename(String key0, JsonObject value){add(key0, value, false);}
+
+	private void add(final String key0, JsonObject value, boolean replace){
 		int x=2;
 		String key=key0;
 		if(jmap==null){jmap=new LinkedHashMap<String, JsonObject>(8);}
-		while(jmap.containsKey(key)){
+		while(!replace && jmap.containsKey(key)){
 			key=key0+" "+x;
 			x++;
 		}
@@ -131,6 +137,10 @@ public class JsonObject {
 	@Override
 	public String toString(){
 		return toText(null, 0, false).toString();
+	}
+	
+	public String toStringln(){
+		return toText(null, 0, false).nl().toString();
 	}
 	
 	public void append(int level, ByteBuilder sb, boolean inArray){
@@ -189,10 +199,10 @@ public class JsonObject {
 			sb.append("null");
 		}else if(c==String.class){
 			sb.append("\"").append(value.toString()).append('"');
-		}else if(c==Double.class && decimals>=0){
-			sb.append(((Double)value).doubleValue(), decimals);
-		}else if(c==Float.class && decimals>=0){
-			sb.append(((Float)value).floatValue(), decimals);
+		}else if(c==Double.class && restictDecimals>=0){
+			sb.append(((Double)value).doubleValue(), restictDecimals);
+		}else if(c==Float.class && restictDecimals>=0){
+			sb.append(((Float)value).floatValue(), restictDecimals);
 		}else if(c==JsonObject.class){
 			((JsonObject)value).append(level+(inArray ? 0 : 1), sb, inArray);
 		}else if(c.isArray()){
@@ -248,6 +258,23 @@ public class JsonObject {
 		return (Long)o;
 	}
 
+	public Integer getInt(String key){
+		assert(omap!=null);
+		Object o=omap.get(key);
+//		assert(o!=null);
+		assert(o==null || o.getClass()==Integer.class) : "Wrong class: "+o.getClass()+"\n"+o;
+//		long x=((Long)o).longValue();
+//		assert(x>=Integer.MIN_VALUE && x<=Integer.MAX_VALUE);
+//		return (int)x;
+		return (Integer)o;
+	}
+	
+	public boolean containsKey(String key){
+		if(omap!=null && omap.containsKey(key)){return true;}
+		if(jmap!=null && jmap.containsKey(key)){return true;}
+		return false;
+	}
+
 //	public Double getDouble(String key){
 //		if(smap==null){return null;}
 //		Object o=smap.get(key);
@@ -272,7 +299,7 @@ public class JsonObject {
 		Object o=omap.get(key);
 		if(o==null){return null;}
 		Class<?> c=o.getClass();
-		assert(c==Double.class || c==Long.class) : "Wrong class: "+c+"\n"+o;
+		assert(c==Double.class || c==Long.class || c==Integer.class || c==Float.class) : "Wrong class: "+c+"\n"+o;
 		return (Number)o;
 	}
 
@@ -288,6 +315,35 @@ public class JsonObject {
 		if(jmap==null){return null;}
 		return jmap.get(key);
 	}
+
+	public JsonObject removeJson(String key){
+		if(jmap==null){return null;}
+		return jmap.remove(key);
+	}
+
+	public Object removeObject(String key){
+		if(omap==null){return null;}
+		return omap.remove(key);
+	}
+
+	public void clearJson(){
+		jmap=null;
+	}
+
+	public void clearOmap(){
+		omap=null;
+	}
+	
+	public Object[] toJmapArray() {
+		if(jmap==null){return null;}
+		Object[] array=new Object[jmapSize()];
+		int i=0;
+		for(Entry<String, JsonObject> e : jmap.entrySet()){
+			array[i]=e.getValue();
+			i++;
+		}
+		return array;
+	}
 	
 	public int jmapSize(){return jmap==null ? 0 : jmap.size();}
 	public int omapSize(){return omap==null ? 0 : omap.size();}
@@ -296,16 +352,16 @@ public class JsonObject {
 	public LinkedHashMap<String, Object> omap;
 	public LinkedHashMap<String, JsonObject> jmap;
 
-	private static int decimals=-1;
-	private static String decimalFormat="%."+decimals+"f";
+	private static int restictDecimals=-1;
+	private static String decimalFormat="%."+restictDecimals+"f";
 	public static synchronized void setDecimals(int d){
-		if(d!=decimals){
-			d=decimals;
-			decimalFormat="%."+decimals+"f";
+		if(d!=restictDecimals){
+			d=restictDecimals;
+			decimalFormat="%."+restictDecimals+"f";
 		}
 	}
 	
 	public static final int padmult=3;
-	public static boolean noNewlinesInArrays=true;
+	public static boolean noNewlinesInArrays=false;
 	
 }

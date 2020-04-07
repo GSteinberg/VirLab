@@ -6,6 +6,7 @@ import stream.SamLine;
 import structures.CoverageArray;
 import structures.CoverageArray2;
 import structures.CoverageArray3;
+import structures.CoverageArray3A;
 
 public class Scaffold {
 	
@@ -48,17 +49,42 @@ public class Scaffold {
 		increment(start, stop, sl.strand());
 	}
 	
-	public synchronized void increment(int from, int to, int strand){
+	public void increment(int from, int to, int strand){
+//		assert(trackStrand);
+		if(!initialized()){
+			synchronized(this){
+				if(!initialized()){
+//					assert(ca==null);
+//					assert(caMinus==null);
+//					assert(trackStrand);
+					ca=useCA3A ? new CoverageArray3A(number, length) : useCA3 ? new CoverageArray3(number, length) : new CoverageArray2(number, length);
+					if(trackStrand){
+						caMinus=useCA3A ? new CoverageArray3A(number, length) : useCA3 ? new CoverageArray3(number, length) : new CoverageArray2(number, length);
+					}
+				}
+				initialized=true;
+			}
+//			assert(ca!=null);
+//			assert(!trackStrand || caMinus!=null) : trackStrand;
+		}
+		assert(initialized());
+		assert(ca!=null);
+//		assert(!trackStrand || caMinus!=null) : trackStrand;
+//		assert(trackStrand);
+		ca.incrementRangeSynchronized(from, to, 1);
+		if(trackStrand && strand==Shared.MINUS){caMinus.incrementRangeSynchronized(from, to, 1);}
+	}
+	
+	public synchronized void incrementOld(int from, int to, int strand){
 		if(ca==null){
 			ca=useCA3 ? new CoverageArray3(number, length) : new CoverageArray2(number, length);
 		}
-		ca.incrementRange(from, to, 1);
-		
+		ca.incrementRange(from, to);
 		if(trackStrand && strand==Shared.MINUS){
 			if(caMinus==null){
 				caMinus=useCA3 ? new CoverageArray3(number, length) : new CoverageArray2(number, length);
 			}
-			caMinus.incrementRange(from, to, 1);
+			caMinus.incrementRange(from, to);
 		}
 	}
 	
@@ -129,19 +155,28 @@ public class Scaffold {
 		return "@SQ\tSN:"+name+"\tLN:"+length+"\tID:"+number;
 	}
 	
-	public void clearCoverage(){
+	public synchronized void clearCoverage(){
 		ca=null;
 		caMinus=null;
+		initialized=false;
 	}
 	
 	public final String name;
 	public final int number;
 	public final int length;
-	public CoverageArray ca;
-	public CoverageArray caMinus;
+	private CoverageArray ca;
+	private CoverageArray caMinus;
 	public byte[] bases;
+	private boolean initialized(){return initialized;};
+	private boolean initialized;
 
-	public static boolean useCA3=false;
-	public static boolean trackStrand=true;
+	public static void setCA3(boolean b){useCA3=b;}
+	public static void setCA3A(boolean b){useCA3A=b;}
+	public static void setTrackStrand(boolean b){trackStrand=b;}
+	public static boolean trackStrand(){return trackStrand;}
+
+	private static boolean useCA3=false;
+	private static boolean useCA3A=true;
+	private static boolean trackStrand=false;
 	
 }

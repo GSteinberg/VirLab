@@ -115,6 +115,14 @@ public final class FileFormat {
 		return ffa;
 	}
 	
+	public static FileFormat[] testInput(String fnames[], int defaultFormat, String overrideExtension, boolean allowSubprocess, boolean allowFileRead){
+		FileFormat[] array=new FileFormat[fnames.length];
+		for(int i=0; i<fnames.length; i++){
+			array[i]=testInput(fnames[i], defaultFormat, overrideExtension, allowSubprocess, allowFileRead);
+		}
+		return array;
+	}
+	
 	public static FileFormat testInput(String fname, int defaultFormat, String overrideExtension, boolean allowSubprocess, boolean allowFileRead){
 		if(verbose){System.err.println("testInputB("+fname+", "+defaultFormat+", "+overrideExtension+", "+allowSubprocess+", "+allowFileRead+")");}
 		return testInput(fname, defaultFormat, overrideExtension, allowSubprocess, allowFileRead, false);
@@ -135,6 +143,17 @@ public final class FileFormat {
 		return testInput(fname, defaultFormat, overrideFormat, overrideCompression, allowSubprocess, allowFileRead, forceFileRead);
 	}
 	
+	/**
+	 * Create an input FileFormat object for this filename.
+	 * @param fname Filename (path).
+	 * @param defaultFormat Use this format if the name is unclear and the format is not autodetected.
+	 * @param overrideFormat If specified, ignore the file extension and autodetection and input using this format.
+	 * @param overrideCompression If specified, ignore the file extension and input using this compression protocol.
+	 * @param allowSubprocess Permission to spawn a subprocess like bgzip.
+	 * @param allowFileRead Permission to read the file while constructing this FileFormat, for the purpose of format detection.
+	 * @param forceFileRead Force reading the file while constructing this FileFormat, for the purpose of format detection.
+	 * @return A FileFormat, or null if the filename is null.
+	 */
 	public static FileFormat testInput(String fname, int defaultFormat, int overrideFormat,
 			int overrideCompression, boolean allowSubprocess, boolean allowFileRead, boolean forceFileRead){
 		if(verbose){System.err.println("testInputD("+fname+", "+defaultFormat+", "+overrideFormat+", "+overrideCompression+", "+allowSubprocess+", "+allowFileRead+", "+forceFileRead+")");}
@@ -142,6 +161,17 @@ public final class FileFormat {
 		return new FileFormat(fname, READ, defaultFormat, overrideFormat, overrideCompression, allowSubprocess, allowFileRead, forceFileRead, false, false, false, true);
 	}
 	
+	/**
+	 * Create an output FileFormat object for this filename.
+	 * @param fname Filename (path).
+	 * @param defaultFormat Use this format if the name is unclear.
+	 * @param overrideExtension If specified, ignore the file extension and output in this format.
+	 * @param allowSubprocess Permission to spawn a subprocess like bgzip.
+	 * @param overwrite Permission to overwrite existing files.
+	 * @param append Permission to append to existing files.
+	 * @param ordered True if the input order should be maintained (for multithreaded read processing).
+	 * @return A FileFormat, or null if the filename is null.
+	 */
 	public static FileFormat testOutput(String fname, int defaultFormat, String overrideExtension, boolean allowSubprocess, boolean overwrite, boolean append, boolean ordered){
 		if(fname==null){return null;}
 		int overrideFormat=0;
@@ -310,11 +340,16 @@ public final class FileFormat {
 		else if(ext.equals("pgm") || ext.equals("pkm")){r[0]=PGM;}
 		else if(ext.equals("embl")){r[0]=EMBL;}
 		else if(ext.equals("gbk")){r[0]=GBK;}
+		else if(ext.equals("gbff")){r[0]=GBFF;}
 		
 		if(comp!=null){
 			r[1]=Tools.find(comp, COMPRESSION_ARRAY);
 			assert(r[1]>0) : "Unhandled compression type: "+comp;
 		}
+		
+//		if(r[1]==GZIP && allowFileRead){
+//			//Check magic number, perhaps
+//		}
 		
 		if(slc.length()>2 && slc.charAt(0)=='s' && slc.charAt(1)=='t'){
 			if(slc.equals("stdin") || slc.startsWith("stdin.") || slc.equals("standardin")){r[2]=STDIO;}
@@ -328,7 +363,6 @@ public final class FileFormat {
 				((r[0]==FASTQ || r[0]==FASTA) && r[3]==UNKNOWN && allowFileRead && !stream.FASTQ.FORCE_INTERLEAVED && stream.FASTQ.TEST_INTERLEAVED)){
 			File f=(allowFileRead && r[2]==FILE ? new File(fname) : null);
 			if(f!=null && f.exists() && !f.isDirectory()){
-				
 //				//a: {quality, interleaved, length, format}
 //				//r: {format, compression, type, interleaved, quality, length}
 				try {
@@ -468,6 +502,8 @@ public final class FileFormat {
 					format=VAR;
 				}else if(s1.startsWith("##gff-version")){
 					format=GFF;
+				}else if(s1.startsWith("LOCUS ")){
+					format=GBFF;
 				}else{format=TEXT;}
 			}
 //			else{format=BREAD;} //or possibly scarf
@@ -567,6 +603,11 @@ public final class FileFormat {
 		String ext=ReadWrite.rawExtension(fname);
 		return isBam(ext);
 	}
+
+	public void deleteIfPresent() {
+		File f=new File(name);
+		if(f.exists()){f.delete();}
+	}
 	
 	/*--------------------------------------------------------------*/
 	/*----------------            Getters           ----------------*/
@@ -607,6 +648,7 @@ public final class FileFormat {
 		else if(ext.equals("pgm") || ext.equals("pkm")){return PGM;}
 		else if(ext.equals("embl")){return EMBL;}
 		else if(ext.equals("gbk")){return GBK;}
+		else if(ext.equals("gbff")){return GBFF;}
 		else if(ext.equals("txt") || ext.equals("text") || ext.equals("tsv") || ext.equals("csv")){return TXT;}
 		return UNKNOWN;
 	}
@@ -671,6 +713,7 @@ public final class FileFormat {
 	public final boolean pgm(){return format==PGM;}
 	public final boolean embl(){return format==EMBL;}
 	public final boolean gbk(){return format==GBK;}
+	public final boolean gbff(){return format==GBFF;}
 	
 	public final boolean preferShreds(){
 		return preferShreds;
@@ -740,6 +783,8 @@ public final class FileFormat {
 	private final boolean allowSubprocess;
 	private final boolean ordered;
 	
+//	private final int magicNumber;
+	
 	public boolean preferShreds=false;
 //	private final long maxReads;
 	
@@ -786,13 +831,14 @@ public final class FileFormat {
 	public static final int PGM=26, PKM=26;
 	public static final int EMBL=27;
 	public static final int GBK=28;
+	public static final int GBFF=29;//TODO: this may be the same as GBK...
 	
 	public static final String[] FORMAT_ARRAY=new String[] {
 		"unknown", "fasta", "fastq", "bread", "sam", "csfasta",
 		"qual", "sequential", "random", "sites", "attachment",
 		"bam", "scarf", "text", "phylip", "header", "int1d",
 		"long1d", "bitset", "sketch", "oneline", "fastr",
-		"vcf", "var", "gff", "bed", "pgm", "embl", "gbk"
+		"vcf", "var", "gff", "bed", "pgm", "embl", "gbk", "gbff"
 	};
 	
 	public static final String[] EXTENSION_LIST=new String[] {
@@ -802,7 +848,7 @@ public final class FileFormat {
 		"scarf", "phylip", "txt",
 		"gz", "gzip", "bz2", "zip", "xz", "dsrc", "header", "headers",
 		"int1d", "long1d", "bitset", "sketch", "oneline", "flat", "fqz",
-		"gff", "gff3", "var", "vcf", "bed", "pgm", "embl", "gbk"
+		"gff", "gff3", "var", "vcf", "bed", "pgm", "embl", "gbk", "gbff"
 	};
 	
 	/* Compression */

@@ -213,7 +213,7 @@ public class Shaver2 extends Shaver {
 			}
 			table=tables.getTable(kmer);
 			
-			assert(table.getValue(kmer)==rightMax);
+			assert(table.getValue(kmer)==rightMax || rightMax==0);
 			count=rightMax;
 			assert(count>0);
 			

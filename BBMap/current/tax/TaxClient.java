@@ -213,7 +213,7 @@ public class TaxClient {
 		return sb.toString();
 	}
 	
-	public static String path="https://taxonomy.jgi-psf.org/";
+	public static String path="https://taxonomy.jgi.doe.gov/";
 	public static PrintStream outstream=System.err;
 	public static boolean verbose=false;
 	

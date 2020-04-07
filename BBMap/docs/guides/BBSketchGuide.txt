@@ -86,7 +86,7 @@ Rather than specifying the full address, they can be accessed using the flags "n
    sendsketch.sh in=assembly.fa refseq
    sendsketch.sh in=assembly.fa silva
 
-   
+  
 Setting up Servers
 
 You can run your own local Sketch servers.  Please see /pipelines/fetchTaxonomy.sh, /pipelines/fetchNt.sh, and /pipelines/startNtServer.sh for examples of how this is done at JGI for the nt dataset.  The only important thing to note, as mentioned in the header of fetchNt.sh, is that you need to add the flag "taxpath=X" all the BBTools commands in fetchNt.sh and startNtServer.sh, where X is the path to wherevery you downloaded the taxonomy information with fetchTaxonomy.sh.
@@ -144,6 +144,7 @@ Doubling reference sketch size will double memory requirements, probably approxi
 Sketch size is also impacted by the maxgenomefraction flag.  The default, 0.01, means that no matter what you set "size" or "autosizefactor" at, the sketch length will be at most 1% of the length of the sequence (so, a 1460bp ribosomal sequence will yield at most a sketch of length 14; this is not long enough, so Silva was sketched with "maxgenomefraction=0.1").
 Also, no sketches will be generated for sequences/genomes smaller than minsize (default 100).  This is the total length of all the sequence going into a sketch, so if you are using 1 million reads of 50bp each in single-sketch mode, the relevant size here would be 50000000 (which is above the default cutoff), not 50.  Very short sequences do not work very well with sketching; for example, at default settings, a bacterial genome will only be represented by roughly 1 kmer every 300 bp.  A human-size genome would only be represented by 1 kmer every 100kbp or so.  Thus, with the default minimum of only displaying organisms with at least 3 kmer hits, and default sketch autosize, you would expect to not see any results for bacterial sequences shorter than around 900bp or human sequences shorter than around 300kbp.  Ribosomal sketches against a ribo index are OK (if you use mgf=0.1), though, because the ribosomal reference sketches have a high kmer density.
 
+(TODO: subsketch.sh)
 
 Depth
 

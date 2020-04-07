@@ -151,6 +151,18 @@ public class VCFFile {
 		errorState|=bf.close();
 	}
 	
+//	static ArrayList<byte[]> loadHeaderOnly(String fname){
+//		ByteFile bf=ByteFile.makeByteFile(fname, true);
+//		ArrayList<byte[]> header=new ArrayList<byte[]>();
+//		byte[] line=bf.nextLine();
+//		while(line!=null && (line.length==0 || line[0]=='#')){
+//			if(line.length>0){
+//				header.add(line);
+//			}
+//			line=bf.nextLine();
+//		}
+//	}
+	
 	void printTime(Timer t){
 		outstream.println(Tools.timeLinesBytesProcessed(t, linesProcessed, bytesProcessed, 8));
 		
@@ -159,13 +171,31 @@ public class VCFFile {
 		outstream.println("Variant Lines:     \t"+map.size());
 	}
 	
-	public ArrayList<VCFLine> lines(){
+	public ArrayList<VCFLine> lines(boolean simplify){
 		ArrayList<VCFLine> lines=new ArrayList<VCFLine>(map.size());
 		for(Entry<VCFLine, VCFLine> e : map.entrySet()){
-			lines.add(e.getValue());
+			VCFLine line=e.getValue();
+			if(simplify && (line.isMulti() || line.isComplex())){
+				ArrayList<VCFLine> list=line.split(true, true, false);
+				lines.addAll(list);
+			}else{
+				lines.add(line);
+			}
 		}
 		return lines;
 	}
+	
+//	public static ScafMap toScafMap(String vcf){
+//		assert(vcf!=null);
+//		if(vcf==null){return null;}
+//		if(sm==null){sm=new ScafMap();}
+//		for(byte[] line : header){
+//			if(Tools.startsWith(line, "##contig=<ID=")){
+//				sm.addFromVcf(line);
+//			}
+//		}
+//		return sm;
+//	}
 	
 	public ScafMap toScafMap(ScafMap sm){
 		if(sm==null){sm=new ScafMap();}

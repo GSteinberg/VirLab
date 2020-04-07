@@ -1752,7 +1752,7 @@ public final class DedupeProtein {
 	}
 	
 	private static synchronized long[][] makeCodes(int symbols, int modes, long seed){
-		Random randy=new Random(seed);
+		Random randy=Shared.threadLocalRandom(seed);
 		long[][] r=new long[symbols][modes];
 		for(int i=0; i<symbols; i++){
 			for(int j=0; j<modes; j++){

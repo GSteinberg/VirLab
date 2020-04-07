@@ -3,30 +3,35 @@ package jgi;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicIntegerArray;
 
-import align2.MSA;
 import fileIO.ByteStreamWriter;
 import fileIO.FileFormat;
 import fileIO.ReadWrite;
+import pacbio.SingleStateAlignerFlat;
 import shared.Parser;
 import shared.PreParser;
 import shared.Shared;
 import shared.Timer;
 import shared.Tools;
 import stream.ConcurrentReadInputStream;
+import stream.ConcurrentReadOutputStream;
 import stream.FastaReadInputStream;
 import stream.Read;
+import stream.ReadStreamWriter;
 import stream.SamLine;
 import stream.SiteScore;
 import structures.ByteBuilder;
 import structures.ListNum;
+import template.Accumulator;
+import template.ThreadWaiter;
 
 /**
  * @author Brian Bushnell
  * @date Oct 6, 2014
  *
  */
-public class FindPrimers {
+public class FindPrimers implements Accumulator<FindPrimers.ProcessThread> {
 
 	public static void main(String[] args){
 		Timer t=new Timer();
@@ -44,7 +49,9 @@ public class FindPrimers {
 			args=pp.args;
 			outstream=pp.outstream;
 		}
-
+		
+		Shared.capBufferLen(8);
+		
 		float cutoff_=0;
 		String literal_=null;
 		String ref_=null;
@@ -55,10 +62,12 @@ public class FindPrimers {
 			String a=split[0].toLowerCase();
 			String b=split.length>1 ? split[1] : null;
 
-			if(parser.parse(arg, a, b)){
-				//do nothing
-			}else if(a.equals("rcomp")){
+			if(a.equals("rcomp")){
 				rcomp=Tools.parseBoolean(b);
+			}else if(a.equals("swap")){
+				swapQuery=Tools.parseBoolean(b);
+			}else if(a.equals("addr")){
+				addR=Tools.parseBoolean(b);
 			}else if(a.equals("replicate") || a.equals("expand")){
 				replicateAmbiguous=Tools.parseBoolean(b);
 			}else if(a.equals("literal")){
@@ -70,12 +79,14 @@ public class FindPrimers {
 			}else if(a.equals("primer") || a.equals("query") || a.equals("ref")){
 				if(new File(b).exists()){ref_=b;}
 				else{literal_=b;}
-			}else if(a.equals("msa")){
-				msaType=b;
 			}else if(a.equals("columns")){
 				columns=Integer.parseInt(b);
+			}else if(a.equals("idhist")){
+				outIdHist=b;
 			}else if(a.equals("parse_flag_goes_here")){
 				//Set a variable here
+			}else if(parser.parse(arg, a, b)){
+				//do nothing
 			}else{
 				outstream.println("Unknown parameter "+args[i]);
 				assert(false) : "Unknown parameter "+args[i];
@@ -92,6 +103,9 @@ public class FindPrimers {
 		}
 		cutoff=cutoff_;
 		
+//		ArrayList<byte[]> sharedHeader=new ArrayList<byte[]>();
+		ByteBuilder sharedHeader=new ByteBuilder();
+		sharedHeader.append("@HD\tVN:1.4\tSO:unsorted\n");
 		if(ref_!=null){
 			ArrayList<Read> list=FastaReadInputStream.toReads(ref_, FileFormat.FASTA, -1);
 			int max=0;
@@ -99,11 +113,14 @@ public class FindPrimers {
 			for(int i=0; i<list.size(); i++){
 				Read r=list.get(i);
 				max=Tools.max(max, r.length());
+				if(swapQuery){
+					sharedHeader.append("@SQ\tSN:"+r.name()+"\tLN:"+r.length()).nl();
+				}
 				queries.add(r);
 				if(rcomp){
 					r=r.copy();
 					r.reverseComplement();
-					r.id="r_"+r.id;
+					if(addR){r.id="r_"+r.id;}
 					r.setStrand(1);
 					queries.add(r);
 				}
@@ -114,15 +131,21 @@ public class FindPrimers {
 			String[] s2=literal_.split(",");
 			queries=new ArrayList<Read>();
 			for(int i=0; i<s2.length; i++){
-				Read r=new Read(s2[i].getBytes(), null, "query", i);
+				Read r=new Read(s2[i].getBytes(), null, "query"+i, i);
 				max=Tools.max(max, r.length());
 				queries.add(r);
-				
+				if(swapQuery){
+					sharedHeader.append("@SQ\tSN:"+r.name()+"\tLN:"+r.length()).nl();
+				}
 			}
 			maxqlen=max;
 		}else{
 			queries=null;
 			maxqlen=0;
+		}
+		
+		if(sharedHeader.length()>0) {
+			ReadStreamWriter.HEADER=sharedHeader;
 		}
 		
 		if(replicateAmbiguous){
@@ -138,7 +161,8 @@ public class FindPrimers {
 			}
 		}
 		
-		ffout1=FileFormat.testOutput(out1, FileFormat.FASTQ, null, true, true, false, false);
+		ffout1=FileFormat.testOutput(out1, FileFormat.ATTACHMENT, "attachment", true, true, false, ordered);
+//		assert(ffout1.type()==FileFormat.ATTACHMENT) : ffout1;
 		ffin1=FileFormat.testInput(in1, FileFormat.FASTQ, null, true, true);
 	}
 	
@@ -151,6 +175,8 @@ public class FindPrimers {
 			cris.start(); //4567
 		}
 		boolean paired=cris.paired();
+
+		final ConcurrentReadOutputStream ros=makeCros();
 		
 		final ByteStreamWriter bsw;
 		if(out1!=null){
@@ -161,100 +187,355 @@ public class FindPrimers {
 			bsw.start();
 		}else{bsw=null;}
 		
-		
-		MSA msa=MSA.makeMSA(maxqlen+3, columns, msaType);
-		
-		long readsProcessed=0;
-		{
-			
-			ListNum<Read> ln=cris.nextList();
-			ArrayList<Read> reads=(ln!=null ? ln.list : null);
-			
-			if(reads!=null && !reads.isEmpty()){
-				Read r=reads.get(0);
-				assert((ffin1==null || ffin1.samOrBam()) || (r.mate!=null)==cris.paired());
-			}
-
-			while(ln!=null && reads!=null && reads.size()>0){//ln!=null prevents a compiler potential null access warning
-				if(verbose){outstream.println("Fetched "+reads.size()+" reads.");}
-				
-				for(int idx=0; idx<reads.size(); idx++){
-					final Read r=reads.get(idx);
-					
-					if(r.length()+2>msa.maxColumns){
-						msa=MSA.makeMSA(maxqlen+3, r.length()+2+r.length()/2, "MultiStateAligner11ts");
-					}
-					final int a=0, b=r.length()-1;
-					int[] max;
-					
-					SiteScore bestSite=null;
-					Read bestQuery=null;
-					for(int qnum=0; qnum<queries.size(); qnum++){
-						final Read query=queries.get(qnum);
-						max=msa.fillLimited(query.bases, r.bases, a, b, -9999, null);
-						if(max!=null){
-							int[] score=msa.score(query.bases, r.bases, a, b, max[0], max[1], max[2], false);
-							SiteScore ss=new SiteScore(1, query.strand(), score[1], score[2], 1, score[0]);
-							if(bestSite==null || ss.quickScore>bestSite.quickScore){
-								bestQuery=query;
-								ss.setSlowScore(ss.quickScore);
-								ss.score=ss.quickScore;
-								ss.match=msa.traceback(query.bases, r.bases, a, b, score[3], score[4], score[5], false);
-								bestSite=ss;
-							}
-						}
-					}
-					
-					if(bsw!=null && bestSite!=null){
-						bsw.println(toBytes(r, bestQuery, bestSite));
-					}
-					
-					readsProcessed++;
-				}
-
-				cris.returnList(ln);
-				if(verbose){outstream.println("Returned a list.");}
-				ln=cris.nextList();
-				reads=(ln!=null ? ln.list : null);
-			}
-			if(ln!=null){
-				cris.returnList(ln.id, ln.list==null || ln.list.isEmpty());
-			}
-		}
+		spawnThreads(cris, ros);
 		
 		if(bsw!=null){bsw.poisonAndWait();}
-		ReadWrite.closeStreams(cris);
+		ReadWrite.closeStreams(cris, ros);
+		
+		int minid=100;
+		{
+			ByteBuilder bb=new ByteBuilder();
+			bb.append("ID\tCount\n");
+			for(int i=0; i<idHist.length(); i++){
+				if(idHist.get(i)>0) {
+					bb.append(i).tab().append(idHist.get(i)).nl();
+					minid=Tools.min(minid, i);
+				}
+			}
+			if(outIdHist!=null){ReadWrite.writeString(bb, outIdHist);}
+		}
+		
 		if(verbose){outstream.println("Finished.");}
 		
 		t.stop();
 		outstream.println("Time:                         \t"+t);
 		outstream.println("Reads Processed:    "+readsProcessed+" \t"+String.format(Locale.ROOT, "%.2fk reads/sec", (readsProcessed/(double)(t.elapsed))*1000000));
+		outstream.println("Average Identity:   "+String.format(Locale.ROOT, "%.2f%%", (identitySum*100/identityCount)));
+		outstream.println("Min Identity:       "+minid);
 	}
 	
+	private ConcurrentReadOutputStream makeCros(){
+		if(ffout1==null){return null;}
 
+		//Select output buffer size based on whether it needs to be ordered
+		final int buff=(ordered ? Tools.mid(16, 128, (Shared.threads()*2)/3) : 8);
+
+		final ConcurrentReadOutputStream ros=ConcurrentReadOutputStream.getStream(ffout1, null, buff, null, true);
+		ros.start(); //Start the stream
+		return ros;
+	}
+	
+	/*--------------------------------------------------------------*/
+	/*----------------       Thread Management      ----------------*/
 	/*--------------------------------------------------------------*/
 	
-	private ByteBuilder toBytes(Read r, Read query, SiteScore ss){
-		ByteBuilder bb=new ByteBuilder(80);
-		float f=Read.identity(ss.match);
-		if(f<cutoff){return bb;}
-		bb.append(query.id).append('\t');
-		bb.append(makeFlag(ss)).append('\t');
-		bb.append(r.id.replace('\t', '_')).append('\t');
-		bb.append(ss.start+1).append('\t');
-		bb.append(Tools.max(ss.score/query.length(), 4)).append('\t');
-		String cigar=SamLine.toCigar14(ss.match, ss.start, ss.stop, r.length(), query.bases);
-		if(cigar==null){bb.append('*').append('\t');}else{bb.append(cigar).append('\t');}
-		bb.append('0').append('\t');
-		bb.append('*').append('\t');
-		bb.append('0').append('\t');
+	/** Spawn process threads */
+	private void spawnThreads(final ConcurrentReadInputStream cris, final ConcurrentReadOutputStream ros){
 		
-		bb.append(query.bases).append('\t');
-		bb.append('*').append('\t');
+		//Do anything necessary prior to processing
 		
-		bb.append(String.format(Locale.ROOT, "YI:f:%.2f", (100*f)));
+		//Determine how many threads may be used
+		final int threads=Shared.threads();
 		
-		return bb;
+		//Fill a list with ProcessThreads
+		ArrayList<ProcessThread> alpt=new ArrayList<ProcessThread>(threads);
+		for(int i=0; i<threads; i++){
+			alpt.add(new ProcessThread(cris, ros, i));
+		}
+		
+		//Start the threads and wait for them to finish
+		boolean success=ThreadWaiter.startAndWait(alpt, this);
+		errorState&=!success;
+		
+		//Do anything necessary after processing
+		
+	}
+	
+	@Override
+	public final void accumulate(ProcessThread pt){
+		readsProcessed+=pt.readsProcessedT;
+		basesProcessed+=pt.basesProcessedT;
+		readsOut+=pt.readsOutT;
+		basesOut+=pt.basesOutT;
+		identitySum+=pt.identitySumT;
+		identityCount+=pt.identityCountT;
+		errorState|=(!pt.success);
+	}
+	
+	@Override
+	public final boolean success(){return !errorState;}
+	
+	/*--------------------------------------------------------------*/
+	/*----------------         Inner Classes        ----------------*/
+	/*--------------------------------------------------------------*/
+	
+	/** This class is static to prevent accidental writing to shared variables.
+	 * It is safe to remove the static modifier. */
+	class ProcessThread extends Thread {
+		
+		//Constructor
+		ProcessThread(final ConcurrentReadInputStream cris_, final ConcurrentReadOutputStream ros_, final int tid_){
+			cris=cris_;
+			ros=ros_;
+			tid=tid_;
+		}
+		
+		//Called by start()
+		@Override
+		public void run(){
+			//Do anything necessary prior to processing
+			
+			//Process the reads
+			processInner();
+			
+			//Do anything necessary after processing
+			
+			//Indicate successful exit status
+			success=true;
+		}
+		
+		/** Iterate through the reads */
+		void processInner(){
+			
+			//Grab the first ListNum of reads
+			ListNum<Read> ln=cris.nextList();
+
+			//Check to ensure pairing is as expected
+			if(ln!=null && !ln.isEmpty()){
+				Read r=ln.get(0);
+//				assert(ffin1.samOrBam() || (r.mate!=null)==cris.paired()); //Disabled due to non-static access
+			}
+
+			//As long as there is a nonempty read list...
+			while(ln!=null && ln.size()>0){
+//				if(verbose){outstream.println("Fetched "+reads.size()+" reads.");} //Disabled due to non-static access
+				
+				processList(ln);
+				
+				//Notify the input stream that the list was used
+				cris.returnList(ln);
+//				if(verbose){outstream.println("Returned a list.");} //Disabled due to non-static access
+				
+				//Fetch a new list
+				ln=cris.nextList();
+			}
+
+			//Notify the input stream that the final list was used
+			if(ln!=null){
+				cris.returnList(ln.id, ln.list==null || ln.list.isEmpty());
+			}
+		}
+		
+		void processList(ListNum<Read> ln){
+
+			//Grab the actual read list from the ListNum
+			final ArrayList<Read> reads=ln.list;
+			
+			//Loop through each read in the list
+			for(int idx=0; idx<reads.size(); idx++){
+				final Read r=reads.get(idx);
+				assert(r.mate==null);
+				
+				//Validate reads in worker threads
+				if(!r.validated()){r.validate(true);}
+
+				//Track the initial length for statistics
+				final int initialLength1=r.length();
+
+				//Increment counters
+				readsProcessedT+=r.pairCount();
+				basesProcessedT+=initialLength1;
+				
+				{
+					//Reads are processed in this block.
+					boolean keep=processRead(r);
+					
+					if(!keep){reads.set(idx, null);}
+					else{
+						readsOutT+=r.pairCount();
+						basesOutT+=r.pairLength();
+					}
+				}
+			}
+
+			//Output reads to the output stream
+			if(ros!=null){ros.add(reads, ln.id);}
+		}
+		
+		/**
+		 * Process a read or a read pair.
+		 * @param r1 Read 1
+		 * @param r2 Read 2 (may be null)
+		 * @return True if the reads should be kept, false if they should be discarded.
+		 */
+		boolean processRead(final Read r){
+			if(swapQuery){
+				if(r.length()+2>msa.maxRows) {
+					msa=new SingleStateAlignerFlat(r.length()+3, msa.maxColumns, r.length());
+				}
+			}else if(r.length()+2>msa.maxColumns){
+				msa=new SingleStateAlignerFlat(maxqlen+3, r.length()+2+r.length()/2, maxqlen);
+			}
+//			System.err.println(msa.maxRows+", "+msa.maxColumns+", "+r.length()+", "+maxqlen);
+			final int a=0, b=(swapQuery ? maxqlen-1 : r.length()-1);
+			int[] max;
+			
+			SiteScore bestSite=null;
+			Read bestQuery=null;
+			for(int qnum=0; qnum<queries.size(); qnum++){
+				final Read query=queries.get(qnum);
+				
+				//{rows, maxCol, maxState, maxScore, maxStart}
+				if(swapQuery){
+					max=msa.fillLimited(r.bases, query.bases, a, b, -9999);
+				}else{
+					max=msa.fillLimited(query.bases, r.bases, a, b, -9999);
+				}
+				if(max!=null){
+					
+					final int rows=max[0];
+					final int maxCol=max[1];
+					final int maxState=max[2];
+					final int maxScore=max[3];
+					final int maxStart=max[4];
+					
+					//{score, bestRefStart, bestRefStop} 
+					//byte[] read, byte[] ref, int refStartLoc, int refEndLoc, int maxRow, int maxCol, int maxState
+//					int[] score=msa.score(query.bases, r.bases, a, b, max[0], max[1], max[2]);
+					int[] score;
+					if(swapQuery){
+						score=msa.score(r.bases, query.bases, a, b, rows, maxCol, maxState);
+					}else{
+						score=msa.score(query.bases, r.bases, a, b, rows, maxCol, maxState);
+					}
+					SiteScore ss=new SiteScore(1, query.strand(), score[1], score[2], 1, score[0]);
+					if(bestSite==null || ss.quickScore>bestSite.quickScore){
+						bestQuery=query;
+						ss.setSlowScore(ss.quickScore);
+						ss.score=ss.quickScore;
+//						ss.match=msa.traceback(query.bases, r.bases, a, b, score[3], score[4], score[5], false);
+						
+						//int refStartLoc, int refEndLoc, int row, int col, int state
+						ss.match=msa.traceback(a, b, rows, maxCol, maxState);
+						bestSite=ss;
+					}
+				}
+			}
+			
+			ByteBuilder bb2=new ByteBuilder(toBytes(r, bestQuery, bestSite));
+			r.obj=bb2;
+			
+			return true;
+		}
+		
+
+		/*--------------------------------------------------------------*/
+		
+		private ByteBuilder toBytes(Read r, Read query, SiteScore ss){
+			bb.clear();
+			if(ss==null){return toBytes(r, query);}
+			float f=Read.identity(ss.match);
+			idHist.incrementAndGet((int)(100*f));
+			if(f<cutoff){return toBytes(r, query);}
+			if(swapQuery){
+				bb.append(r.id).append('\t');
+			}else{
+				bb.append(query.id).append('\t');
+			}
+			bb.append(makeFlag(ss)).append('\t');
+			if(swapQuery){
+				bb.append(query.id).append('\t');
+			}else{
+				bb.append(r.id.replace('\t', '_')).append('\t');
+			}
+			bb.append(Tools.max(0, ss.start)+1).append('\t');
+			bb.append(Tools.max(ss.score/query.length(), 4)).append('\t');
+			String cigar;
+			if(swapQuery){
+				cigar=SamLine.toCigar14(ss.match, ss.start, ss.stop, query.length(), r.bases);
+//				assert(SamLine.calcCigarReadLength(cigar, true, false)==r.length()) : 
+//					"cigar="+SamLine.calcCigarReadLength(cigar, true, false)+", r="+r.length()+", q="+query.length()+", swap="+swapQuery+", rid="+r.id;
+			}else{
+				cigar=SamLine.toCigar14(ss.match, ss.start, ss.stop, r.length(), query.bases);
+//				assert(SamLine.calcCigarReadLength(cigar, true, false)==query.length()) : 
+//					"cigar="+SamLine.calcCigarReadLength(cigar, true, false)+", r="+r.length()+", q="+query.length()+", swap="+swapQuery+", rid="+r.id;
+			}
+			if(cigar==null){bb.append('*').append('\t');}else{bb.append(cigar).append('\t');}
+			bb.append('0').append('\t');
+			bb.append('*').append('\t');
+			bb.append('0').append('\t');
+			
+			if(swapQuery){
+				bb.append(r.bases).append('\t');
+			}else{
+				bb.append(query.bases).append('\t');
+			}
+			bb.append('*').append('\t');
+			
+			identitySumT+=f;
+			identityCountT++;
+			bb.append("YI:f:").append(100*f, 2);
+			
+			return bb;
+		}
+		
+		private ByteBuilder toBytes(Read r, Read query){
+			bb.clear();
+//			if(cutoff>0){return bb;}
+			if(swapQuery){
+				bb.append(r.id).append('\t');
+			}else{
+				bb.append(query.id).append('\t');
+			}
+			bb.append(4).append('\t');
+			bb.append('*').append('\t');
+			bb.append(0).append('\t');
+			bb.append(0).append('\t');
+			bb.append('*').append('\t');
+			bb.append('*').append('\t');
+			bb.append('0').append('\t');
+			bb.append('0').append('\t');
+			
+			if(swapQuery){
+				bb.append(r.bases).append('\t');
+			}else{
+				bb.append(query.bases).append('\t');
+			}
+			bb.append('*').append('\t');
+			
+//			identitySumT+=f;
+//			identityCountT++;
+//			bb.append("YI:f:").append(100*f, 2);
+			
+			return bb;
+		}
+		
+		SingleStateAlignerFlat msa=new SingleStateAlignerFlat(maxqlen+3, columns, maxqlen);
+
+		/** Number of reads processed by this thread */
+		protected long readsProcessedT=0;
+		/** Number of bases processed by this thread */
+		protected long basesProcessedT=0;
+		
+		/** Number of reads retained by this thread */
+		protected long readsOutT=0;
+		/** Number of bases retained by this thread */
+		protected long basesOutT=0;
+		
+		double identitySumT=0;
+		long identityCountT=0;
+		
+		/** True only if this thread has completed successfully */
+		boolean success=false;
+		
+		private ByteBuilder bb=new ByteBuilder(1000);
+		
+		/** Shared input stream */
+		private final ConcurrentReadInputStream cris;
+		/** Shared output stream */
+		private final ConcurrentReadOutputStream ros;
+		/** Thread ID */
+		final int tid;
 	}
 	
 	public static int makeFlag(SiteScore ss){
@@ -271,21 +552,37 @@ public class FindPrimers {
 	
 	private String in1=null;
 	private String out1=null;
+	private String outIdHist=null;
+	
+	private AtomicIntegerArray idHist=new AtomicIntegerArray(101);
 	
 	private final float cutoff;
 	private boolean rcomp=true;
 	private boolean replicateAmbiguous=true;
+	private boolean swapQuery=false;
+	private boolean addR=false;
 	
 	private final FileFormat ffin1;
 	private final FileFormat ffout1;
 	private ArrayList<Read> queries;
 	private final int maxqlen;
 	private int columns=2000;
-	private String msaType="MultiStateAligner11ts";
 	
 	/*--------------------------------------------------------------*/
+	
+	protected long readsProcessed=0;
+	protected long basesProcessed=0;
+	
+	protected long readsOut=0;
+	protected long basesOut=0;
 
 	private long maxReads=-1;
+	
+	double identitySum=0;
+	long identityCount=0;
+	
+	boolean ordered=true;
+	boolean errorState=false;
 	
 	/*--------------------------------------------------------------*/
 	

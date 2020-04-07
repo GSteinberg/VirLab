@@ -1,7 +1,5 @@
 package shared;
 
-import dna.Data;
-
 public class Colors {
 	
 	public static void main(String[] args){
@@ -38,7 +36,7 @@ public class Colors {
 		};
 	}
 
-	public static boolean windows = Data.WINDOWS;
+	public static boolean windows = Shared.WINDOWS;
 	public static boolean skip = windows;
 	public static String esc = windows ? "<ESC>" : "\u001B"; //Windows only supports colors with Win10+
 

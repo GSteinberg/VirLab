@@ -19,11 +19,11 @@ public final class ConcurrentGenericReadOutputStream extends ConcurrentReadOutpu
 	/*----------------        Initialization        ----------------*/
 	/*--------------------------------------------------------------*/
 	
-	ConcurrentGenericReadOutputStream(FileFormat ff1_, FileFormat ff2_, String qf1, String qf2, int maxSize, CharSequence header, boolean useSharedHeader){
+	ConcurrentGenericReadOutputStream(FileFormat ff1_, FileFormat ff2_, String qf1, String qf2, int rswBuffers, CharSequence header, boolean useSharedHeader){
 		super(ff1_, ff2_);
 		
 		if(verbose){
-			System.err.println("ConcurrentGenericReadOutputStream("+ff1+", "+ff2+", "+qf1+", "+qf2+", "+maxSize+", "+useSharedHeader+")");
+			System.err.println("ConcurrentGenericReadOutputStream("+ff1+", "+ff2+", "+qf1+", "+qf2+", "+rswBuffers+", "+useSharedHeader+")");
 		}
 		
 		assert(ff1!=null);
@@ -35,8 +35,8 @@ public final class ConcurrentGenericReadOutputStream extends ConcurrentReadOutpu
 			if(ff2!=null){assert(!ff1.name().equals(ff2.name())) : ff1.name()+"=="+ff2.name();}
 		}
 		
-		readstream1=new ReadStreamByteWriter(ff1, qf1, true, maxSize, header, useSharedHeader);
-		readstream2=ff1.stdio() || ff2==null ? null : new ReadStreamByteWriter(ff2, qf2, false, maxSize, header, useSharedHeader);
+		readstream1=new ReadStreamByteWriter(ff1, qf1, true, rswBuffers, header, useSharedHeader);
+		readstream2=ff1.stdio() || ff2==null ? null : new ReadStreamByteWriter(ff2, qf2, false, rswBuffers, header, useSharedHeader);
 		
 		if(readstream2==null && readstream1!=null){
 //			System.out.println("ConcurrentReadOutputStream detected interleaved output.");

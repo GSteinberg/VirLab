@@ -20,6 +20,7 @@ import shared.Shared;
 import shared.Timer;
 import shared.Tools;
 import structures.ByteBuilder;
+import tax.TaxFilter;
 import tax.TaxTree;
 
 /**
@@ -58,6 +59,8 @@ public class CompareSketch extends SketchObject {
 		
 		//Close the print stream if it was redirected
 		Shared.closeStream(x.outstream);
+		
+		alignerPool.poison();
 	}
 	
 	/**
@@ -77,6 +80,7 @@ public class CompareSketch extends SketchObject {
 		ReadWrite.USE_PIGZ=ReadWrite.USE_UNPIGZ=true;
 		ReadWrite.MAX_ZIP_THREADS=Shared.threads();
 		KILL_OK=true;
+		TaxFilter.REQUIRE_PRESENT=false;
 		
 		//Create a parser object
 		Parser parser=new Parser();
@@ -227,7 +231,8 @@ public class CompareSketch extends SketchObject {
 //		assert(makeIndex || defaultParams.printContam2==false) : "Contam2 requires the flag index=t";
 		
 		if(taxTreeFile!=null){setTaxtree(taxTreeFile);}
-		defaultParams.postParse(true);
+		defaultParams.postParse(true, true);
+		if(!defaultParams.printSSU){processSSU=false;}
 		allowMultithreadedFastq=in.size()<2 && !allToAll;
 		if(!allowMultithreadedFastq){Shared.capBufferLen(40);}
 //		assert(defaultParams.checkValid());
@@ -244,19 +249,19 @@ public class CompareSketch extends SketchObject {
 		
 		outstream.println("Loading sketches.");
 		searcher.makeTool(1, false, defaultParams.mergePairs);
-		SketchTool tool=new SketchTool(targetSketchSize, defaultParams.minKeyOccuranceCount, defaultParams.trackCounts(), defaultParams.mergePairs);
+		SketchTool tool=new SketchTool(targetSketchSize, defaultParams);
 		
 		final int mode2=(defaultParams.mode==PER_FILE ? PER_FILE : PER_TAXA);
 		if(skipCompare){
 			makeIndex=false;
-			inSketches=tool.loadSketches_MT(defaultParams.mode, defaultParams.samplerate, defaultParams.reads, defaultParams.minEntropy, in);
+			inSketches=tool.loadSketches_MT(defaultParams, in);
 		}else if(!useWhitelist || allToAll){
 			if(allToAll){
 				makeIndex=searcher.refFileCount()>0 && (makeIndex || defaultParams.needIndex() || searcher.autoIndex);
-				searcher.loadReferences(mode2, defaultParams.minKeyOccuranceCount, defaultParams.minEntropy);
+				searcher.loadReferences(mode2, defaultParams);
 				inSketches=(ArrayList<Sketch>) searcher.refSketches.clone();
 			}else{
-				inSketches=tool.loadSketches_MT(defaultParams.mode, defaultParams.samplerate, defaultParams.reads, defaultParams.minEntropy, in);
+				inSketches=tool.loadSketches_MT(defaultParams, in);
 				
 				for(Sketch sk : inSketches){
 					if(sk.taxID<1 || sk.taxID>=minFakeID || outTaxID>0){sk.taxID=outTaxID;}
@@ -274,7 +279,7 @@ public class CompareSketch extends SketchObject {
 					}
 				}
 				makeIndex=searcher.refFileCount()>0 && ((searcher.autoIndex && inSketches.size()>8) || defaultParams.needIndex() || (makeIndex && !searcher.autoIndex));
-				searcher.loadReferences(mode2, defaultParams.minKeyOccuranceCount, defaultParams.minEntropy);
+				searcher.loadReferences(mode2, defaultParams);
 				if(mode2==PER_FILE){
 					int max=inSketches.size();
 					for(int i=0; i<searcher.refSketches.size(); i++){
@@ -285,8 +290,8 @@ public class CompareSketch extends SketchObject {
 		}else{
 			//assert(searcher.makeIndex && !searcher.autoIndex) : "whitelist=t requires index=t";
 			makeIndex=true; //(searcher.refFileCount()>0); //Index is required in whitelist mode.
-			searcher.loadReferences(mode2, defaultParams.minKeyOccuranceCount, defaultParams.minEntropy);
-			inSketches=tool.loadSketches_MT(defaultParams.mode, defaultParams.samplerate, defaultParams.reads, defaultParams.minEntropy, in);
+			searcher.loadReferences(mode2, defaultParams);
+			inSketches=tool.loadSketches_MT(defaultParams, in);
 		}
 		
 		if(outSketch!=null){
@@ -364,10 +369,11 @@ public class CompareSketch extends SketchObject {
 		if(tsw!=null){errorState|=tsw.poisonAndWait();}
 		
 		t.stop();
-		long comparisons=(makeIndex ? searcher.comparisons.get() : 
-			allToAll ? (inSketches.size()*(long)(inSketches.size()-(compareSelf ? 0 : 1)))
-					: inSketches.size()*(long)searcher.refSketchCount());
-		if(!skipCompare) {outstream.println("\nRan "+comparisons+" comparison"+(comparisons==1 ? "" : "s")+" in \t"+t);}
+//		long comparisons=(makeIndex ? searcher.comparisons.get() : 
+//			allToAll ? (inSketches.size()*(long)(inSketches.size()-(compareSelf ? 0 : 1)))
+//					: inSketches.size()*(long)searcher.refSketchCount());
+		long comparisons=searcher.comparisons.get();
+		if(!skipCompare) {outstream.println("\nRan "+comparisons+" comparison"+(comparisons==1 ? "" : "s")+" in "+t);}
 		ttotal.stop();
 		outstream.println("Total Time: \t"+ttotal);
 	}

@@ -3,14 +3,14 @@
 usage(){
 echo "
 Written by Brian Bushnell
-Last modified March 21, 2018
+Last modified April 1, 2019
 
-Description:  Filters a sam file to remove reads with substitutions
-unsupported by other reads (bad subs).  For particularly bad data,
+Description:  Filters a sam file to remove reads with variations unsupported
+by other reads (bad vars, aka bad subs).  For particularly bad data,
 it may be advisable to iteratively re-call variants and re-run FilterSam.
 Calling variants may be performed like this:
 
-callvariants.sh in=mapped.sam out=vars.vcf clearfilters minreads=2
+callvariants.sh in=mapped.sam ref=ref.fa out=vars.vcf clearfilters minreads=2
 
 Usage:  filtersam.sh in=<file> out=<file> vcf=<file>
 
@@ -22,12 +22,21 @@ outb=<file>     Output file for bad reads.
 vcf=<file>      VCF file of variants called from these reads.
 vars=<file>     Alternatively, variants can be provided in CallVariants'
                 native output format.
-maxbadsubs=2    A read will be discarded if it has more than maxbadsubs.
-mbsad=2         (maxbadsuballeledepth) A substitution is bad if the 
-                allele depth is at most this much. 
-mbsrd=2         (minbadsubreaddepth) Substitutions may only be considered
+mbv=2           (maxbadvars) Discarded reads with more bad vars than this.
+mbad=2          (maxbadalleledepth) A var is bad if the allele depth is at
+                most this much.
+mbaf=0.01       (maxbadalleledepth) A var is bad if the allele fraction is at
+                most this much.  The more stringent of mbad or mbaf is used,
+                so in low depth regions mbad is dominant while in high depth 
+                regions mbaf is more important.  Vars are considered bad if
+                they fail either threshold (meaning ad<=mbad or af<=mbaf).
+mbrd=2          (minbadreaddepth) Substitutions may only be considered
                 bad if the total read depth spanning the variant is
                 at least this much.
+border=5        (minenddist) Ignore vars within this distance of read ends.
+sub=t           Consider bad substitutions.
+ins=f           Consider bad insertions.
+del=f           Consider bad deletions.
 
 Please contact Brian Bushnell at bbushnell@lbl.gov if you encounter any problems.
 "
@@ -49,8 +58,6 @@ CP="$DIR""current/"
 
 z="-Xmx8g"
 z2="-Xms8g"
-EA="-ea"
-EOOM=""
 set=0
 
 if [ -z "$1" ] || [[ $1 == -h ]] || [[ $1 == --help ]]; then
@@ -60,6 +67,7 @@ fi
 
 calcXmx () {
 	source "$DIR""/calcmem.sh"
+	setEnvironment
 	parseXmx "$@"
 	if [[ $set == 1 ]]; then
 	return
@@ -71,30 +79,6 @@ calcXmx () {
 calcXmx "$@"
 
 filtersam() {
-	if [[ $SHIFTER_RUNTIME == 1 ]]; then
-		#Ignore NERSC_HOST
-		shifter=1
-	elif [[ $NERSC_HOST == genepool ]]; then
-		module unload oracle-jdk
-		module load oracle-jdk/1.8_144_64bit
-		module load samtools/1.4
-		module load pigz
-	elif [[ $NERSC_HOST == denovo ]]; then
-		module unload java
-		module load java/1.8.0_144
-		module load PrgEnv-gnu/7.1
-		module load samtools/1.4
-		module load pigz
-	elif [[ $NERSC_HOST == cori ]]; then
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/jgi
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/usg
-		module unload java
-		module load java/1.8.0_144
-		module unload PrgEnv-intel
-		module load PrgEnv-gnu/7.1
-		module load samtools/1.4
-		module load pigz
-	fi
 	local CMD="java $EA $EOOM $z $z2 -cp $CP var2.FilterSam $@"
 #	echo $CMD >&2
 	eval $CMD

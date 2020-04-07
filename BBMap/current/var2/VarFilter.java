@@ -6,7 +6,7 @@ public class VarFilter {
 	
 
 	public boolean parse(String a, String b, String arg){
-		if(a.equals("minreads") || a.equals("minad") || a.equals("minalleledepth")){
+		if(a.equals("minreads") || a.equals("minad") || a.equals("minalleledepth") || a.equals("mincount")){
 			minAlleleDepth=Integer.parseInt(b);
 		}else if(a.equals("maxreads") || a.equals("maxad") || a.equals("maxalleledepth")){
 			maxAlleleDepth=Integer.parseInt(b);
@@ -128,6 +128,7 @@ public class VarFilter {
 	}
 	
 	public boolean passesFast(Var v){
+		if(v.forced()){return true;}
 		final int count=v.alleleCount();
 		if(count<minAlleleDepth || count>maxAlleleDepth){return false;}
 		if(v.baseQMax<minMaxQuality){return false;}

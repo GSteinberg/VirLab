@@ -3,7 +3,7 @@
 usage(){
 echo "
 Written by Brian Bushnell
-Last modified February 19, 2019
+Last modified September 4, 2019
 
 Description:  Compares query sketches to reference sketches hosted on a 
 remote server via the Internet.  The input can be sketches made by sketch.sh,
@@ -12,7 +12,18 @@ Only sketches will sent, not sequences.
 
 Please read bbmap/docs/guides/BBSketchGuide.txt for more information.
 
-Usage:  sendsketch.sh in=file
+Usage:  
+sendsketch.sh in=file
+
+To change nucleotide servers, add the server name, e.g.:
+sendsketch.sh in=file nt
+
+For the protein server with nucleotide input:
+sendsketch.sh in=file protein
+
+for the protein server with amino input:
+sendsketch.sh in=file amino protein
+
 
 Standard parameters:
 in=<file>       Sketch or fasta file to compare.
@@ -34,61 +45,68 @@ address=        Address of remote server.  Default address:
                    fungi:   RefSeq fungi sketches (NYA)
                 Using an abbreviation automatically sets the address, 
                 the blacklist, and k.
-blacklist=<file>    Ignore keys in this sketch file.  Additionaly, there are
-                built-in blacklists that can be specified:
-                   nt:      Blacklist for nt
-                   refseq:  Blacklist for Refseq
-                   silva:   Blacklist for Silva
-                   img:     Blacklist for IMG
-amino=f         Use amino acid mode.  Input should be amino acids.
-translate=f     Call genes and translate to proteins.  Input should be
-                nucleotides.  Designed for prokaryotes.
-sixframes=f     Translate all 6 frames instead of predicting genes.
 
 Sketch-making parameters:
 mode=single     Possible modes, for fasta input:
                    single: Generate one sketch per file.
                    sequence: Generate one sketch per sequence.
-size=10000      Size of sketches to generate, if autosize=f.
-                For raw PacBio data, 100k is suggested.
-mgf=0.01        (maxfraction) Max fraction of genomic kmers to use.
-autosize=t      Use flexible sizing instead of fixed-length.
-sizemult=1      Multiply the default size of sketches by this factor.
-k=31            Kmer length, 1-32.  To maximize sensitivity and 
-                specificity, dual kmer lengths may be used:  k=31,24
-                Dual kmers are fastest if the shorter is a multiple 
-                of 4.  Query and reference k must match.
-                Currently, JGI-hosted nt and RefSeq use k=31,24
-                while JGI-hosted Silva uses k=31, but this is set for you.
-keyfraction=0.2 Only consider this upper fraction of keyspace.
+k=31            Kmer length, 1-32.  This is automatic and does not need to
+                be set for JGI servers, only for locally-hosted servers.
 samplerate=1    Set to a lower value to sample a fraction of input reads.
                 For raw reads (rather than an assembly), 1-3x coverage
                 gives best results, by reducing error kmers.  Somewhat
                 higher is better for high-error-rate data like PacBio.
 minkeycount=1   Ignore kmers that occur fewer times than this.  Values
                 over 1 can be used with raw reads to avoid error kmers.
-sketchheapfactor=4  If minkeycount>1, temporarily track this many kmers until
-                counts are known and low-count kmers are discarded.
 minprob=0.0001  Ignore kmers below this probability of correctness.
 minqual=0       Ignore kmers spanning bases below this quality.
 entropy=0.66    Ignore sequence with entropy below this value.
 merge=f         Merge paired reads prior to sketching.
+amino=f         Use amino acid mode.  Input should be amino acids.
+translate=f     Call genes and translate to proteins.  Input should be
+                nucleotides.  Designed for prokaryotes.
+sixframes=f     Translate all 6 frames instead of predicting genes.
+ssu=t           Scan for and retain full-length SSU sequence.
 
-Taxonomy-related parameters:
-tree=<file>     Specify a TaxTree file.  On Genepool, use tree=auto.
-                Only necessary for use with printtaxa and level.
-                Assumes comparisons are done against reference sketches
-                with known taxonomy information.
+Size parameters:
+size=10000      Desired size of sketches (if not using autosize).
+mgf=0.01        (maxfraction) Max fraction of genomic kmers to use.
+minsize=100     Do not generate sketches for genomes smaller than this.
+autosize=t      Use flexible sizing instead of fixed-length.  This is
+                nonlinear; a human sketch is only ~6x a bacterial sketch.
+sizemult=1      Multiply the autosized size of sketches by this factor.
+                Normally a bacterial-size genome will get a sketch size
+                of around 10000; if autosizefactor=2, it would be ~20000.
+density=        If this flag is set (to a number between 0 and 1),
+                autosize and sizemult are ignored, and this fraction of
+                genomic kmers are used.  For example, at density=0.001,
+                a 4.5Mbp bacteria will get a 4500-kmer sketch.
+sketchheapfactor=4  If minkeycount>1, temporarily track this many kmers until
+                counts are known and low-count kmers are discarded.
+
+Taxonomy and filtering parameters:
 level=2         Only report the best record per taxa at this level.
                 Either level names or numbers may be used.
-                   -1: disabled
+                    0: disabled
                     1: subspecies
                     2: species
                     3: genus
                    ...etc
-taxfilter=      List of NCBI taxIDs to filter from output.
-taxfilterlevel=0    Filter everything sharing an ancestor at this level.
-taxfilterinclude=t  Include only filtered records. 'f' will discard them.
+include=        Restrict output to organisms in these clades.
+                May be a comma-delimited list of names or NCBI TaxIDs.
+includelevel=0  Promote the include list to this taxonomic level.
+                For example, include=h.sapiens includelevel=phylum
+                would only include organisms in the same phylum as human.
+includestring=  Only report records whose name contains this string.
+exclude=        Ignore organisms in these clades.
+                May be a comma-delimited list of names or NCBI TaxIDs.
+excludelevel=0  Promote the exclude list to this taxonomic level.
+                For example, exclude=h.sapiens excludelevel=phylum
+                would exclude all organisms in the same phylum as human.
+excludestring=  Do not records whose name contains this string.
+banunclassified=f   Ignore organisms descending from nodes like 
+                    'unclassified Bacteria'
+banvirus=f          Ignore viruses.
 
 Output format:
 format=2        2: Default format with, per query, one query header line;
@@ -96,9 +114,11 @@ format=2        2: Default format with, per query, one query header line;
                 3: One line per hit, with columns query, reference, ANI,
                    and sizeRatio.
                 4: JSON (format=json also works).
+                5: Constellation (format=constellation also works).
 usetaxidname=f  For format 3, print the taxID in the name column.
 usetaxname      for format 3, print the taxonomic name in the name column.
 useimgname      For format 3, print the img ID in the name column.
+d3=f            Output in JSON format, with a tree for visualization.
 
 Output columns (for format=2):
 printall=f      Enable all output columns.
@@ -114,8 +134,9 @@ printgkmers=f   Number of genomic kmers.
 printgsize=t    Estimated number of unique genomic kmers.
 printgseqs=t    Number of sequences (scaffolds/reads).
 printtaxname=t  Name associated with this taxID.
-printname0=t    (pn0) Original seqeuence name.
-printfname=t    Query filename.
+printname0=f    (pn0) Original seqeuence name.
+printqfname=t   Query filename.
+printrfname=f   Reference filename.
 printtaxa=f     Full taxonomy of each record.
 printcontam=t   Print contamination estimate, and factor contaminant kmers
                 into calculations.  Kmers are considered contaminant if
@@ -124,8 +145,9 @@ printunique=t   Number of matches unique to this reference.
 printunique2=f  Number of matches unique to this reference's taxa.
 printunique3=f  Number of query kmers unique to this reference's taxa,
                 regardless of whether they are in this reference sketch.
-printnohit=t    Number of kmers that don't hit anything.
-printrefhits=t  Average number of ref sketches hit by shared kmers.
+printnohit=f    Number of kmers that don't hit anything.
+printrefhits=f  Average number of ref sketches hit by shared kmers.
+printgc=f       GC content.
 printucontam=f  Contam hits that hit exactly one reference sketch.
 printcontam2=f  Print contamination estimate using only kmer hits
                 to unrelated taxa.
@@ -146,6 +168,9 @@ sortbyscore=t   Default sort order is by score.
 sortbydepth=f   Include depth as a factor in sort order.
 sortbydepth2=f  Include depth2 as a factor in sort order.
 sortbyvolume=f  Include volume as a factor in sort order.
+sortbykid=f     Sort strictly by KID.
+sortbyani=f     Sort strictly by ANI/AAI/WKID.
+sortbyhits=f    Sort strictly by the number of kmer hits.
 
 Other output parameters:
 minhits=3       (hits) Only report records with at least this many hits.
@@ -160,10 +185,6 @@ color=family    Color records at the family level.  color=f will disable.
                 Colors work in most terminals but may cause odd characters
                 to appear in text editors.  So, color defaults to f if 
                 writing to a file.
-format=2        Available formats:
-                  1: Original format; deprecated.
-                  2: Customizable with different columns.
-                  3: 3-column format for alltoall: query, ref, ANI.
 intersect=f     Print sketch intersections.  delta=f is suggested.
 
 Metadata parameters (optional, for the query sketch header):
@@ -210,8 +231,6 @@ CP="$DIR""current/"
 
 z="-Xmx4g"
 z2="-Xms4g"
-EA="-ea"
-EOOM=""
 set=0
 
 if [ -z "$1" ] || [[ $1 == -h ]] || [[ $1 == --help ]]; then
@@ -221,6 +240,7 @@ fi
 
 calcXmx () {
 	source "$DIR""/calcmem.sh"
+	setEnvironment
 	parseXmx "$@"
 	if [[ $set == 1 ]]; then
 		return
@@ -232,24 +252,6 @@ calcXmx () {
 calcXmx "$@"
 
 sendsketch() {
-	if [[ $SHIFTER_RUNTIME == 1 ]]; then
-		#Ignore NERSC_HOST
-		shifter=1
-	elif [[ $NERSC_HOST == genepool ]]; then
-		module unload oracle-jdk
-		module load oracle-jdk/1.8_144_64bit
-		module load pigz
-	elif [[ $NERSC_HOST == denovo ]]; then
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	elif [[ $NERSC_HOST == cori ]]; then
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/jgi
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/usg
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	fi
 	local CMD="java $EA $EOOM $z -cp $CP sketch.SendSketch $@"
 #	echo $CMD >&2
 	eval $CMD

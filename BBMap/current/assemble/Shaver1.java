@@ -181,7 +181,7 @@ public class Shaver1 extends Shaver {
 			}
 			table=tables.getTableForKey(key);
 			
-			assert(table.getValue(key)==rightMax);
+			assert(table.getValue(key)==rightMax || rightMax==0);
 			
 			{//Fill right and look for dead end
 				nextRightMaxPos=fillRightCounts(kmer, rkmer, rightCounts, mask, shift2);
@@ -314,7 +314,7 @@ public class Shaver1 extends Shaver {
 			}
 			table=tables.getTableForKey(key);
 			
-			assert(table.getValue(key)==rightMax);
+			assert(table.getValue(key)==rightMax || rightMax==0);
 			count=rightMax;
 			
 			{//Look right

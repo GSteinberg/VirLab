@@ -71,7 +71,6 @@ public class MakeChimeras {
 				ByteFile2.verbose=verbose;
 				stream.FastaReadInputStream.verbose=verbose;
 				ConcurrentGenericReadInputStream.verbose=verbose;
-//				align2.FastaReadInputStream2.verbose=verbose;
 				stream.FastqReadInputStream.verbose=verbose;
 				ReadWrite.verbose=verbose;
 			}else if(parser.in1==null && i==0 && !arg.contains("=") && (arg.toLowerCase().startsWith("stdin") || new File(arg).exists())){
@@ -192,7 +191,7 @@ public class MakeChimeras {
 				tsw.start();
 			}
 			
-			final Random randy=new Random();
+			final Random randy=Shared.threadLocalRandom();
 			
 			long readsProcessed=0;
 			long basesProcessed=0;

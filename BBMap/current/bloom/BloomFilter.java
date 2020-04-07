@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.PrintStream;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Locale;
 
 import dna.AminoAcid;
 import fileIO.ReadWrite;
@@ -14,6 +15,7 @@ import shared.Timer;
 import shared.Tools;
 import stream.FastaReadInputStream;
 import stream.Read;
+import structures.IntList;
 import structures.LongList;
 
 /**
@@ -71,8 +73,9 @@ public class BloomFilter implements Serializable {
 		
 		//Create a parser object
 		Parser parser=new Parser();
-		
+
 		int k_=31;
+		int kbig_=31;
 		int bits_=1;
 		int hashes_=2;
 		int minConsecutiveMatches_=3;
@@ -90,9 +93,12 @@ public class BloomFilter implements Serializable {
 			
 			if(a.equals("verbose")){
 				verbose=Tools.parseBoolean(b);
-			}else if(a.equals("k")){
+			}else if(a.equals("k") || a.equals("ksmall")){
 				k_=Integer.parseInt(b);
 				assert(k_<=31 && k_>=1);
+			}else if(a.equals("kbig")){
+				kbig_=Integer.parseInt(b);
+				assert(kbig_>=1);
 			}else if(a.equals("hashes")){
 				hashes_=Integer.parseInt(b);
 				assert(hashes_<=10000 && hashes_>=1);
@@ -122,6 +128,8 @@ public class BloomFilter implements Serializable {
 		}
 		
 		k=k_;
+		kbig=Tools.max(k_, kbig_);
+		smallPerBig=kbig-k+1;
 		bits=bits_;
 		hashes=hashes_;
 		minConsecutiveMatches=minConsecutiveMatches_;
@@ -158,13 +166,13 @@ public class BloomFilter implements Serializable {
 		
 		filterMemory=setMemory(memFraction);
 		
-		shift=2*k;
-		shift2=shift-2;
+		shift=bitsPerBase*k;
+		shift2=shift-bitsPerBase;
 		mask=(shift>63 ? -1L : ~((-1L)<<shift));
 		filter=load();
 	}
 	
-	public BloomFilter(String in1_, String in2_, ArrayList<String> extra_, int k_, int bits_, int hashes_,
+	public BloomFilter(String in1_, String in2_, ArrayList<String> extra_, int k_, int kbig_, int bits_, int hashes_,
 			int minConsecutiveMatches_, boolean rcomp_, boolean ecco_, boolean merge_, float memFraction){
 		if(extra_!=null){
 			for(String s : extra_){extra.add(s);}
@@ -175,6 +183,8 @@ public class BloomFilter implements Serializable {
 		in1=in1_;
 		in2=in2_;
 		k=k_;
+		kbig=Tools.max(k_, kbig_);
+		smallPerBig=kbig-k+1;
 		bits=bits_;
 		hashes=hashes_;
 		minConsecutiveMatches=minConsecutiveMatches_;
@@ -182,26 +192,28 @@ public class BloomFilter implements Serializable {
 		ecco=ecco_;
 		merge=merge_;
 
-		shift=2*k;
-		shift2=shift-2;
+		shift=bitsPerBase*k;
+		shift2=shift-bitsPerBase;
 		mask=(shift>63 ? -1L : ~((-1L)<<shift));
 		filter=load();
 	}
 
-	public BloomFilter(boolean bbmapIndex_, int k_, int bits_, int hashes_, int minConsecutiveMatches_, boolean rcomp_) {
+	public BloomFilter(boolean bbmapIndex_, int k_, int kbig_, int bits_, int hashes_, int minConsecutiveMatches_, boolean rcomp_) {
 		assert(bbmapIndex_);
 		filterMemory=setMemory(0.75);
 		
 		in1=null;
 		in2=null;
 		k=k_;
+		kbig=Tools.max(k_, kbig_);
+		smallPerBig=kbig-k+1;
 		bits=bits_;
 		hashes=hashes_;
 		minConsecutiveMatches=minConsecutiveMatches_;
 		rcomp=rcomp_;
 
-		shift=2*k;
-		shift2=shift-2;
+		shift=bitsPerBase*k;
+		shift2=shift-bitsPerBase;
 		mask=(shift>63 ? -1L : ~((-1L)<<shift));
 		filter=loadFromIndex();
 	}
@@ -245,7 +257,7 @@ public class BloomFilter implements Serializable {
 		final int cbits=bits;
 		final long totalBits=8*filterMemory;
 		final long cells=totalBits/cbits;
-		outstream.println("Filter Memory = "+String.format("%.2f GB", filterMemory/(double)(1024*1024*1024)));
+		outstream.println("Filter Memory = "+String.format(Locale.ROOT, "%.2f GB", filterMemory/(double)(1024*1024*1024)));
 		KCountArray7MTA kca=(KCountArray7MTA)KmerCount7MTA.makeKcaFromIndex(k, cbits, cells, hashes, rcomp);
 		return kca;
 	}
@@ -273,8 +285,8 @@ public class BloomFilter implements Serializable {
 			byte b=bases[i];
 			long x=AminoAcid.baseToNumber[b];
 			long x2=AminoAcid.baseToComplementNumber[b];
-			kmer=((kmer<<2)|x)&mask;
-			rkmer=(rkmer>>>2)|(x2<<shift2);
+			kmer=((kmer<<bitsPerBase)|x)&mask;
+			rkmer=(rkmer>>>bitsPerBase)|(x2<<shift2);
 			if(x<0){len=0; rkmer=0;}else{len++;}
 			if(len>=k){
 				counted++;
@@ -308,8 +320,8 @@ public class BloomFilter implements Serializable {
 			byte b=bases[i];
 			long x=AminoAcid.baseToNumber[b];
 			long x2=AminoAcid.baseToComplementNumber[b];
-			kmer=((kmer<<2)|x)&mask;
-			rkmer=(rkmer>>>2)|(x2<<shift2);
+			kmer=((kmer<<bitsPerBase)|x)&mask;
+			rkmer=(rkmer>>>bitsPerBase)|(x2<<shift2);
 			if(x<0){len=0; rkmer=0;}else{len++;}
 			if(len>=k){
 				counted++;
@@ -350,8 +362,8 @@ public class BloomFilter implements Serializable {
 			byte b=bases[i];
 			long x=AminoAcid.baseToNumber[b];
 			long x2=AminoAcid.baseToComplementNumber[b];
-			kmer=((kmer<<2)|x)&mask;
-			rkmer=(rkmer>>>2)|(x2<<shift2);
+			kmer=((kmer<<bitsPerBase)|x)&mask;
+			rkmer=(rkmer>>>bitsPerBase)|(x2<<shift2);
 			if(x<0){len=0; rkmer=0;}
 			else{
 				len++;
@@ -377,8 +389,8 @@ public class BloomFilter implements Serializable {
 			byte b=bases[i];
 			long x=AminoAcid.baseToNumber[b];
 			long x2=AminoAcid.baseToComplementNumber[b];
-			kmer=((kmer<<2)|x)&mask;
-			rkmer=(rkmer>>>2)|(x2<<shift2);
+			kmer=((kmer<<bitsPerBase)|x)&mask;
+			rkmer=(rkmer>>>bitsPerBase)|(x2<<shift2);
 			if(x<0){len=0; rkmer=0;}
 			else{
 				len++;
@@ -405,8 +417,8 @@ public class BloomFilter implements Serializable {
 			byte b=bases[i];
 			long x=AminoAcid.baseToNumber[b];
 			long x2=AminoAcid.baseToComplementNumber[b];
-			kmer=((kmer<<2)|x)&mask;
-			rkmer=(rkmer>>>2)|(x2<<shift2);
+			kmer=((kmer<<bitsPerBase)|x)&mask;
+			rkmer=(rkmer>>>bitsPerBase)|(x2<<shift2);
 			if(x<0){len=0; rkmer=0;}else{len++;}
 			if(len>=k){
 				boolean found=contains(kmer, rkmer, thresh);
@@ -447,8 +459,8 @@ public class BloomFilter implements Serializable {
 			byte b=bases[i];
 			long x=AminoAcid.baseToNumber[b];
 			long x2=AminoAcid.baseToComplementNumber[b];
-			kmer=((kmer<<2)|x)&mask;
-			rkmer=(rkmer>>>2)|(x2<<shift2);
+			kmer=((kmer<<bitsPerBase)|x)&mask;
+			rkmer=(rkmer>>>bitsPerBase)|(x2<<shift2);
 			if(x<0){
 				if(len>=k){keys.add(-1);}
 				len=0;
@@ -491,18 +503,127 @@ public class BloomFilter implements Serializable {
 		return true;
 	}
 	
+	/*--------------------------------------------------------------*/
+	
+	/** Returns number of counts */
+	public int fillCounts(byte[] bases, IntList counts){
+		final int blen=bases.length;
+		if(blen<k){return 0;}
+		final int min=k-1;
+		long kmer=0, rkmer=0;
+		int len=0;
+		int valid=0;
+
+		counts.clear();
+
+		/* Loop through the bases, maintaining a forward kmer via bitshifts */
+		for(int i=0; i<blen; i++){
+			final byte base=bases[i];
+			final long x=AminoAcid.baseToNumber[base];
+			final long x2=AminoAcid.baseToComplementNumber[base];
+			kmer=((kmer<<bitsPerBase)|x)&mask;
+			rkmer=(rkmer>>>bitsPerBase)|(x2<<shift2);
+			
+			if(x<0){
+				len=0;
+				kmer=rkmer=0;
+			}else{
+				len++;
+			}
+			
+			if(i>=min){
+				if(len>=k){
+					int count=getCount(kmer, rkmer);
+					counts.add(count);
+					valid++;
+				}else{
+					counts.add(0);
+				}
+			}
+		}
+		return valid;
+	}
+	
 	public int getCount(final long kmer, final long rkmer){
 		final long key=toKey(kmer, rkmer);
 		return filter.read(key);
 	}
 	
 	public int getCount(final long key){
+//		assert(key==toKey(key, AminoAcid.reverseComplementBinaryFast(key, k))); //slow
 		return filter.read(key);
 	}
 	
 	public boolean contains(final long kmer, final long rkmer, final int thresh){
 		final long key=toKey(kmer, rkmer);
 		return filter.read(key)>=thresh;
+	}
+	
+	/*--------------------------------------------------------------*/
+	
+	/** Returns number of counts */
+	public int fillCountsBig(byte[] bases, IntList counts){
+		assert(smallPerBig>1) : smallPerBig;
+		final int valid0=fillCounts(bases, counts);
+		if(valid0<smallPerBig){return 0;}
+//		System.err.println(counts.size);
+		for(int i=0, lim=counts.size()-smallPerBig+1; i<lim; i++){
+			int count=smallToBig(counts, i);
+			counts.set(i, count);
+		}
+		counts.size-=(smallPerBig-1);
+//		System.err.println(counts.size+", "+k+", "+kbig+", "+smallPerBig);
+		return valid0-smallPerBig+1; //Normally correct
+	}
+	
+	
+	public void fillCountsBig(LongList kmers, IntList counts){
+		assert(smallPerBig>1) : smallPerBig;
+		counts.clear();
+		for(int i=0; i<kmers.size; i++){
+			long kmer=kmers.get(i);
+			int count=getCountBig(kmer);
+			counts.add(count);
+		}
+//		assert(false) : counts;
+	}
+	
+	private int smallToBig(IntList counts, final int start){
+		assert(smallPerBig>1) : smallPerBig;
+		final int[] array=counts.array;
+		int min=array[start];
+		for(int i=start+1; i<start+smallPerBig && min>0; i++){
+			min=Tools.min(min, array[i]);
+		}
+		return min;
+	}
+	
+	@SuppressWarnings("unused")
+	public int getCountBig(final long kmer, final long rkmer){
+		return getCountBig(kmer);
+	}
+	
+	public int getCountBig(long kmer){
+		int min=Integer.MAX_VALUE;
+		for(int i=0; i<smallPerBig && min>0; i++){
+			long small=kmer&mask;
+			long key=toKey(small);
+			int count=getCount(key);
+			min=Tools.min(min, count);
+			kmer>>=bitsPerBase;
+		}
+		return min;
+	}
+	
+	public boolean containsBig(final long kmer, final long rkmer, final int thresh){
+		final long key=toKey(kmer, rkmer);
+		return filter.read(key)>=thresh;
+	}
+	
+	/*--------------------------------------------------------------*/
+	
+	public long toKey(final long kmer){
+		return (rcomp ? toKey(kmer, AminoAcid.reverseComplementBinaryFast(kmer, k)) : kmer);
 	}
 	
 	public long toKey(final long kmer, final long rkmer){
@@ -535,9 +656,11 @@ public class BloomFilter implements Serializable {
 	
 	public final KCountArray7MTA filter;
 	final int k;
+	final int kbig;
+	final int smallPerBig;
 	final int bits;
 	final int hashes;
-	final int minConsecutiveMatches;
+	final int minConsecutiveMatches;//Note this is similar to smallPerBig
 	
 	final int shift;
 	final int shift2;
@@ -552,6 +675,7 @@ public class BloomFilter implements Serializable {
 	/*--------------------------------------------------------------*/
 	
 	public static long OVERRIDE_CELLS=-1;
+	static final int bitsPerBase=2;
 	
 	/*--------------------------------------------------------------*/
 	/*----------------        Common Fields         ----------------*/

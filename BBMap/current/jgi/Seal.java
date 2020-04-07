@@ -37,7 +37,7 @@ import stream.SamLine;
 import structures.IntList;
 import structures.IntList3;
 import structures.ListNum;
-import tax.GiToNcbi;
+import tax.GiToTaxid;
 import tax.TaxNode;
 import tax.TaxTree;
 
@@ -714,7 +714,7 @@ public class Seal {
 		}
 		
 		if(USE_TAXTREE){
-			if(giTableFile!=null){loadGiToNcbi();}
+			if(giTableFile!=null){loadGiToTaxid();}
 			if(USE_TAXTREE){tree=TaxTree.loadTaxTree(taxTreeFile, taxNameFile, taxNodeFile, null, DISPLAY_PROGRESS ? outstream : null, false, false);}
 			addToTree();
 		}
@@ -735,7 +735,7 @@ public class Seal {
 		if(RELEASE_TABLES){
 			unloadScaffolds();
 			tree=null;
-			GiToNcbi.unload();
+			GiToTaxid.unload();
 		}
 		
 		outstream.println("\nInput:                  \t"+readsIn+" reads \t\t"+basesIn+" bases.");
@@ -1094,10 +1094,10 @@ public class Seal {
 		return x;
 	}
 	
-	private void loadGiToNcbi(){
+	private void loadGiToTaxid(){
 		Timer t=new Timer();
 		outstream.println("Loading gi to taxa translation table.");
-		GiToNcbi.initialize(giTableFile);
+		GiToTaxid.initialize(giTableFile);
 		t.stop();
 		if(DISPLAY_PROGRESS){
 			outstream.println("Time: \t"+t);
@@ -1130,10 +1130,10 @@ public class Seal {
 			long count=scaffoldFragCounts.get(i);
 			if(count>0){
 				String name=scaffoldNames.get(i);
-				assert(name.startsWith("ncbi|") || name.startsWith("tid|") || (name.startsWith("gi|") && GiToNcbi.isInitialized())) :
+				assert(name.startsWith("ncbi|") || name.startsWith("tid|") || (name.startsWith("gi|") && GiToTaxid.isInitialized())) :
 					"\nFor taxonomy, all ref names must start with 'gi|' or 'ncbi|' or 'tid|'.\n" +
 					"If the names start with 'gi', the gi= flag must be set.\n";
-				int id=GiToNcbi.getID(name);
+				int id=GiToTaxid.getID(name);
 				if(id>-1){
 					tree.incrementRaw(id, count);
 				}

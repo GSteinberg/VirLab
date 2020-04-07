@@ -52,14 +52,20 @@ public class ByteStreamWriter extends Thread {
 		System.err.println("Time: \t"+t);
 	}
 	
+	/** @See primary constructor */
 	public ByteStreamWriter(String fname_, boolean overwrite_, boolean append_, boolean allowSubprocess_){
 		this(fname_, overwrite_, append_, allowSubprocess_, 0);
 	}
 	
+	/** @See primary constructor */
 	public ByteStreamWriter(String fname_, boolean overwrite_, boolean append_, boolean allowSubprocess_, int format){
 		this(FileFormat.testOutput(fname_, FileFormat.TEXT, format, 0, allowSubprocess_, overwrite_, append_, false));
 	}
 	
+	/**
+	 * Create a ByteStreamWriter for this FileFormat.
+	 * @param ff Contains information about the file name, output format, etc.
+	 */
 	public ByteStreamWriter(FileFormat ff){
 		FASTQ=ff.fastq() || ff.text();
 		FASTA=ff.fasta();
@@ -222,6 +228,10 @@ public class ByteStreamWriter extends Thread {
 		addJob(POISON2);
 	}
 	
+	/** 
+	 * Wait for this object's thread to terminate.
+	 * Should be poisoned first.
+	 */
 	public void waitForFinish(){
 		while(this.getState()!=Thread.State.TERMINATED){
 			try {
@@ -233,6 +243,7 @@ public class ByteStreamWriter extends Thread {
 	}
 	
 	/**
+	 * Poison the thread, and wait for it to terminate.
 	 * @return true if there was an error, false otherwise
 	 */
 	public boolean poisonAndWait(){
@@ -273,7 +284,7 @@ public class ByteStreamWriter extends Thread {
 	}
 	
 	/** Called after every write to the buffer */
-	private final void flushBuffer(boolean force){
+	public final void flushBuffer(boolean force){
 		final int x=buffer.length();
 		if(x>=maxLen || (force && x>0)){
 			addJob(buffer);
@@ -378,31 +389,52 @@ public class ByteStreamWriter extends Thread {
 		}
 	}
 	
-	@Deprecated
-	/** Avoid using this if possible. */
-	public void print(CharSequence x){
-		if(verbose){System.err.println("Added line '"+x+"'");}
-		assert(open) : x;
-		buffer.append(x);
-		flushBuffer(false);
+
+	public ByteBuilder getBuffer() {
+		assert(open);
+		assert(buffer!=null);
+		return buffer;
 	}
 	
 	@Deprecated
 	/** Avoid using this if possible. */
-	public void print(StringBuilder x){
+	public ByteStreamWriter print(CharSequence x){
 		if(verbose){System.err.println("Added line '"+x+"'");}
 		assert(open) : x;
 		buffer.append(x);
 		flushBuffer(false);
+		return this;
 	}
 	
 	@Deprecated
 	/** Avoid using this if possible. */
-	public void print(String x){
+	public ByteStreamWriter print(StringBuilder x){
 		if(verbose){System.err.println("Added line '"+x+"'");}
 		assert(open) : x;
 		buffer.append(x);
 		flushBuffer(false);
+		return this;
+	}
+	
+	@Deprecated
+	/** Avoid using this if possible. */
+	public ByteStreamWriter print(String x){
+		if(verbose){System.err.println("Added line '"+x+"'");}
+		assert(open) : x;
+		buffer.append(x);
+		flushBuffer(false);
+		return this;
+	}
+
+	public ByteStreamWriter tab(){return print('\t');}
+	public ByteStreamWriter nl(){return print('\n');}
+	
+	public ByteStreamWriter print(boolean x){
+		if(verbose){System.err.println("Added line '"+x+"'");}
+		assert(open) : x;
+		buffer.append(x);
+		flushBuffer(false);
+		return this;
 	}
 	
 	public ByteStreamWriter print(int x){
@@ -421,18 +453,34 @@ public class ByteStreamWriter extends Thread {
 		return this;
 	}
 	
-	public ByteStreamWriter print(float x){
+//	public ByteStreamWriter print(float x){
+//		if(verbose){System.err.println("Added line '"+(x)+"'");}
+//		assert(open) : x;
+//		buffer.appendSlow(x);
+//		flushBuffer(false);
+//		return this;
+//	}
+//	
+//	public ByteStreamWriter print(double x){
+//		if(verbose){System.err.println("Added line '"+(x)+"'");}
+//		assert(open) : x;
+//		buffer.appendSlow(x);
+//		flushBuffer(false);
+//		return this;
+//	}
+	
+	public ByteStreamWriter print(float x, int decimals){
 		if(verbose){System.err.println("Added line '"+(x)+"'");}
 		assert(open) : x;
-		buffer.appendSlow(x);
+		buffer.append(x, decimals);
 		flushBuffer(false);
 		return this;
 	}
 	
-	public ByteStreamWriter print(double x){
+	public ByteStreamWriter print(double x, int decimals){
 		if(verbose){System.err.println("Added line '"+(x)+"'");}
 		assert(open) : x;
-		buffer.appendSlow(x);
+		buffer.append(x, decimals);
 		flushBuffer(false);
 		return this;
 	}
@@ -457,6 +505,22 @@ public class ByteStreamWriter extends Thread {
 		if(verbose){System.err.println("Added line '"+new String(x)+"'");}
 		assert(open) : new String(x);
 		buffer.append(x);
+		flushBuffer(false);
+		return this;
+	}
+	
+	public ByteStreamWriter println(byte[] x){
+		if(verbose){System.err.println("Added line '"+new String(x)+"'");}
+		assert(open) : new String(x);
+		buffer.append(x).nl();
+		flushBuffer(false);
+		return this;
+	}
+	
+	public ByteStreamWriter print(byte[] x, int len){
+		if(verbose){System.err.println("Added line '"+new String(x)+"'");}
+		assert(open) : new String(x);
+		buffer.append(x, len);
 		flushBuffer(false);
 		return this;
 	}
@@ -532,33 +596,36 @@ public class ByteStreamWriter extends Thread {
 	/*--------------------------------------------------------------*/
 	
 	
-	public void println(){print('\n');}
-	public void println(CharSequence x){print(x); print('\n');}
-	public void println(String x){print(x); print('\n');}
-	public void println(StringBuilder x){print(x); print('\n');}
-	public void println(int x){print(x); print('\n');}
-	public void println(long x){print(x); print('\n');}
-	public void println(float x){print(x); print('\n');}
-	public void println(double x){print(x); print('\n');}
-	public void println(byte x){print(x); print('\n');}
-	public void println(char x){print(x); print('\n');}
-	public void println(byte[] x){print(x); print('\n');}
-	public void println(char[] x){print(x); print('\n');}
-	public void println(ByteBuilder x){print(x); print('\n');}
-	public void println(ByteBuilder x, boolean destroy){
-		if(destroy){print(x.append('\n'));}else{print(x); print('\n');}
+	public ByteStreamWriter println(){return print('\n');}
+	public ByteStreamWriter println(CharSequence x){print(x); return print('\n');}
+	public ByteStreamWriter println(String x){print(x); return print('\n');}
+	public ByteStreamWriter println(StringBuilder x){print(x); return print('\n');}
+	public ByteStreamWriter println(int x){print(x); return print('\n');}
+	public ByteStreamWriter println(long x){print(x); return print('\n');}
+//	public void println(float x){print(x); print('\n');}
+//	public void println(double x){print(x); print('\n');}
+	public ByteStreamWriter println(float x, int d){print(x, d); return print('\n');}
+	public ByteStreamWriter println(double x, int d){print(x, d); return print('\n');}
+	public ByteStreamWriter println(byte x){print(x); return print('\n');}
+	public ByteStreamWriter println(char x){print(x); return print('\n');}
+//	public ByteStreamWriter println(byte[] x){print(x); return print('\n');}
+	public ByteStreamWriter println(char[] x){print(x); return print('\n');}
+	public ByteStreamWriter println(ByteBuilder x){print(x); return print('\n');}
+	public ByteStreamWriter println(ByteBuilder x, boolean destroy){
+		if(destroy){return print(x.append('\n'));}else{print(x); return print('\n');}
 	}
-	public void printlnKmer(long kmer, int count, int k){printKmer(kmer, count, k); print('\n');}
-	public void printlnKmer(long kmer, int[] values, int k){printKmer(kmer, values, k); print('\n');}
-	public void printlnKmer(long[] array, int count, int k){printKmer(array, count, k); print('\n');}
-	public void printlnKmer(long[] array, int[] values, int k){printKmer(array, values, k); print('\n');}
-	public void println(Read r){print(r); print('\n');}
-	public void println(Contig c){print(c); print('\n');}
+	public ByteStreamWriter printlnKmer(long kmer, int count, int k){printKmer(kmer, count, k); return print('\n');}
+	public ByteStreamWriter printlnKmer(long kmer, int[] values, int k){printKmer(kmer, values, k); return print('\n');}
+	public ByteStreamWriter printlnKmer(long[] array, int count, int k){printKmer(array, count, k); return print('\n');}
+	public ByteStreamWriter printlnKmer(long[] array, int[] values, int k){printKmer(array, values, k); return print('\n');}
+	public ByteStreamWriter println(Read r){print(r); return print('\n');}
+	public ByteStreamWriter println(Contig c){print(c); return print('\n');}
 
 	
-	public void println(Read r, boolean paired){
+	public ByteStreamWriter println(Read r, boolean paired){
 		println(r);
 		if(paired && r.mate!=null){println(r.mate);}
+		return this;
 	}
 	
 	/*--------------------------------------------------------------*/

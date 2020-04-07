@@ -4,13 +4,13 @@ import java.io.File;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.BitSet;
-import java.util.Collections;
 import java.util.HashMap;
 
 import dna.AminoAcid;
 import dna.Data;
 import fileIO.FileFormat;
 import fileIO.ReadWrite;
+import gff.GffLine;
 import shared.Shared;
 import shared.Tools;
 import stream.ConcurrentReadInputStream;
@@ -77,7 +77,8 @@ public class GeneModel {
 	/*--------------------------------------------------------------*/
 	
 	public boolean process(String genomeFname, String gffFname){
-		fnames.add(ReadWrite.stripPath(genomeFname));
+//		fnames.add(ReadWrite.stripPath(genomeFname));
+		numFiles++;
 		FileFormat fnaFile=FileFormat.testInput(genomeFname, FileFormat.FA, null, true, true);
 		FileFormat gffFile=FileFormat.testInput(gffFname, FileFormat.GFF, null, true, true);
 		
@@ -137,7 +138,8 @@ public class GeneModel {
 		genesProcessed+=pgm.genesProcessed;
 		filesProcessed+=pgm.filesProcessed;
 		
-		fnames.addAll(pgm.fnames);
+//		fnames.addAll(pgm.fnames);
+		numFiles+=pgm.numFiles;
 		taxIds.addAll(pgm.taxIds);
 		Tools.add(baseCounts, pgm.baseCounts);
 	}
@@ -391,26 +393,36 @@ public class GeneModel {
 			assert(gline.strand==strand);
 			final byte flag;
 			if(!gline.attributes.contains("partial=true") && gline.start>1 && gline.stop<sd.length()){
-				if(gline.type.equals("tRNA")){
+				final int length=gline.length();
+				if(gline.type.equals("tRNA") && length>=40 && length<=120){
 					flag=1;
-					statstRNA.addLength(gline.length());
+					statstRNA.addLength(length);
 				}else{
-					assert(gline.type.equals("rRNA"));
-					if(gline.attributes.contains("16S")){
+//					assert(gline.type.equals("rRNA"));
+					if(gline.attributes.contains("16S") && length>=1440 && length<=1620){
 						flag=2;
-						stats16S.addLength(gline.length());
-					}else if(gline.attributes.contains("23S")){
+						stats16S.addLength(length);
+					}else if(gline.attributes.contains("23S") && length>=2720 && length<=3170){
 						flag=4;
-						stats23S.addLength(gline.length());
-					}else if(gline.attributes.contains("5S")){
+						stats23S.addLength(length);
+					}else if(gline.attributes.contains("5S") && length>=90 && length<=150){
 						flag=8;
-						stats5S.addLength(gline.length());
+						stats5S.addLength(length);
+//					}else if(gline.attributes.contains("SSU") || gline.attributes.contains("mall subunit")){
+//						flag=2;
+//						stats16S.addLength(gline.length());
+//					}else if(gline.attributes.contains("LSU") || gline.attributes.contains("arge subunit")){
+//						flag=4;
+//						stats23S.addLength(gline.length());
 					}else{
 						flag=0;
-						assert(false) : gline;
+//						assert(false) : gline;
+//						System.err.println("Can't determine rRNA type for "+gline);
 					}
 				}
-				processRnaLine(gline, sd, flag);
+				if(flag!=0){//TODO:  I just added this...  make sure it's OK
+					processRnaLine(gline, sd, flag);
+				}
 			}
 		}
 		processRnaInner(sd);
@@ -583,10 +595,13 @@ public class GeneModel {
 	}
 	
 	private IntHashSet loadLongKmers(StatsContainer sc, int k, String prefix){
-		String fname=Data.findPath("?"+prefix+"_"+k+"mers.fa.gz");
+		String fname=Data.findPath("?"+prefix+"_"+k+"mers.fa");
 		if(!new File(fname).exists()){
-			System.err.println("Can't find "+fname);
-			return null;
+			fname=fname+".gz";
+			if(!new File(fname).exists()){
+				System.err.println("Can't find "+fname);
+				return null;
+			}
 		}
 		IntHashSet set=loadLongKmers(fname, k);
 		sc.kmerSet=set;
@@ -645,14 +660,19 @@ public class GeneModel {
 	
 	public ByteBuilder appendTo(ByteBuilder bb){
 
-		Collections.sort(fnames);
+//		Collections.sort(fnames);
 		taxIds.sort();
 		
 		bb.append("#BBMap "+Shared.BBMAP_VERSION_STRING+" Prokaryotic Gene Model\n");
 		bb.append("#files");
-		for(String fname : fnames){
-			bb.tab().append(fname);
-		}
+		bb.tab().append(numFiles);
+//		if(fnames.size()>5){
+//			bb.tab().append(fnames.size());
+//		}else{
+//			for(String fname : fnames){
+//				bb.tab().append(fname);
+//			}
+//		}
 		bb.nl();
 		bb.append("#taxIDs");
 		for(int i=0; i<taxIds.size; i++){
@@ -697,6 +717,7 @@ public class GeneModel {
 	
 	StatsContainer[] rnaContainers=new StatsContainer[] {statstRNA, stats16S, stats23S, stats5S};
 	StatsContainer[] allContainers=new StatsContainer[] {statsCDS, statstRNA, stats16S, stats23S, stats5S};
+	//public static int CDS=0, tRNA=1, r16S=2, r23S=3, r5S=4, RNA=5, r18S=6, r28S=7;
 	
 //	public final FrameStats innerKmerStats=new FrameStats("innerKmerStats", innerKmerLength, 3, 0);
 //	public final FrameStats startStats=new FrameStats("startStats", endKmerLength, startFrames, startLeftOffset);
@@ -713,7 +734,8 @@ public class GeneModel {
 	
 	/*--------------------------------------------------------------*/
 	
-	public ArrayList<String> fnames=new ArrayList<String>();
+//	public ArrayList<String> fnames=new ArrayList<String>();
+	public int numFiles=0;
 	public IntList taxIds=new IntList();
 
 	
@@ -817,8 +839,8 @@ public class GeneModel {
 	
 	public static int kLong16s=15;
 	public static int kLong23s=15;
-	public static int kLong5s=9;
-	public static int kLongTRna=9;
+	public static int kLong5s=10;
+	public static int kLongTRna=10;
 	
 	static int startLeftOffset(){return startLeftOffset;}
 	static int startRightOffset(){return startRightOffset;}
@@ -837,7 +859,7 @@ public class GeneModel {
 	
 	public static boolean load16Skmers=true;
 	public static boolean load23Skmers=true;
-	public static boolean load5Skmers=false;
+	public static boolean load5Skmers=true;
 	public static boolean loadtRNAkmers=true;
 	
 	/*--------------------------------------------------------------*/

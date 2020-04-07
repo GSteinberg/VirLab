@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Random;
 
 import dna.AminoAcid;
+import shared.Shared;
 import shared.Timer;
 import shared.Tools;
 
@@ -71,7 +72,7 @@ public class GreedyBarCodeFinder {
 			set=new int[(int)space];
 			for(int i=0; i<set.length; i++){set[i]=i;}
 		}
-		Random randy=new Random();
+		Random randy=Shared.threadLocalRandom();
 		for(int i=0; i<set.length; i++){
 			int x=i+randy.nextInt(set.length-i);
 			int temp=set[i];

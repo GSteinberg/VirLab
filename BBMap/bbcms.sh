@@ -3,7 +3,7 @@
 usage(){
 echo "
 Written by Brian Bushnell
-Last modified December 19, 2018
+Last modified September 4, 2018
 
 Description:  Error corrects reads and/or filters by depth, storing
 kmer counts in a count-min sketch (a Bloom filter variant).
@@ -50,6 +50,10 @@ k=31            Kmer length, currently 1-31.
 hashes=3        Number of hashes per kmer.  Higher generally reduces 
                 false positives at the expense of speed; rapidly
                 diminishing returns above 4.
+ksmall=         Optional sub-kmer length; setting to slightly lower than k 
+                can improve memory efficiency by reducing the number of hashes
+                needed.  e.g. 'k=31 ksmall=29 hashes=2' has better speed and
+                accuracy than 'k=31 hashes=3' when the filter is very full.
 minprob=0.5     Ignore kmers with probability of being correct below this.
 memmult=1.0     Fraction of free memory to use for Bloom filter.  1.0 should
                 generally work; if the program crashes with an out of memory
@@ -58,8 +62,9 @@ memmult=1.0     Fraction of free memory to use for Bloom filter.  1.0 should
 cells=          Option to set the number of cells manually.  By default this
                 will be autoset to use all available memory.  The only reason
                 to set this is to ensure deterministic output.
-seed=0          This will change the hash function used.
-
+seed=0          This will change the hash function used.  Useful if running
+                iteratively with a very full table.  -1 uses a random seed.
+                
 Depth filtering parameters:
 mincount=0      If positive, reads with kmer counts below mincount will
                 be discarded (sent to outb).
@@ -116,8 +121,6 @@ CP="$DIR""current/"
 
 z="-Xmx4g"
 z2="-Xms4g"
-EA="-ea"
-EOOM=""
 set=0
 
 if [ -z "$1" ] || [[ $1 == -h ]] || [[ $1 == --help ]]; then
@@ -127,6 +130,7 @@ fi
 
 calcXmx () {
 	source "$DIR""/calcmem.sh"
+	setEnvironment
 	parseXmx "$@"
 	if [[ $set == 1 ]]; then
 		return
@@ -138,24 +142,6 @@ calcXmx () {
 calcXmx "$@"
 
 bloomfilter() {
-	if [[ $SHIFTER_RUNTIME == 1 ]]; then
-		#Ignore NERSC_HOST
-		shifter=1
-	elif [[ $NERSC_HOST == genepool ]]; then
-		module unload oracle-jdk
-		module load oracle-jdk/1.8_144_64bit
-		module load pigz
-	elif [[ $NERSC_HOST == denovo ]]; then
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	elif [[ $NERSC_HOST == cori ]]; then
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/jgi
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/usg
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	fi
 	local CMD="java $EA $EOOM $z $z2 -cp $CP bloom.BloomFilterCorrectorWrapper $@"
 	echo $CMD >&2
 	eval $CMD

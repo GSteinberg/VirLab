@@ -1,7 +1,9 @@
 package sketch;
 
 import java.util.Arrays;
+import java.util.Locale;
 
+import dna.AminoAcid;
 import shared.KillSwitch;
 import shared.Tools;
 import structures.LongHashMap;
@@ -20,7 +22,7 @@ public class SketchHeap {
 			map=null;
 			heap=set.heap;
 		}else{
-			if(minKeyOccuranceCount>1){limit=(int)Tools.min(100000000, limit*(long)SketchObject.sketchHeapFactor);}
+			if(minKeyOccuranceCount>1){limit=(int)Tools.min(10000000, limit*SketchObject.sketchHeapFactor);}
 			setOrMap=map=new LongHeapMap(limit);
 			set=null;
 			heap=map.heap;
@@ -33,6 +35,8 @@ public class SketchHeap {
 		genomeSizeBases=0;
 		genomeSizeKmers=0;
 		genomeSequences=0;
+		if(baseCounts!=null){Arrays.fill(baseCounts, 0);}
+		ssu=null;
 		probSum=0;
 		taxName=null;
 		name0=null;
@@ -49,6 +53,8 @@ public class SketchHeap {
 		genomeSizeBases+=b.genomeSizeBases;
 		genomeSizeKmers+=b.genomeSizeKmers;
 		genomeSequences+=b.genomeSequences;
+		if(baseCounts!=null){Tools.add(baseCounts, b.baseCounts);}
+		setSSU(b.ssu);
 		probSum+=b.probSum;
 		if(setMode){
 			set.add(b.set);
@@ -66,9 +72,11 @@ public class SketchHeap {
 		genomeSizeBases+=b.genomeSizeBases;
 		genomeSizeKmers+=b.genomeSizeKmers;
 		genomeSequences+=b.genomeSequences;
+		if(baseCounts!=null && b.baseCounts!=null){Tools.add(baseCounts, b.baseCounts);}
+		setSSU(b.ssu());
 		
-		long[] keys=b.array;
-		int[] counts=b.counts;
+		long[] keys=b.keys;
+		int[] counts=b.keyCounts;
 		assert(keys.length==b.length()) : keys.length+", "+b.length(); //Otherwise, change to loop through the size
 		for(int i=0; i<keys.length; i++){
 			long key=Long.MAX_VALUE-keys[i];
@@ -97,12 +105,24 @@ public class SketchHeap {
 		final long ge=genomeSizeEstimate();
 		if(ge>0){sb.append("\tGE:").append(ge);}
 		if(genomeSequences>0){sb.append("\tGQ:"+genomeSequences);}
-		if(probSum>0){sb.append("\tPC:"+String.format("%.4f",probSum/genomeSizeKmers));}
+		if(baseCounts!=null && !SketchObject.aminoOrTranslate()){
+			sb.append("\tBC:").append(baseCounts[0]).append(',').append(baseCounts[1]).append(',');
+			sb.append(baseCounts[2]).append(',').append(baseCounts[3]);
+		}
+		if(probSum>0){sb.append("\tPC:"+String.format(Locale.ROOT, "%.4f",probSum/genomeSizeKmers));}
 		if(taxID>=0){sb.append("\tID:"+taxID);}
 		if(imgID>=0){sb.append("\tIMG:"+imgID);}
 		if(taxName!=null){sb.append("\tNM:"+taxName);}
 		if(name0!=null){sb.append("\tNM0:"+name0);}
 		if(fname!=null){sb.append("\tFN:"+fname);}
+		if(ssu!=null){
+			sb.append("\tSSU:"+ssu.length);
+			sb.append('\n');
+			sb.append("#SSU:");
+			for(byte b : ssu){
+				sb.append((char)b);
+			}
+		}
 		return sb;
 	}
 	
@@ -128,7 +148,16 @@ public class SketchHeap {
 	
 	public final long[] toSketchArray(){
 		int maxLen=maxLen();
-		return toSketchArray(maxLen);
+		return toSketchArray(maxLen, minKeyOccuranceCount);
+	}
+	
+	public final long[] toSketchArray_minCount(int minKeyOccuranceCount_){
+		int maxLen=maxLen();
+		return toSketchArray(maxLen, minKeyOccuranceCount_);
+	}
+	
+	final long[] toSketchArray_maxLen(int maxLen){
+		return toSketchArray(maxLen, minKeyOccuranceCount);
 	}
 	
 	private final long[] toSketchArrayOld(int maxLen){//Destructive
@@ -146,9 +175,10 @@ public class SketchHeap {
 		return array;
 	}
 	
-	private final long[] toSketchArray(int maxLen){//Non-destructive
+	private final long[] toSketchArray(int maxLen, int minKeyOccuranceCount_){//Non-destructive
+		if(minKeyOccuranceCount_<0){minKeyOccuranceCount_=minKeyOccuranceCount;}
 		if(setMode){return toSketchArrayOld(maxLen);}
-		long[] keys=map().toArray(minKeyOccuranceCount);
+		long[] keys=map().toArray(minKeyOccuranceCount_);
 		for(int i=0; i<keys.length; i++){
 //			assert(keys[i]>0) : Arrays.toString(keys);
 			keys[i]=Long.MAX_VALUE-keys[i];
@@ -205,9 +235,24 @@ public class SketchHeap {
 	public String taxName(){return taxName;}
 	public String name0(){return name0;}
 	public String fname(){return fname;}
+	public long[] baseCounts(boolean original){return baseCounts==null ? null : original ? baseCounts : baseCounts.clone();}
 	public void setTaxName(String s){taxName=s;}
 	public void setName0(String s){name0=s;}
 	public void setFname(String s){fname=s;}
+
+	public byte[] ssu(){return ssu;}
+	
+	public int ssuLen() {
+		return ssu==null ? 0 : ssu.length;
+	}
+	
+	public void setSSU(byte[] b){
+		if(b==null || b.length<SketchObject.min_SSU_len){return;}
+//		assert(false);
+		if(ssu==null || AminoAcid.countDefined(b)>AminoAcid.countDefined(ssu)){
+			ssu=b;
+		}
+	}
 	
 	private String taxName;
 	private String name0;
@@ -217,6 +262,8 @@ public class SketchHeap {
 	public long genomeSizeBases=0;
 	public long genomeSizeKmers=0;
 	public long genomeSequences=0;
+	public final long[] baseCounts=(SketchObject.aminoOrTranslate() ? null : new long[4]);
+	private byte[] ssu;
 	double probSum=0;
 
 	public float probCorrect(){return probSum<=0 ? 0f : (float)(probSum/Tools.max(genomeSizeKmers, 1f));}

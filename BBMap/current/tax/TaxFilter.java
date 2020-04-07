@@ -111,7 +111,11 @@ public class TaxFilter {
 		if("auto".equalsIgnoreCase(giTableFile)){giTableFile=TaxTree.defaultTableFile();}
 		if("auto".equalsIgnoreCase(accessionFile)){accessionFile=TaxTree.defaultAccessionFile();}
 		
-		TaxFilter filter=new TaxFilter(giTableFile, taxTreeFile, accessionFile, taxLevelE, reqLevels, include, promote, null, regex, contains);
+		TaxTree tree=loadTree(taxTreeFile);
+		loadGiTable(giTableFile);
+		loadAccession(accessionFile, tree);
+		
+		TaxFilter filter=new TaxFilter(tree, taxLevelE, reqLevels, include, promote, null, regex, contains);
 		filter.addNames(names);
 		filter.addNumbers(ids, true);
 		return filter;
@@ -121,47 +125,21 @@ public class TaxFilter {
 	 * Constructor.
 	 * @param tree_
 	 */
-	public TaxFilter(TaxTree tree_){
-		tree=tree_;
-		taxLevelE=-1;
-		reqLevels=0;
-		include=true;
-		promote=true;
-		taxSet=null;
-		regex=null;
-		regexPattern=null;
-		containsString=null;
+	public TaxFilter(TaxTree tree_, boolean include_){
+		this(tree_, -1, 0, include_, true, null, null, null);
 	}
 	
 	/**
 	 * Constructor.
 	 */
-	public TaxFilter(TaxTree tree_, int taxLevelE_, int reqLevels_, boolean include_, boolean promote_, HashSet<Integer> taxSet_, String regex_, String contains_){
+	public TaxFilter(TaxTree tree_, int taxLevelE_, int reqLevels_, boolean include_, boolean promote_,
+			HashSet<Integer> taxSet_, String regex_, String contains_){
 		tree=tree_;
 		taxLevelE=taxLevelE_;
 		reqLevels=reqLevels_;
 		include=include_;
 		promote=promote_;
 		taxSet=(taxSet_==null ? new HashSet<Integer>() : taxSet_);
-		regex=regex_;
-		regexPattern=(regex==null ? null : Pattern.compile(regex));
-		containsString=contains_;
-	}
-	
-	/**
-	 * Constructor.
-	 */
-	public TaxFilter(String giTableFile, String taxTreeFile, String accessionFile, int taxLevelE_, int reqLevels_,
-			boolean include_, boolean promote_, HashSet<Integer> taxSet_, String regex_, String contains_){
-		taxLevelE=taxLevelE_;
-		reqLevels=reqLevels_;
-		include=include_;
-		promote=promote_;
-		taxSet=(taxSet_==null ? new HashSet<Integer>() : taxSet_);
-
-		tree=loadTree(taxTreeFile);
-		loadGiTable(giTableFile);
-		loadAccession(accessionFile);
 		regex=regex_;
 		regexPattern=(regex==null ? null : Pattern.compile(regex));
 		containsString=contains_;
@@ -240,7 +218,7 @@ public class TaxFilter {
 	/*----------------        Initialization        ----------------*/
 	/*--------------------------------------------------------------*/
 	
-	void loadAccession(String accessionFile){
+	private static void loadAccession(String accessionFile, TaxTree tree){
 		if(accessionFile!=null){
 			AccessionToTaxid.tree=tree;
 			assert(tree!=null);
@@ -250,17 +228,31 @@ public class TaxFilter {
 		}
 	}
 	
-	static void loadGiTable(String fname){
+	public static void loadGiTable(String fname){
 		if(fname==null){return;}
 		if(PRINT_STUFF){outstream.println("Loading gi table.");}
-		GiToNcbi.initialize(fname);
+		GiToTaxid.initialize(fname);
 	}
 	
-	static TaxTree loadTree(String fname){
+	public static TaxTree loadTree(String fname){
 		if(fname==null){return null;}
 		TaxTree tt=TaxTree.loadTaxTree(fname, PRINT_STUFF ? outstream : null, true, false);
 		assert(tt.nameMap!=null);
 		return tt;
+	}
+	
+	public void addNamesOrNumbers(String names, boolean promote){
+		if(names==null){return;}
+		String[] array=names.split(",");
+		for(String name : array){
+			addNameOrNumber(name, promote);
+		}
+	}
+	
+	public void addNameOrNumber(String s, boolean promote){
+		if(s==null || s.length()<1){return;}
+		if(Tools.isDigit(s.charAt(0))){addNumber(Integer.parseInt(s), promote);}
+		else{addName(s);}
 	}
 	
 	public void addNames(String names){
@@ -279,6 +271,7 @@ public class TaxFilter {
 		List<TaxNode> list=tree.getNodesByNameExtended(name);
 		boolean success=false;
 		assert(list!=null) : "Could not find a node for '"+name+"'";
+		if(list==null){throw new RuntimeException("Could not find a node for '"+name+"'");}
 		for(TaxNode tn : list){
 			success=addNode(tn)|success;
 		}
@@ -312,6 +305,7 @@ public class TaxFilter {
 			assert(tn!=null) : "Could not find a node for '"+taxID+"'";
 			return addNode(tn);
 		}else{
+			maxChildLevelExtended=TaxTree.LIFE_E;
 			return taxSet.add(taxID);
 		}
 	}
@@ -319,6 +313,7 @@ public class TaxFilter {
 	public boolean addNode(TaxNode tn){
 		if(tn==null){return false;}
 		taxSet.add(tn.id);
+		maxChildLevelExtended=Tools.max(maxChildLevelExtended, tn.maxChildLevelExtended, tn.levelExtended);
 		if(printNodesAdded){System.err.println("Added node "+tn);}//123
 		while(tn.id!=tn.pid && tn.levelExtended<taxLevelE){
 			tn=tree.getNode(tn.pid);
@@ -372,9 +367,13 @@ public class TaxFilter {
 		TaxNode tn=tree.getNode(id);
 //		assert(tn!=null || !REQUIRE_PRESENT) : "Could not find node number "+id;
 		
-		if(REQUIRE_PRESENT && tn==null){
-//			assert(false) : ("ERROR: Could not find node for "+id);
-			KillSwitch.kill("ERROR: Could not find node for "+id);
+		if(tn==null){
+			if(REQUIRE_PRESENT){ 
+				KillSwitch.kill("ERROR: Could not find node for "+id);
+			}else if(WARN_ABSENT_NODE){
+				System.err.println("Warning: Could not find node for "+id);
+				WARN_ABSENT_NODE=false;
+			}
 		}
 		
 		return passesFilter(tn);
@@ -398,6 +397,40 @@ public class TaxFilter {
 		}
 //		assert(false) : levels+", "+reqLevels+", "+tn0+", "+tree.getAncestors(tn0.pid);
 		return include==found && (levels&reqLevels)==reqLevels;
+	}
+	
+	public boolean passesFilterFast(final int id){
+		assert(reqLevels==0);
+		if(taxSet==null || taxSet.isEmpty()){return true;}
+		TaxNode tn=tree.getNode(id);
+		
+		if(tn==null){
+			if(REQUIRE_PRESENT){ 
+				KillSwitch.kill("ERROR: Could not find node for "+id);
+			}else if(WARN_ABSENT_NODE){
+				System.err.println("Warning: Could not find node for "+id);
+				WARN_ABSENT_NODE=false;
+			}
+		}
+		
+		return passesFilterFast(tn);
+	}
+	
+	boolean passesFilterFast(final TaxNode tn0){
+		TaxNode tn=tn0;
+		if(taxSet==null || taxSet.isEmpty()){return true;}
+		if(tn==null){
+			assert(!REQUIRE_PRESENT) : "Null TaxNode.";
+			return !include;
+		}
+		boolean found=taxSet.contains(tn.id);
+		if(!promote){return include==found;}
+		
+		while(!found && tn.maxChildLevelExtended<=maxChildLevelExtended && tn.id!=tn.pid){
+			tn=tree.getNode(tn.pid);
+			found=found||taxSet.contains(tn.id);
+		}
+		return include==found;
 	}
 	
 	boolean matchesRegex(String s){
@@ -435,9 +468,9 @@ public class TaxFilter {
 		taxSet=new HashSet<Integer>();
 	}
 	
-	public void setInclude(boolean b){
-		include=b;
-	}
+//	public void setInclude(boolean b){
+//		include=b;
+//	}
 	
 	public void setLevel(final int newLevel, boolean promote){
 		final int newLevelE=TaxTree.levelToExtended(newLevel);
@@ -464,7 +497,7 @@ public class TaxFilter {
 	public boolean include(){return include;}
 	public void setTree(TaxTree tree_){tree=tree_;}
 	public TaxTree tree(){return tree;}
-	public void setContainsString(String s){containsString=s;}
+	public void setContainsString(String s){containsString=(s==null ? null : s.toLowerCase());}
 	public String containsString(){return containsString;}
 	@Override
 	public String toString(){return ""+taxSet;}
@@ -485,8 +518,9 @@ public class TaxFilter {
 	
 	/** Set of numeric NCBI TaxIDs */
 	private HashSet<Integer> taxSet;
-
-	private boolean include;
+	
+	private int maxChildLevelExtended=TaxTree.LIFE_E;
+	private final boolean include;
 	private boolean promote;
 	
 	private String regex;
@@ -504,6 +538,7 @@ public class TaxFilter {
 	static boolean PRINT_STUFF=true;
 	
 	public static boolean REQUIRE_PRESENT=true;
+	public static boolean WARN_ABSENT_NODE=true;
 	public static boolean printNodesAdded=true;
 
 }

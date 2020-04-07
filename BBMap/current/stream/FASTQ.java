@@ -915,7 +915,11 @@ public class FASTQ {
 	public static boolean DELETE_OLD_NAME=false;
 	public static byte ASCII_OFFSET=33;
 	public static byte ASCII_OFFSET_OUT=33;
+	
+	/** Autodetect interleaving based on read names */
 	public static boolean TEST_INTERLEAVED=true;
+	
+	/** Override autodetection and treat input as interleaved */
 	public static boolean FORCE_INTERLEAVED=false;
 	public static boolean DETECT_QUALITY=true;
 	public static boolean DETECT_QUALITY_OUT=true;

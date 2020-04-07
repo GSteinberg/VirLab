@@ -32,7 +32,6 @@ import stream.SamReadStreamer;
 import structures.ListNum;
 import var2.CallVariants;
 import var2.ScafMap;
-import var2.Var;
 import var2.VarFilter;
 import var2.VarMap;
 import var2.VcfLoader;
@@ -121,7 +120,6 @@ public class CalcTrueQuality {
 				ByteFile2.verbose=verbose;
 				stream.FastaReadInputStream.verbose=verbose;
 				ConcurrentGenericReadInputStream.verbose=verbose;
-//				align2.FastaReadInputStream2.verbose=verbose;
 				stream.FastqReadInputStream.verbose=verbose;
 				ReadWrite.verbose=verbose;
 			}else if(a.equals("reads") || a.equals("maxreads")){
@@ -196,7 +194,6 @@ public class CalcTrueQuality {
 		}
 		
 		assert(FastaReadInputStream.settingsOK());
-//		if(maxReads!=-1){ReadWrite.USE_GUNZIP=ReadWrite.USE_UNPIGZ=false;}
 		
 		if(in==null){throw new RuntimeException("Error - at least one input file is required.");}
 		
@@ -239,9 +236,9 @@ public class CalcTrueQuality {
 			for(int i=1; i<in.length; i++){
 				inString=inString+","+in[i];
 			}
-			CallVariants cv=new CallVariants(new String[] {inString, "ref="+ref, "realign="+realign});
-			cv.ploidy=ploidy;
-			cv.prefilter=prefilter;
+			CallVariants cv=new CallVariants(new String[] {inString, "ref="+ref, "realign="+realign, "ploidy="+ploidy, "prefilter="+prefilter});
+//			cv.ploidy=ploidy;
+//			cv.prefilter=prefilter;
 			cv.varFilter.setFrom(filter);
 			
 			varMap=cv.process(new Timer());
@@ -254,9 +251,9 @@ public class CalcTrueQuality {
 			}
 			assert(scafMap!=null && scafMap.size()>0) : "No scaffold names were loaded.";
 			if(varFile!=null){
-				varMap=VcfLoader.loadVars(varFile, scafMap);
+				varMap=VcfLoader.loadVarFile(varFile, scafMap);
 			}else{
-				varMap=VcfLoader.loadVcf(vcfFile, scafMap, false, false);
+				varMap=VcfLoader.loadVcfFile(vcfFile, scafMap, false, false);
 			}
 		}
 		
@@ -330,9 +327,9 @@ public class CalcTrueQuality {
 		final ConcurrentReadInputStream cris;
 		{
 			FileFormat ff=FileFormat.testInput(fname, FileFormat.SAM, null, true, false);
-			if(useStreamer && (maxReads<0 || maxReads==Long.MAX_VALUE) && Shared.threads()>1 && ff.samOrBam()){
+			if(useStreamer && Shared.threads()>1 && ff.samOrBam()){
 				cris=null;
-				ss=new SamReadStreamer(ff, streamerThreads, false);
+				ss=new SamReadStreamer(ff, streamerThreads, false, maxReads);
 				ss.start();
 			}else{
 				ss=null;
@@ -662,12 +659,7 @@ public class CalcTrueQuality {
 		
 		final int pairnum;
 		if(USE_PAIRNUM){
-			int x=r.pairnum();
-			final Object obj=r.obj;
-			if(obj!=null && obj.getClass()==SamLine.class){
-				x=((SamLine)obj).pairnum();
-			}
-			pairnum=x;
+			pairnum=r.samline==null ? r.pairnum() : r.samline.pairnum();
 		}else{
 			pairnum=0;
 		}
@@ -1028,35 +1020,35 @@ public class CalcTrueQuality {
 			}
 		}
 		
-		private void fixVars(Read r, SamLine sl){
-
-			final byte[] match=r.match;
-			final byte[] bases=r.bases;
-			
-			final boolean rcomp=(r.strand()==Shared.MINUS);
-			if(rcomp){r.reverseComplement();}
-			
-			int rpos=sl.pos-1-SamLine.countLeadingClip(sl.cigar, true, true);
-			int scafnum=scafMap.getNumber(sl.rnameS());
-
-			for(int qpos=0, mpos=0; mpos<match.length; mpos++){
-				final byte m=match[mpos];
-				final byte b=bases[qpos];
-				
-				if(m=='S' && scafnum>=0){
-					Var v=new Var(scafnum, rpos, rpos+1, b, Var.SUB);
-					varsTotalT++;
-					if(varMap.containsKey(v)){
-						varsFoundT++;
-						match[mpos]='V';
-					}
-				}
-				
-				if(m!='D'){qpos++;}
-				if(m!='I'){rpos++;}
-			}
-			if(rcomp){r.reverseComplement();}
-		}
+//		private void fixVars(Read r, SamLine sl){
+//
+//			final byte[] match=r.match;
+//			final byte[] bases=r.bases;
+//			
+//			final boolean rcomp=(r.strand()==Shared.MINUS);
+//			if(rcomp){r.reverseComplement();}
+//			
+//			int rpos=sl.pos-1-SamLine.countLeadingClip(sl.cigar, true, true);
+//			int scafnum=scafMap.getNumber(sl.rnameS());
+//
+//			for(int qpos=0, mpos=0; mpos<match.length; mpos++){
+//				final byte m=match[mpos];
+//				final byte b=bases[qpos];
+//				
+//				if(m=='S' && scafnum>=0){
+//					Var v=new Var(scafnum, rpos, rpos+1, b, Var.SUB);
+//					varsTotalT++;
+//					if(varMap.containsKey(v)){
+//						varsFoundT++;
+//						match[mpos]='V';
+//					}
+//				}
+//				
+//				if(m!='D'){qpos++;}
+//				if(m!='I'){rpos++;}
+//			}
+//			if(rcomp){r.reverseComplement();}
+//		}
 		
 		private void processLocal(Read r){
 			
@@ -1064,17 +1056,14 @@ public class CalcTrueQuality {
 			
 			if(r==null){return;}
 			final int pairnum;
-			final SamLine sl;
-			if(r.obj!=null && r.obj.getClass()==SamLine.class){
-				sl=(SamLine)r.obj;
+			final SamLine sl=r.samline;
+			if(sl!=null){
 				assert(sl.strand()==r.strand());
-			}else{
-				sl=null;
 			}
 			if(!USE_PAIRNUM){
 				pairnum=0;
 			}else if(sl!=null){
-				pairnum=((SamLine)r.obj).pairnum();
+				pairnum=sl.pairnum();
 			}else{
 				pairnum=r.pairnum();
 			}
@@ -1086,7 +1075,7 @@ public class CalcTrueQuality {
 			if(verbose){outstream.println("A");}
 			final byte[] quals=r.quality, bases=r.bases;
 			if(quals==null || bases==null || r.match==null){return;}
-			final boolean needsFixing=(varMap!=null && Read.containsSubs(r.match));
+			final boolean needsFixing=(varMap!=null && Read.containsVars(r.match));
 			
 			if(r.shortmatch()){
 				r.toLongMatchString(false);
@@ -1098,7 +1087,7 @@ public class CalcTrueQuality {
 //				return;
 //			}
 			
-			if(needsFixing){fixVars(r, sl);}
+			if(needsFixing){CallVariants.fixVars(r, sl, varMap, scafMap);}
 			
 			if(r.strand()==Shared.MINUS){
 //				r.reverseComplement();
@@ -1124,7 +1113,7 @@ public class CalcTrueQuality {
 				
 				if(verbose){outstream.print("D");}
 				final int q0=(qpos>0 ? Tools.mid(QMAX, quals[qpos-1], 0) : QEND);
-				assert(quals!=null && qpos<quals.length) : r.obj+"\n"+new String(match)+"\n"+(quals==null ? "null" : ""+quals.length)+", "+qpos+", "+match.length+", "+mpos;
+				assert(quals!=null && qpos<quals.length) : sl+"\n"+new String(match)+"\n"+(quals==null ? "null" : ""+quals.length)+", "+qpos+", "+match.length+", "+mpos;
 				final int q1=quals[qpos];
 				final int q2=(qpos<last ? Tools.mid(QMAX, quals[qpos+1], 0) : QEND);
 				
@@ -1220,7 +1209,7 @@ public class CalcTrueQuality {
 //						matrixT.qGoodMatrix[pairnum][q1]+=incr;
 //						matrixT.pGoodMatrix[pairnum][pos]+=incr;
 					}else if(m=='S' || m=='I'){
-						
+					
 //						if(!skip){
 							if(incrQ102) matrixT.q102BadMatrix[pairnum][q1][q0][q2]+=2;
 							if(incrQap) matrixT.qapBadMatrix[pairnum][q1][aq][pos]+=2;
@@ -1253,11 +1242,15 @@ public class CalcTrueQuality {
 //						matrixT.pBadMatrix[pairnum][pos]+=2;
 					}else if(m=='V'){
 						match[mpos]='S';
+					}else if(m=='i'){
+						match[mpos]='I';
+					}else if(m=='d'){
+						match[mpos]='D';
 					}else{
 						throw new RuntimeException("Bad symbol m='"+((char)m)+"'\n"+new String(match)+"\n"+new String(bases)+"\n");
 					}
 				}
-				if(m!='D'){qpos++;}
+				if(m!='D' && m!='d'){qpos++;}
 			}
 			
 		}
@@ -1275,6 +1268,20 @@ public class CalcTrueQuality {
 		
 	}
 	
+	/** 
+	 * Good Bad Matrix.
+	 * Tracks counts of calls being correct or incorrect under the specified conditions.
+	 * For example, q12GoodMatrix[0][10][15] tracks the number of times correct calls were observed,
+	 * for Q10 bases followed by q15 bases, in read 1 (0 for first dimension).
+	 * <br><br>
+	 * q = quality<br>
+	 * p = position<br>
+	 * a = average quality<br>
+	 * 1 = this position (other positions are relative to this position)
+	 * @author Brian Bushnell
+	 * @date Jan 13, 2014
+	 *
+	 */
 	class GBMatrixSet{
 		
 		GBMatrixSet(int pass_){

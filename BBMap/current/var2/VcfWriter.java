@@ -6,7 +6,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 
 import fileIO.ByteStreamWriter;
 import fileIO.FileFormat;
-import prok.GffLine;
+import gff.GffLine;
 import shared.Shared;
 import shared.Tools;
 import structures.ByteBuilder;
@@ -91,7 +91,7 @@ public class VcfWriter {
 	}
 
 	public void writeVarFile(final FileFormat ff){
-		assert(ff.var());
+		assert(ff.var()) : "Incorrect file extension: "+ff;
 		writeFile(ff, VARMODE);
 	}
 

@@ -276,17 +276,13 @@ public class ReadStats {
 	}
 	
 	private void addToQualityHistogram2(final Read r){
-		int pairnum=r.pairnum();
+		final int pairnum=r.samline==null ? r.pairnum() : r.samline.pairnum();
 		if(r==null || r.quality==null || r.quality.length<1){return;}
 		byte[] quals=r.quality, bases=r.bases;
 		final Object obj=r.obj;
-		if(obj!=null){
-			if(obj.getClass()==SamLine.class){
-				pairnum=((SamLine)obj).pairnum();
-			}else if(obj.getClass()==TrimRead.class){
-				quals=(pairnum==0 ? ((TrimRead)obj).qual1 : ((TrimRead)obj).qual2);
-				bases=(pairnum==0 ? ((TrimRead)obj).bases1 : ((TrimRead)obj).bases2);
-			}
+		if(obj!=null && obj.getClass()==TrimRead.class){
+			quals=(pairnum==0 ? ((TrimRead)obj).qual1 : ((TrimRead)obj).qual2);
+			bases=(pairnum==0 ? ((TrimRead)obj).bases1 : ((TrimRead)obj).bases2);
 		}
 		if(pairnum==1){read2Count++;}
 		addToQualityHistogram(quals, pairnum);
@@ -347,11 +343,11 @@ public class ReadStats {
 		if(r.shortmatch()){match=Read.toLongMatchString(match);}
 
 		final boolean plus=(r.strand()==0);
-		int rpos=0;
+		int bpos=0;
 		byte lastm='A';
 		for(int mpos=0; mpos<match.length/* && rpos<limit*/; mpos++){
-			byte b=bases[rpos];
-			byte q=qual[rpos];
+			byte b=bases[bpos];
+			byte q=qual[bpos];
 			byte m=match[plus ? mpos : match.length-mpos-1];
 			
 			{
@@ -365,11 +361,11 @@ public class ReadStats {
 					//do nothing
 				}else if(m=='C'){
 					//do nothing
-				}else if(m=='V'){
+				}else if(m=='V' || m=='i'){
 					//do nothing
 				}else if(m=='D'){
 					if(lastm!=m){
-						int x=rpos, y=rpos-1;
+						int x=bpos, y=bpos-1;
 						if(x<qual.length){
 							if(AminoAcid.isFullyDefined(bases[x])){
 								qualDel[qual[x]]++;
@@ -381,13 +377,15 @@ public class ReadStats {
 							}
 						}
 					}
-					rpos--;
+					bpos--;
+				}else if(m=='d'){
+					bpos--;
 				}else{
 					assert(!Tools.isDigit(m)) : ((char)m);
 				}
 			}
 
-			rpos++;
+			bpos++;
 			lastm=m;
 		}
 		
@@ -481,8 +479,8 @@ public class ReadStats {
 	/** Handles short match, long match, and reads with attached SamLines */
 	private boolean addToIndelHistogram(final Read r, int pairnum){
 		if(r==null || !r.mapped()){return false;}
-		if(r.obj!=null && r.obj.getClass()==SamLine.class){
-			boolean success=addToIndelHistogram((SamLine)r.obj);
+		if(r.samline!=null){
+			boolean success=addToIndelHistogram(r.samline);
 			if(success){return true;}
 		}
 		if(r.match==null/* || r.discarded()*/){return false;}
@@ -543,7 +541,7 @@ public class ReadStats {
 			return false;
 		}
 		final String cigar=sl.cigar;
-		final int pairnum=sl.pairnum();
+//		final int pairnum=sl.pairnum();
 		
 		int count=0;
 		for(int cpos=0; cpos<cigar.length(); cpos++){
@@ -579,12 +577,7 @@ public class ReadStats {
 	
 	private void addToMatchHistogram2(final Read r){
 		if(r==null || r.bases==null || r.length()<1 || !r.mapped() || r.match==null/* || r.discarded()*/){return;}
-		int pairnum=r.pairnum();
-		if(r.obj!=null){
-			if(r.obj.getClass()==SamLine.class){
-				pairnum=((SamLine)r.obj).pairnum();
-			}
-		}
+		final int pairnum=r.samline==null ? r.pairnum() : r.samline.pairnum();
 		if(pairnum==1){read2Count++;}
 		final byte[] bases=r.bases;
 		final int limit=Tools.min(bases.length, MAXLEN);
@@ -602,38 +595,42 @@ public class ReadStats {
 			}
 		}else{
 			final boolean plus=(r.strand()==0);
-			int rpos=0;
+			int bpos=0;
 			byte lastm='A';
-			for(int mpos=0; mpos<match.length && rpos<limit; mpos++){
-				byte b=bases[rpos];//bases[plus ? rpos : bases.length-rpos-1];
+			for(int mpos=0; mpos<match.length && bpos<limit; mpos++){
+				byte b=bases[bpos];//bases[plus ? rpos : bases.length-rpos-1];
 				byte m=match[plus ? mpos : match.length-mpos-1];//match[mpos];
 				if(b=='N'){
 					if(m=='D'){
-						if(lastm!=m){ds[rpos]++;}
-						rpos--;
-					}else{ns[rpos]++;}
+						if(lastm!=m){ds[bpos]++;}
+						bpos--;
+					}else{ns[bpos]++;}
 				}else{
 					if(m=='m'){
-						ms[rpos]++;
+						ms[bpos]++;
 					}else if(m=='S'){
-						ss[rpos]++;
+						ss[bpos]++;
 					}else if(m=='I'){
-						is[rpos]++;
+						is[bpos]++;
 					}else if(m=='N' || m=='V'){
 //						assert(false) : "\n"+r+"\n"+new String(Data.getChromosome(r.chrom).getBytes(r.start, r.stop))+"\nrpos="+rpos+", mpos="+mpos;
-						os[rpos]++;
+						os[bpos]++;
 					}else if(m=='C'){
 //						assert(false) : r;
-						cs[rpos]++;
+						cs[bpos]++;
 					}else if(m=='D'){
-						if(lastm!=m){ds[rpos]++;}
-						rpos--;
+						if(lastm!=m){ds[bpos]++;}
+						bpos--;
+					}else if(m=='i'){
+						os[bpos]++;
+					}else if(m=='d'){
+						bpos--;
 					}else{
-						os[rpos]++;
+						os[bpos]++;
 						assert(false) : "For read "+r.numericID+", unknown symbol in match string: ASCII "+m+" = "+(char)m;
 					}
 				}
-				rpos++;
+				bpos++;
 				lastm=m;
 			}
 		}
@@ -736,12 +733,7 @@ public class ReadStats {
 	
 	public void addToBaseHistogram2(final Read r){
 		if(r==null || r.bases==null){return;}
-		int pairnum=r.pairnum();
-		if(r.obj!=null){
-			if(r.obj.getClass()==SamLine.class){
-				pairnum=((SamLine)r.obj).pairnum();
-			}
-		}
+		final int pairnum=r.samline==null ? r.pairnum() : r.samline.pairnum();
 		if(pairnum==1){read2Count++;}
 		final byte[] bases=r.bases;
 		final LongList[] lists=baseHist[pairnum];

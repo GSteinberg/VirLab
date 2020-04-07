@@ -22,15 +22,37 @@ import stream.NullOutputStream;
  */
 public class PreParser {
 	
-	public PreParser(final String[] args, final Class<?> c, boolean printVersion){
-		this(args, System.err, c, printVersion, true, true);
+	/**
+	 * Auxiliary constructor.
+	 * @param args Command line arguments
+	 * @param c Class object of the caller
+	 * @param printVersion True if the BBTools version should be printed to the screen
+	 */
+	public PreParser(final String[] args_, final Class<?> c, boolean printVersion){
+		this(args_, System.err, c, printVersion, true, true);
 	}
 	
-	public PreParser(final String[] args, PrintStream defaultPrintStream, final Class<?> c, boolean printVersion){
-		this(args, defaultPrintStream, c, printVersion, true, true);
+	/**
+	 * Auxiliary constructor.
+	 * @param args Command line arguments
+	 * @param defaultPrintStream Print stream that will be used if not overridden
+	 * @param c Class object of the caller
+	 * @param printVersion True if the BBTools version should be printed to the screen
+	 */
+	public PreParser(final String[] args_, PrintStream defaultPrintStream, final Class<?> c, boolean printVersion){
+		this(args_, defaultPrintStream, c, printVersion, true, true);
 	}
 	
-	public PreParser(String[] args0, PrintStream defaultPrintStream, final Class<?> c, boolean printVersion, boolean removeKnown, boolean autoExit){
+	/**
+	 * Primary constructor.
+	 * @param args0 Command line arguments
+	 * @param defaultPrintStream Print stream that will be used if not overridden
+	 * @param c Class object of the caller
+	 * @param printVersion True if the BBTools version should be printed to the screen
+	 * @param removeKnown Remove parameters from args that are parsed here
+	 * @param autoExit Exit if there is a version or help flag
+	 */
+	public PreParser(final String[] args0, PrintStream defaultPrintStream, final Class<?> c, boolean printVersion, boolean removeKnown, boolean autoExit){
 		original=args0;
 		if(Shared.COMMAND_LINE==null){Shared.COMMAND_LINE=(original==null ? null : original.clone());}
 		if(Shared.mainClass==null){Shared.mainClass=c;}
@@ -68,6 +90,7 @@ public class PreParser {
 				
 				final String[] split=s.split("=");
 				assert(split.length<3) : "To many '=' signs: "+s;
+				assert(split!=null && split.length>0) : "Please do not put spaces around = symbols.\nSyntax is 'arg=value' with no spaces.";
 				final String a=split[0].toLowerCase();
 				String b=split.length>1 ? split[1] : null;
 				if(b==null){
@@ -82,6 +105,8 @@ public class PreParser {
 					remove=removeKnown;
 				}else if(a.equals("json")){
 					json=Tools.parseBoolean(b);
+				}else if(a.equals("silent")){
+					silent=Tools.parseBoolean(b);
 				}else if(a.equals("printexecuting")){
 					printExecuting=Tools.parseBoolean(b);
 					remove=true;

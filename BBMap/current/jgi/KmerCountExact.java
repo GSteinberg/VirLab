@@ -317,9 +317,9 @@ public class KmerCountExact {
 		double actualDepth=Tools.observedToActualCoverage(averageCount);
 		double readDepth=(actualDepth*tables.basesIn)/(tables.kmersIn);
 		
-		outstream.println("Average Kmer Count:         \t"+String.format("%."+decimals+"f", averageCount));
-		outstream.println("Estimated Kmer Depth:       \t"+String.format("%."+decimals+"f", actualDepth));
-		outstream.println("Estimated Read Depth:       \t"+String.format("%."+decimals+"f", readDepth));
+		outstream.println("Average Kmer Count:         \t"+String.format(Locale.ROOT, "%."+decimals+"f", averageCount));
+		outstream.println("Estimated Kmer Depth:       \t"+String.format(Locale.ROOT, "%."+decimals+"f", actualDepth));
+		outstream.println("Estimated Read Depth:       \t"+String.format(Locale.ROOT, "%."+decimals+"f", readDepth));
 		outstream.println();
 		
 		outstream.println("Load Time:                  \t"+t);

@@ -3,7 +3,7 @@
 usage(){
 echo "
 Written by Brian Bushnell
-Last modified February 7, 2019
+Last modified May 30, 2019
 
 Description:  Calls variants from sam or bam input.
 In default mode, all input files are combined and treated as a single sample.
@@ -28,8 +28,10 @@ vcf=<file>      Output variant list in vcf format.
 outgff=<file>   Output variant list in gff format.
 ref=<file>      Reference fasta.  Required to display ref alleles.
                 Variant calling wil be more accurate with the reference.
+vcfin=<file>    Force calls at these locations, even if allele count is 0.
 shist=<file>    (scorehist) Output for variant score histogram.
 zhist=<file>    (zygosityhist) Output for zygosity histogram.
+qhist=<file>    (qualityhist) Output for variant base quality histogram.
 overwrite=f     (ow) Set to false to force the program to abort rather than
                 overwrite an existing file.
 extended=t      Print additional variant statistics columns.
@@ -38,15 +40,18 @@ multisample=f   (multi) Set to true if there are multiple sam/bam files,
                 and each should be tracked as an individual sample.
 vcf0=           Optional comma-delimited list of per-sample outputs.
                 Only used in multisample mode.
-bgzip=f         Use bgzip for gzip compression.
+bgzip=t         Use bgzip for gzip compression.
+samstreamer=t   (ss) Load reads multithreaded to increase speed.
+                Disable to reduce the number of threads used.  The number of
+                streamer threads can be set with e.g. 'ss=4'; default is 6.
+streamermf=8    (ssmf) Allow multiple sam files to be read simultaneously.
+                Set ssmf=X to specify the maximum number or ssmf=f
+                to disable.
 
 Processing Parameters:
 prefilter=f     Use a Bloom filter to exclude variants seen fewer than
                 minreads times.  Doubles the runtime but greatly reduces
                 memory usage.  The results are identical.
-samstreamer=t   (ss) Load reads multithreaded to increase speed.
-                Disable to reduce the number of threads used.  The number of
-                streamer threads can be set with e.g. 'ss=4'; default is 6.
 coverage=t      (cc) Calculate coverage, to better call variants.
 ploidy=1        Set the organism's ploidy.
 rarity=1.0      Penalize the quality of variants with allele fraction 
@@ -65,14 +70,21 @@ useedist=t      Include read-end distance in score calculation.
 homopolymer=t   Penalize scores of substitutions matching adjacent bases.
 nscan=t         Consider the distance of a variant from contig ends when 
                 calculating strand bias.
-32bit=f         Set to true to allow coverage tracking over depth 65535.
-strandedcov=f   Tracks per-strand ref coverage to print the DP4 field.
-                Requires more memory when enabled.
 callsub=t       Call substitutions.
 calldel=t       Call deletions.
 callins=t       Call insertions.
 calljunct=f     Call junctions (in development).
 nopassdot=f     Use . as genotype for variations failing the filter.
+
+Coverage Parameters (these mainly affect speed and memory use):
+32bit=f         Set to true to allow coverage tracking over depth 65535,
+                which increases memory use.  Variant calls are impacted
+                where coverage exceeds the maximum.
+atomic=auto     Increases multithreaded speed; forces 32bit to true.
+                Defaults to true if there are more than 8 threads.
+strandedcov=f   (stranded) Tracks per-strand ref coverage to print the MCOV
+                and DP4 fields.  Requires more memory when enabled.  Strand
+                of variant reads is tracked regardless of this flag.
 
 Trimming parameters:
 border=5        Trim at least this many bases on both ends of reads.
@@ -161,8 +173,6 @@ CP="$DIR""current/"
 
 z="-Xmx4g"
 z2="-Xms4g"
-EA="-ea"
-EOOM=""
 set=0
 
 if [ -z "$1" ] || [[ $1 == -h ]] || [[ $1 == --help ]]; then
@@ -172,6 +182,7 @@ fi
 
 calcXmx () {
 	source "$DIR""/calcmem.sh"
+	setEnvironment
 	parseXmx "$@"
 	if [[ $set == 1 ]]; then
 		return
@@ -183,30 +194,6 @@ calcXmx () {
 calcXmx "$@"
 
 callvariants() {
-	if [[ $SHIFTER_RUNTIME == 1 ]]; then
-		#Ignore NERSC_HOST
-		shifter=1
-	elif [[ $NERSC_HOST == genepool ]]; then
-		module unload oracle-jdk
-		module load oracle-jdk/1.8_144_64bit
-		module load samtools/1.4
-		module load pigz
-	elif [[ $NERSC_HOST == denovo ]]; then
-		module unload java
-		module load java/1.8.0_144
-		module load PrgEnv-gnu/7.1
-		module load samtools/1.4
-		module load pigz
-	elif [[ $NERSC_HOST == cori ]]; then
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/jgi
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/usg
-		module unload java
-		module load java/1.8.0_144
-		module unload PrgEnv-intel
-		module load PrgEnv-gnu/7.1
-		module load samtools/1.4
-		module load pigz
-	fi
 	local CMD="java $EA $EOOM $z $z2 -cp $CP var2.CallVariants $@"
 	echo $CMD >&2
 	eval $CMD

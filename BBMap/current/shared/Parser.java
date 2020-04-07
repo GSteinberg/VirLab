@@ -28,6 +28,7 @@ import stream.SamLine;
 import stream.SamStreamer;
 import structures.IntList;
 import tax.TaxTree;
+import var2.CallVariants;
 
 /**
  * @author Brian Bushnell
@@ -408,10 +409,14 @@ public class Parser {
 	}
 	
 	public boolean parseMapping(String arg, String a, String b){
-		if(a.equals("idfilter") || a.equals("identityfilter")){
-			idFilter=Float.parseFloat(b);
-			if(idFilter>1f){idFilter/=100;}
-			assert(idFilter<=1f) : "idfilter should be between 0 and 1.";
+		if(a.equals("idfilter") || a.equals("identityfilter") || a.equals("minidfilter") || a.equals("minidentityfilter") || a.equals("minid")){
+			minIdFilter=Float.parseFloat(b);
+			if(minIdFilter>1f){minIdFilter/=100;}
+			assert(minIdFilter<=1f) : "idfilter should be between 0 and 1.";
+		}else if(a.equals("maxidfilter") || a.equals("maxidentityfilter") || a.equals("maxid")){
+			maxIdFilter=Float.parseFloat(b);
+			if(maxIdFilter>1f){maxIdFilter/=100;}
+			assert(maxIdFilter<=1f) : "idfilter should be between 0 and 1.";
 		}else if(a.equals("subfilter")){
 			subfilter=Integer.parseInt(b);
 		}else if(a.equals("clipfilter")){
@@ -527,7 +532,10 @@ public class Parser {
 			else if("crash".equalsIgnoreCase(b) || "fail".equalsIgnoreCase(b)){Read.JUNK_MODE=Read.CRASH_JUNK;}
 			else if("fix".equalsIgnoreCase(b)){Read.JUNK_MODE=Read.FIX_JUNK;}
 			else if("flag".equalsIgnoreCase(b) || "discard".equalsIgnoreCase(b)){Read.JUNK_MODE=Read.FLAG_JUNK;}
+			else if("iupacton".equalsIgnoreCase(b)){Read.JUNK_MODE=Read.FIX_JUNK_AND_IUPAC;}
 			else{assert(false) : "Bad junk mode: "+arg;}
+		}else if(a.equals("undefinedton") || a.equals("iupacton") || a.equals("itn")){
+			Read.IUPAC_TO_N=Tools.parseBoolean(b);
 		}else if(a.equals("ignorejunk")){
 			boolean x=Tools.parseBoolean(b);
 			if(x){Read.JUNK_MODE=Read.IGNORE_JUNK;}
@@ -546,6 +554,8 @@ public class Parser {
 			else if(Read.JUNK_MODE==Read.CRASH_JUNK){Read.JUNK_MODE=Read.IGNORE_JUNK;}
 		}else if(a.equals("skipvalidation")){
 			Read.SKIP_SLOW_VALIDATION=Tools.parseBoolean(b);
+		}else if(a.equals("validate")){
+			Read.SKIP_SLOW_VALIDATION=!Tools.parseBoolean(b);
 		}else if(a.equals("validatebranchless")){
 //			Read.VALIDATE_BRANCHLESS=Tools.parseBoolean(b);
 		}else if(a.equals("bf1")){
@@ -621,7 +631,11 @@ public class Parser {
 		}else if(a.equals("recalpairnum") || a.equals("recalibratepairnum")){
 			CalcTrueQuality.USE_PAIRNUM=Tools.parseBoolean(b);
 		}else if(a.equals("taxpath")){
-			TaxTree.TAX_PATH=b.replaceAll("\\\\", "/");
+			if("auto".equalsIgnoreCase(b)){
+				TaxTree.TAX_PATH=TaxTree.defaultTaxPath;
+			}else{
+				TaxTree.TAX_PATH=b.replaceAll("\\\\", "/");
+			}
 		}else if(a.equals("parallelsort")){
 			boolean x=Tools.parseBoolean(b);
 			Shared.setParallelSort(x);
@@ -651,6 +665,8 @@ public class Parser {
 			var2.Var.CALL_JUNCTION=Tools.parseBoolean(b);
 		}else if(a.equals("callnocall") || a.equals("callnocalls")){
 			var2.Var.CALL_NOCALL=Tools.parseBoolean(b);
+		}else if(a.equals("kmg") || a.equals("outputkmg")){
+			Shared.OUTPUT_KMG=Tools.parseBoolean(b);
 		}
 		
 		else if(a.equals("tmpdir")){
@@ -667,6 +683,10 @@ public class Parser {
 		
 		else if(a.equals("2passresize") || a.equals("twopassresize")){
 			AbstractKmerTable.TWO_PASS_RESIZE=Tools.parseBoolean(b);
+		}
+		
+		else if(a.equalsIgnoreCase("forceJavaParseDouble")){
+			Tools.FORCE_JAVA_PARSE_DOUBLE=Tools.parseBoolean(b);
 		}
 		
 		else{
@@ -816,6 +836,10 @@ public class Parser {
 			ReadStats.MAXLEN=ReadStats.MAXINSERTLEN=ReadStats.MAXLENGTHLEN=Tools.parseIntKMG(b);
 		}
 		
+		else if(a.equals("fixindels") || a.equals("ignorevcfindels")){
+			CallVariants.fixIndels=Tools.parseBoolean(b);
+		}
+		
 		else{
 			return false;
 		}
@@ -838,9 +862,26 @@ public class Parser {
 		}else if(a.equals("usegzip") || a.equals("gzip")){
 			ReadWrite.USE_GZIP=Tools.parseBoolean(b);
 		}else if(a.equals("usebgzip") || a.equals("bgzip")){
-			ReadWrite.USE_BGZIP=Tools.parseBoolean(b);
+			
+			if(b!=null && Tools.isDigit(b.charAt(0))){
+				int zt=Integer.parseInt(b);
+				if(zt<1){ReadWrite.USE_BGZIP=false;}
+				else{
+					ReadWrite.USE_BGZIP=true;
+					ReadWrite.MAX_ZIP_THREADS=zt;
+				}
+			}else{ReadWrite.USE_BGZIP=Tools.parseBoolean(b);}
+			if(ReadWrite.USE_BGZIP){ReadWrite.PREFER_BGZIP=true;}
 		}else if(a.equals("forcepigz")){
 			ReadWrite.FORCE_PIGZ=Tools.parseBoolean(b);
+			if(ReadWrite.FORCE_PIGZ){ReadWrite.USE_PIGZ=true;}
+		}else if(a.equals("forcebgzip")){
+			ReadWrite.FORCE_BGZIP=Tools.parseBoolean(b);
+			if(ReadWrite.FORCE_BGZIP){ReadWrite.USE_BGZIP=true;}
+		}else if(a.equals("preferbgzip")){
+			ReadWrite.PREFER_BGZIP=Tools.parseBoolean(b);
+		}else if(a.equals("zipthreads")){
+			ReadWrite.MAX_ZIP_THREADS=Integer.parseInt(b);
 		}else if(a.equals("usepigz") || a.equals("pigz")){
 			if(b!=null && Tools.isDigit(b.charAt(0))){
 				int zt=Integer.parseInt(b);
@@ -848,7 +889,6 @@ public class Parser {
 				else{
 					ReadWrite.USE_PIGZ=true;
 					ReadWrite.MAX_ZIP_THREADS=zt;
-					
 				}
 			}else{ReadWrite.USE_PIGZ=Tools.parseBoolean(b);}
 		}else if(a.equals("zipthreaddivisor") || a.equals("ztd")){
@@ -863,6 +903,10 @@ public class Parser {
 			ReadWrite.USE_GUNZIP=Tools.parseBoolean(b);
 		}else if(a.equals("useunpigz") || a.equals("unpigz")){
 			ReadWrite.USE_UNPIGZ=Tools.parseBoolean(b);
+		}else if(a.equals("useunbgzip") || a.equals("unbgzip")){
+			ReadWrite.USE_UNBGZIP=ReadWrite.PREFER_UNBGZIP=Tools.parseBoolean(b);
+		}else if(a.equals("preferunbgzip")){
+			ReadWrite.PREFER_UNBGZIP=Tools.parseBoolean(b);
 		}else if(a.equals("usebzip2") || a.equals("bzip2")){
 			ReadWrite.USE_BZIP2=Tools.parseBoolean(b);
 		}else if(a.equals("usepbzip2") || a.equals("pbzip2")){
@@ -879,6 +923,10 @@ public class Parser {
 		if(a.equals("samversion") || a.equals("samv") || a.equals("sam")){
 			assert(b!=null) : "The sam flag requires a version number, e.g. 'sam=1.4'";
 			SamLine.VERSION=Float.parseFloat(b);
+		}else if(a.equals("sambamba")){
+			Data.USE_SAMBAMBA=Tools.parseBoolean(b);
+		}else if(a.equals("samtools")){
+			Data.USE_SAMTOOLS=Tools.parseBoolean(b);
 		}else if(a.equals("streamerthreads")){
 			SamStreamer.DEFAULT_THREADS=Integer.parseInt(b);
 		}else if(a.equals("prefermd") || a.equals("prefermdtag")){
@@ -1202,7 +1250,8 @@ public class Parser {
 	public boolean untrim=false;
 	public boolean tossJunk=false;
 
-	public float idFilter=-1;
+	public float minIdFilter=-1;
+	public float maxIdFilter=999999999;
 	public int subfilter=-1;
 	public int clipfilter=-1;
 	public int delfilter=-1;
@@ -1224,10 +1273,14 @@ public class Parser {
 	
 	public HashSet<String> barcodes=null;
 	
+	/** Permission to overwrite existing files */
 	public boolean overwrite=false;
+	
+	/** Permission to append to existing files */
 	public boolean append=false;
 	public boolean testsize=false;
 	
+	/** Whether input file interleaving was explicitly set */
 	public boolean setInterleaved=false;
 	
 	public String in1=null;

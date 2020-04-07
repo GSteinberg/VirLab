@@ -65,6 +65,8 @@ public class SamStreamerWrapper {
 				forceParse=Tools.parseBoolean(b);
 			}else if(a.equals("ref")){
 				ref=b;
+			}else if(a.equals("reads") || a.equals("maxreads")){
+				maxReads=Long.parseLong(b);
 			}else if(a.equals("samversion") || a.equals("samv") || a.equals("sam")){
 				Parser.parseSam(arg, a, b);
 				fixCigar=true;
@@ -116,7 +118,7 @@ public class SamStreamerWrapper {
 		}
 		
 		boolean useSharedHeader=(ffout1!=null && ffout1.samOrBam());
-		final SamReadStreamer ss=new SamReadStreamer(ffin1, ordered ? 1 : SamStreamer.DEFAULT_THREADS, useSharedHeader);
+		final SamReadStreamer ss=new SamReadStreamer(ffin1, ordered ? 1 : SamStreamer.DEFAULT_THREADS, useSharedHeader, maxReads);
 		ss.start();
 
 		final ConcurrentReadOutputStream ros;
@@ -136,7 +138,7 @@ public class SamStreamerWrapper {
 				final int len=r.length();
 				readsProcessed++;
 				basesProcessed+=len;
-				SamLine sl=(SamLine) r.obj;
+				final SamLine sl=r.samline;
 				boolean keep=filter==null || filter.passesFilter(sl);
 				if(keep){
 					if(sl.cigar!=null){

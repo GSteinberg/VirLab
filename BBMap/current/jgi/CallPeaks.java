@@ -355,11 +355,11 @@ public class CallPeaks {
 				bsw.println("#genome_size_in_peaks\t"+genomeSize);
 				bsw.println("#genome_size\t"+genomeSize2);
 				if(mainPeak.gc>0){
-					bsw.println("#main_peak_gc\t"+String.format("%.3f", Tools.mid(0, 1, mainPeak.gc*gcmult/mainPeak.volume)));
+					bsw.println("#main_peak_gc\t"+String.format(Locale.ROOT, "%.3f", Tools.mid(0, 1, mainPeak.gc*gcmult/mainPeak.volume)));
 				}
 				if(gcHist!=null){
-					bsw.println("#gc_content_in_peaks\t"+String.format("%.3f", Tools.mid(0, 1, gcContent)));
-					bsw.println("#gc_content\t"+String.format("%.3f", Tools.mid(0, 1, gcContent2)));
+					bsw.println("#gc_content_in_peaks\t"+String.format(Locale.ROOT, "%.3f", Tools.mid(0, 1, gcContent)));
+					bsw.println("#gc_content\t"+String.format(Locale.ROOT, "%.3f", Tools.mid(0, 1, gcContent2)));
 				}
 				if(ploidy>1 || true){bsw.println("#haploid_genome_size\t"+haploidSize);}
 				bsw.println("#fold_coverage\t"+center0);

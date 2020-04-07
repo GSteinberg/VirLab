@@ -1,12 +1,16 @@
 package server;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URLConnection;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map.Entry;
@@ -155,6 +159,82 @@ public class ServerTools {
 		}
 		
 		return new StringNum(result, responseCode);
+	}
+	
+	
+	/** Send a message to a remote URL, and return the response.
+	 * Set message to null if there is no message. */
+	public static StringNum sendAndReceiveFTP(byte[] message, String address){
+    	address=PercentEncoding.commonSymbolToCode(address);
+		URL url=null;
+		InputStream is=null;
+		URLConnection connection=null;
+		OutputStream os=null;
+		try {
+			url=new URL(address);
+			connection=url.openConnection();
+			connection.setDoOutput(true);
+			connection.setConnectTimeout(40000); //For testing
+			os=connection.getOutputStream();
+		} catch (IOException e1) {
+//			System.err.println("A:\t"+address+" -> "+url+" -> "+connection+" -> "+os);
+			// TODO Auto-generated catch block
+			if(!suppressErrors){e1.printStackTrace();}
+		}
+		
+		if(os!=null){
+			try {
+				//TODO: It may be useful to set a timeout here.
+				if(message!=null){os.write(message);}
+			} catch (IOException e) {
+//				System.err.println("B:\t"+connection+" -> "+os);
+				// TODO Auto-generated catch block
+				if(!suppressErrors){e.printStackTrace();}
+			}
+			try {
+				os.close();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+
+		String result=null;
+//		int responseCode=1;
+		if(connection!=null){
+			IOException noInputStream=null;
+			try {
+				is=connection.getInputStream();
+			} catch (IOException e) {
+				noInputStream=e;
+			}
+			
+//			try {
+				//responseCode=connection.getResponseCode();
+//				if(!suppressErrors && (responseCode<200 || responseCode>299)){
+//					System.err.println("Error: Server returned response code "+responseCode);
+//				}
+//			} 
+//			catch (IOException e) {
+//				if(!suppressErrors) {
+//					e.printStackTrace();
+//				}
+//			}
+			
+			if(is!=null){
+				result=readStream(is);
+				try {
+//					System.err.println("C:\t"+connection+" -> "+os+" -> "+is+" -> "+(result!=null));
+					is.close();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}else if(noInputStream!=null && !suppressErrors){
+				noInputStream.printStackTrace();
+			}
+		}
+		
+		return new StringNum(result, 400);
 	}
 
 	/** Read the body of an incoming HTTP session */
@@ -329,6 +409,41 @@ public class ServerTools {
 		}
 	
 		return false;
+	}
+	
+	public static ArrayList<String> listDirectory(String baseAddress, int retries){
+//		System.err.println("listDirectory '"+baseAddress+"'");
+		while(baseAddress.endsWith("/")){baseAddress=baseAddress.substring(0, baseAddress.length()-1);}
+		String baseAddress2=baseAddress.substring(0, baseAddress.lastIndexOf('/')+1);
+		String address=baseAddress+";type=d";
+		ArrayList<String> list=new ArrayList<String>();
+		boolean success=false;
+		for(int i=-1; !success && i<retries; i++) {
+			try {
+				//			System.err.println("URL '"+address+"'");
+				URL url=new URL(address);
+				URLConnection connection=url.openConnection();
+				InputStream is=connection.getInputStream();
+				BufferedReader br=new BufferedReader(new InputStreamReader(is));
+
+				String line=null;
+				while((line=br.readLine())!=null) {
+					list.add(baseAddress2+line);
+				}
+
+				is.close();
+				success=true;
+			} catch (IOException e) {
+				e.printStackTrace();
+				if(i<retries-1){
+					System.err.println("** Retrying **");
+					list.clear();
+				}else{
+					System.err.println("*** Gave up ***");
+				}
+			}
+		}
+		return list;
 	}
 	
 	/** Don't print caught exceptions */

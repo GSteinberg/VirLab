@@ -44,9 +44,9 @@ public class SuperLongList {
 		}
 		{
 			final int listSize=list.size;
-			final long[] array=list.array;
+			final long[] listArray=list.array;
 			for(int i=0; i<listSize; i++){
-				long value=array[i];
+				long value=listArray[i];
 				ca[(int)Tools.min(value, max)]++;
 			}
 		}
@@ -260,13 +260,14 @@ public class SuperLongList {
 	/*----------------           toString           ----------------*/
 	/*--------------------------------------------------------------*/
 	
+	@Override
 	public String toString(){
 		ByteBuilder bb=new ByteBuilder();
 		bb.append('[');
 		String comma="";
 		for(int i=0; i<array.length; i++){
-			long count=array[i];
-			for(long j=0; j<count; j++){
+			long value=array[i];
+			for(long j=0; j<value; j++){
 				bb.append(comma).append(i);
 				comma=", ";
 			}

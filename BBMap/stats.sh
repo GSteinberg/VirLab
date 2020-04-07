@@ -3,7 +3,7 @@
 usage(){
 echo "
 Written by Brian Bushnell
-Last modified December 19, 2018
+Last modified July 25, 2019
 
 Description:  Generates basic assembly statistics such as scaffold count, 
 N50, L50, GC content, gap percent, etc.  For multiple files, please use
@@ -14,6 +14,7 @@ Usage:        stats.sh in=<file>
 
 Parameters:
 in=file         Specify the input fasta file, or stdin.
+out=stdout      Destination of primary output; may be directed to a file.
 gc=file         Writes ACGTN content per scaffold to a file.
 gchist=file     Filename to output scaffold gc content histogram.
 shist=file      Filename to output cumulative scaffold length histogram.
@@ -85,8 +86,6 @@ popd > /dev/null
 CP="$DIR""current/"
 
 z="-Xmx120m"
-EA="-ea"
-EOOM=""
 set=0
 
 if [ -z "$1" ] || [[ $1 == -h ]] || [[ $1 == --help ]]; then
@@ -96,30 +95,12 @@ fi
 
 calcXmx () {
 	source "$DIR""/calcmem.sh"
+	setEnvironment
 	parseXmx "$@"
 }
 calcXmx "$@"
 
 stats() {
-	if [[ $SHIFTER_RUNTIME == 1 ]]; then
-		#Ignore NERSC_HOST
-		shifter=1
-	elif [[ $NERSC_HOST == genepool ]]; then
-		module unload oracle-jdk
-		module load oracle-jdk/1.8_144_64bit
-		module load pigz
-	elif [[ $NERSC_HOST == denovo ]]; then
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	elif [[ $NERSC_HOST == cori ]]; then
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/jgi
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/usg
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	fi
-	
 	local CMD="java $EA $EOOM $z -cp $CP jgi.AssemblyStats2 $@"
 #	echo $CMD >&2
 	eval $CMD

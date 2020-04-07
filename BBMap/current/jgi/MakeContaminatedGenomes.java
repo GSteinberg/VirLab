@@ -73,7 +73,6 @@ public class MakeContaminatedGenomes {
 				ByteFile2.verbose=verbose;
 				stream.FastaReadInputStream.verbose=verbose;
 				ConcurrentGenericReadInputStream.verbose=verbose;
-//				align2.FastaReadInputStream2.verbose=verbose;
 				stream.FastqReadInputStream.verbose=verbose;
 				ReadWrite.verbose=verbose;
 			}else if(a.equals("chimeras") || a.equals("count")){
@@ -133,9 +132,7 @@ public class MakeContaminatedGenomes {
 	void process(Timer t){
 		final String[] in=TextFile.toStringLines(fffofn);
 //		final long sizes[]=calcSizes(in);
-		final Random randy;
-		if(seed<0){randy=new Random();}
-		else{randy=new Random(seed);}
+		final Random randy=Shared.threadLocalRandom(seed);
 		
 		final StringBuilder sb=new StringBuilder();
 		for(int cid=0; cid<chimeras; cid++){

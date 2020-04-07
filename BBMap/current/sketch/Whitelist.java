@@ -12,14 +12,14 @@ public class Whitelist {
 	
 	public static void apply(Sketch s){
 		assert(exists());
-		LongList list=new LongList(s.array.length);
-		for(long key : s.array){
+		LongList list=new LongList(s.keys.length);
+		for(long key : s.keys){
 			if(contains(key)){
 				list.add(key);
 			}
 		}
-		if(list.size()!=s.array.length){
-			s.array=list.toArray();
+		if(list.size()!=s.keys.length){
+			s.keys=list.toArray();
 		}
 	}
 	

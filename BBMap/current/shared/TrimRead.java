@@ -276,7 +276,7 @@ public final class TrimRead implements Serializable {
 		assert(r.sites==null) : "TODO: Handle trimming of reads with SiteScores.";
 		
 		if(r.match!=null){
-			return trimReadWithMatch(r, (SamLine)r.obj, leftTrimAmount, rightTrimAmount, minResultingLength, Integer.MAX_VALUE, trimClip);
+			return trimReadWithMatch(r, r.samline, leftTrimAmount, rightTrimAmount, minResultingLength, Integer.MAX_VALUE, trimClip);
 		}
 		
 		final byte[] bases=r.bases, qual=r.quality;
@@ -579,11 +579,88 @@ public final class TrimRead implements Serializable {
 //		}
 	}
 	
+	/** Special case of 100% match */
+	public static int trimReadWithMatchFast(final Read r, final SamLine sl, final int leftTrimAmount, final int rightTrimAmount, final int minFinalLength){
+		assert(r.match!=null);
+		if(r.bases==null){return 0;}
+		if(leftTrimAmount<1 && rightTrimAmount<1){return 0;}
+		if(leftTrimAmount+rightTrimAmount>=r.length()){return -leftTrimAmount-rightTrimAmount;}
+		
+		final boolean shortmatch=r.shortmatch();
+		final byte[] old=r.match;
+		r.match=null;
+		final int trimmed;
+		if(sl.strand()==Shared.MINUS){
+			trimmed=trimByAmount(r, rightTrimAmount, leftTrimAmount, minFinalLength, false);
+		}else{
+			trimmed=trimByAmount(r, leftTrimAmount, rightTrimAmount, minFinalLength, false);
+		}
+		if(trimmed<1){
+			r.match=old;
+			return 0;
+		}
+		
+		ByteBuilder bb=new ByteBuilder();
+		final int len=r.length();
+		if(shortmatch){
+			bb.append((byte)'m');
+			if(len>1){bb.append(len);}
+		}else{
+			for(int i=0; i<len; i++){bb.append((byte)'m');}
+		}
+		r.match=bb.toBytes();
+		bb.clear();
+		
+		if(sl!=null){
+			sl.pos+=leftTrimAmount;
+			if(sl.cigar!=null){
+				bb.append(len);
+				bb.append(SamLine.VERSION>1.3 ? '=' : 'm');
+				sl.cigar=bb.toString();
+			}
+			sl.seq=r.bases;
+			sl.qual=r.quality;
+			if(trimmed>0 && sl.optional!=null && sl.optional.size()>0){
+				ArrayList<String> list=new ArrayList<String>(2);
+				for(int i=0; i<sl.optional.size(); i++){
+					String s=sl.optional.get(i);
+					if(s.startsWith("PG:") || s.startsWith("RG:") || s.startsWith("X") || s.startsWith("Y") || s.startsWith("Z")){list.add(s);} //Only keep safe flags.
+				}
+				sl.optional.clear();
+				sl.optional.addAll(list);
+			}
+		}
+		return trimmed;
+	}
 
-	
+	//TODO: This is slow
 	public static int trimReadWithMatch(final Read r, final SamLine sl, int leftTrimAmount, int rightTrimAmount, int minFinalLength, int scafLen,
 			boolean trimClip){
-		if(r.match==null || r.bases==null){return 0;}
+		if(r.bases==null || (leftTrimAmount<1 && rightTrimAmount<1)){return 0;}
+		if(!r.containsNonM()){
+			return trimReadWithMatchFast(r, sl, leftTrimAmount, rightTrimAmount, minFinalLength);
+		}
+		
+//		if(r.match==null){
+//			assert(sl.cigar==null);
+//			int trimmed=trimByAmount(r, leftTrimAmount, rightTrimAmount, minFinalLength, false);
+//			if(sl!=null){
+//				assert(sl.cigar==null);
+//				int start=sl.pos-1;
+//				int stop=start+sl.seq.length;
+//				sl.seq=r.bases;
+//				sl.qual=r.quality;
+//				if(trimmed>0 && sl.optional!=null && sl.optional.size()>0){
+//					ArrayList<String> list=new ArrayList<String>(2);
+//					for(int i=0; i<sl.optional.size(); i++){
+//						String s=sl.optional.get(i);
+//						if(s.startsWith("PG:") || s.startsWith("RG:") || s.startsWith("X") || s.startsWith("Y") || s.startsWith("Z")){list.add(s);} //Only keep safe flags.
+//					}
+//					sl.optional.clear();
+//					sl.optional.addAll(list);
+//				}
+//			}
+//		}
 		
 		if(trimClip){
 			r.toLongMatchString(false);
@@ -632,6 +709,10 @@ public final class TrimRead implements Serializable {
 					rpos++;
 				}else if(m=='I' || m=='C'){
 					cpos++;
+				}else if(m=='d'){
+					rpos++;
+				}else if(m=='i'){
+					cpos++;
 				}else{
 					assert(false) : "Unknown symbol "+(char)m;
 				}
@@ -657,10 +738,11 @@ public final class TrimRead implements Serializable {
 			boolean keep=rightTrimAmount<1;
 			for(int mpos=0, cpos=0; mpos<mlen; mpos++){
 				final byte m=match[mpos];
-				if(m=='m' || m=='S' || m=='V' || m=='N'){
+				if(m=='m' || m=='S' || m=='V' || m=='N' || m=='I' || m=='C'){
 					cpos++;
 				}else if(m=='D'){
-				}else if(m=='I' || m=='C'){
+				}else if(m=='d'){
+				}else if(m=='i'){
 					cpos++;
 				}else{
 					assert(false) : "Unknown symbol "+(char)m;
@@ -671,7 +753,7 @@ public final class TrimRead implements Serializable {
 				}else if(cpos>=rightTrimAmount){
 					byte next=(mpos<mlen-1 ? match[mpos+1] : (byte)'m');
 //					if(m=='m' || m=='S' ||  m=='V' ||  m=='N' || next=='m' || next=='S' || next=='V' || next=='N'){
-					if(next!='I' && next!='D'){
+					if(next!='I' && next!='D' && next!='i' && next!='d'){
 						keep=true;
 						rightTrim=cpos;
 					}

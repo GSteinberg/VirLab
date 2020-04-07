@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Random;
 
+import shared.Shared;
 import stream.Read;
 
 public final class ListNum<K extends Serializable> implements Serializable, Iterable<K> {
@@ -55,7 +56,7 @@ public final class ListNum<K extends Serializable> implements Serializable, Iter
 	public static synchronized void setDeterministicRandom(boolean b){
 		GEN_RANDOM_NUMBERS=b;
 		if(b){
-			randy=new Random(seed);
+			randy=Shared.threadLocalRandom(seed);
 			seed++;
 		}
 	}

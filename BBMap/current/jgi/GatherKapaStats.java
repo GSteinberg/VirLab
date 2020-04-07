@@ -539,6 +539,7 @@ public class GatherKapaStats {
 			}
 		}
 		
+		@Override
 		public String toString(){
 			StringBuilder sb=new StringBuilder();
 			sb.append("name\t"+name).append('\n');
@@ -611,6 +612,7 @@ public class GatherKapaStats {
 			tagName=tagName_;
 		}
 		
+		@Override
 		public String toString(){
 			return wellName+"\t"+tagName+"\t"+reads;
 		}

@@ -1,0 +1,35 @@
+Command line: spades.py	-o	/mnt/c/VirLab/SPAdes-3.13.0/current_code	-s	/mnt/c/VirLab/SPAdes-3.13.0/test_reads_1.fastq	
+
+System information:
+  SPAdes version: 3.13.0
+  Python version: 2.7.15
+  OS: Linux-4.4.0-18362-Microsoft-x86_64-with-Ubuntu-18.04-bionic
+
+Output dir: /mnt/c/VirLab/SPAdes-3.13.0/current_code
+Mode: read error correction and assembling
+Debug mode is turned OFF
+
+Dataset parameters:
+  Multi-cell mode (you should set '--sc' flag if input data was obtained with MDA (single-cell) technology or --meta flag if processing metagenomic dataset)
+  Reads:
+    Library number: 1, library type: single
+      left reads: not specified
+      right reads: not specified
+      interlaced reads: not specified
+      single reads: ['/mnt/c/VirLab/SPAdes-3.13.0/test_reads_1.fastq']
+      merged reads: not specified
+Read error correction parameters:
+  Iterations: 1
+  PHRED offset will be auto-detected
+  Corrected reads will be compressed
+Assembly parameters:
+  k: automatic selection based on read length
+  Repeat resolution is enabled
+  Mismatch careful mode is turned OFF
+  MismatchCorrector will be SKIPPED
+  Coverage cutoff is turned OFF
+Other parameters:
+  Dir for temp files: /mnt/c/VirLab/SPAdes-3.13.0/current_code/tmp
+  Threads: 16
+  Memory limit (in Gb): 15
+

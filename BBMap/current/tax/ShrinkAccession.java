@@ -63,6 +63,10 @@ public class ShrinkAccession {
 				ByteFile1.verbose=verbose;
 				ByteFile2.verbose=verbose;
 				ReadWrite.verbose=verbose;
+			}else if(a.equals("gi")){
+				KEEP_GI_NUMBERS=Tools.parseBoolean(b);
+			}else if(a.equals("outgi") || a.equals("giout") || a.equals("gi")){
+				giOut=b;
 			}else if(parser.in1==null && i==0 && !arg.contains("=") && (arg.toLowerCase().startsWith("stdin") || new File(arg).exists())){
 				parser.in1=arg;
 			}else if(parser.out1==null && i==1 && !arg.contains("=")){
@@ -80,35 +84,36 @@ public class ShrinkAccession {
 			overwrite=ReadStats.overwrite=parser.overwrite;
 			append=ReadStats.append=parser.append;
 			
-			in1=parser.in1;
+			in=parser.in1;
 
-			out1=parser.out1;
+			out=parser.out1;
 		}
 		
 		assert(FastaReadInputStream.settingsOK());
 		
-		if(in1==null){throw new RuntimeException("Error - at least one input file is required.");}
+		if(in==null){throw new RuntimeException("Error - at least one input file is required.");}
 		if(!ByteFile.FORCE_MODE_BF1 && !ByteFile.FORCE_MODE_BF2){
 			ByteFile.FORCE_MODE_BF2=false;
 			ByteFile.FORCE_MODE_BF1=true;
 		}
 
-		if(out1!=null && out1.equalsIgnoreCase("null")){out1=null;}
+		if(out!=null && out.equalsIgnoreCase("null")){out=null;}
 		
-		if(!Tools.testOutputFiles(overwrite, append, false, out1)){
-			outstream.println((out1==null)+", "+out1);
-			throw new RuntimeException("\n\noverwrite="+overwrite+"; Can't write to output files "+out1+"\n");
+		if(!Tools.testOutputFiles(overwrite, append, false, out)){
+			outstream.println((out==null)+", "+out);
+			throw new RuntimeException("\n\noverwrite="+overwrite+"; Can't write to output files "+out+"\n");
 		}
 
-		ffout1=FileFormat.testOutput(out1, FileFormat.TXT, null, true, overwrite, append, false);
-		ffin1=FileFormat.testInput(in1, FileFormat.TXT, null, true, true);
+		ffout=FileFormat.testOutput(out, FileFormat.TXT, null, true, overwrite, append, false);
+		ffoutGi=FileFormat.testOutput(giOut, FileFormat.TXT, null, true, overwrite, append, false);
+		ffin=FileFormat.testInput(in, FileFormat.TXT, null, true, true);
 		
 	}
 	
 	void process(Timer t){
 		
-		ByteFile bf=ByteFile.makeByteFile(ffin1);
-		ByteStreamWriter bsw=new ByteStreamWriter(ffout1);
+		ByteFile bf=ByteFile.makeByteFile(ffin);
+		ByteStreamWriter bsw=new ByteStreamWriter(ffout);
 		bsw.start();
 
 		long linesProcessed=0;
@@ -116,7 +121,6 @@ public class ShrinkAccession {
 		long badLines=0;
 		
 		byte[] line=bf.nextLine();
-		boolean valid=false;
 		ByteBuilder bb=new ByteBuilder(10000);
 		while(line!=null){
 			if(Tools.startsWith(line, "accession\t")){
@@ -126,30 +130,43 @@ public class ShrinkAccession {
 				charsProcessed+=line.length+1;
 				linesProcessed++;
 				
-				if(AccessionToTaxid.parseLineToTaxid(line, (byte)'\t')<1){
+				final int tid=AccessionToTaxid.parseLineToTaxid(line, (byte)'\t');
+				if(tid<1){
 					badLines++;
 				}else{
 					int i=0;
-					while(i<line.length){
+					
+					while(i<line.length){//Accession
 						byte b=line[i];
 						bb.append(b);
 						i++;
 						if(b=='\t'){break;}
 					}
-					while(i<line.length){
+					
+					while(i<line.length){//Accession with decimal
 						byte b=line[i];
 //						bb.append(b);
 						i++;
-						if(b=='\t'){
-							bb.append(b);
-							break;
-						}
+						if(b=='\t'){break;}
 					}
-					while(i<line.length){
+					bb.append('\t');
+					
+					while(i<line.length){//Taxid
 						byte b=line[i];
 						bb.append(b);
 						i++;
 						if(b=='\t'){break;}
+					}
+					
+					if(KEEP_GI_NUMBERS){
+						if(line.length>i && Tools.isDigit(line[i])){//GI number or "na"
+							while(i<line.length){
+								byte b=line[i];
+								bb.append(b);
+								i++;
+//								if(b=='\t'){break;}
+							}
+						}
 					}
 					bb.nl();
 				}
@@ -190,18 +207,21 @@ public class ShrinkAccession {
 	
 	/*--------------------------------------------------------------*/
 	
-	private String in1=null;
-	private String out1=null;
+	private String in=null;
+	private String out=null;
+	private String giOut=null;
 	
 	/*--------------------------------------------------------------*/
 	
-	private final FileFormat ffin1;
-	private final FileFormat ffout1;
+	private final FileFormat ffin;
+	private final FileFormat ffout;
+	private final FileFormat ffoutGi;
 	
 	/*--------------------------------------------------------------*/
 	
 	private PrintStream outstream=System.err;
 	public static boolean verbose=false;
+	public static boolean KEEP_GI_NUMBERS=true;
 	public boolean errorState=false;
 	private boolean overwrite=false;
 	private boolean append=false;

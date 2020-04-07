@@ -62,7 +62,9 @@ abstract class Feature implements Comparable<Feature>{
 	public final int strand;
 	public final int scaflen;
 	
+	/** 0-based position of first base of feature **/
 	public int start;
+	/** 0-based position of last base of feature **/
 	public int stop;
 	private int flipped=0;
 	

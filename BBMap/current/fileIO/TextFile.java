@@ -5,7 +5,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 
-import dna.Data;
+import shared.Shared;
 import shared.Timer;
 import shared.Tools;
 
@@ -137,6 +137,7 @@ public class TextFile {
 		return lines;
 	}
 	
+	/** Generate an array of the lines in this TextFile */
 	public final String[] toStringLines(){
 		
 		String s=null;
@@ -234,7 +235,7 @@ public class TextFile {
 //		if(!ready){return null;}
 		
 		if(!open || br==null){
-			if(Data.WINDOWS){System.err.println("Attempting to read from a closed file: "+name);}
+			if(Shared.WINDOWS){System.err.println("Attempting to read from a closed file: "+name);}
 			return null;
 		}
 		try{

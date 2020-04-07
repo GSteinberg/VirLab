@@ -174,7 +174,7 @@ public class RandomGenome {
 	
 	/*--------------------------------------------------------------*/
 
-	Random randy=new Random();
+	Random randy=Shared.threadLocalRandom();
 	
 	private long linesOut=0;
 	private long bytesOut=0;

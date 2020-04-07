@@ -483,20 +483,124 @@ public abstract class MSA {
 		return true;
 	}
 	
+//	public final int score(byte[] match){
+//		boolean digit=false;
+//		for(byte b : match){
+//			if(Tools.isDigit(b)){digit=true;}
+//		}
+//		byte[] shortMatch, longMatch;
+//		if(digit){
+//			shortMatch=match;
+//			longMatch=Read.toLongMatchString(shortMatch);
+//			int ss=scoreShort(shortMatch);
+//			int ls=scoreLong(longMatch);
+//			int ss2=scoreShort(longMatch);
+//			assert(ss==ls) : ss+", "+ls+"\n"+new String(shortMatch)+"\n"+new String(longMatch);
+//			assert(ss==ss2);
+//			return ss;
+//		}else{
+//			longMatch=match;
+//			shortMatch=Read.toShortMatchString(longMatch);
+//			int ss=scoreShort(shortMatch);
+//			int ls=scoreLong(longMatch);
+//			int ss2=scoreShort(longMatch);
+//			assert(ss==ls);
+//			assert(ss==ss2);
+//			return ss;
+//		}
+//	}
 
-	/** Assumes match string is in long format. */
+//	/** Assumes match string is in long format. */
+//	public final int scoreLong(byte[] match){
+//		if(match==null || match.length<1){return 0;}
+//		
+//		byte mode=match[0], prevMode='0';
+//		int current=0, prevStreak=0;
+//		int score=0;
+//		
+//		for(int mpos=0; mpos<match.length; mpos++){
+//			byte c=match[mpos];
+//			
+//			if(mode==c){
+//				current++;
+//			}else{
+//				if(mode=='m'){
+//					score+=calcMatchScore(current);
+////					if(prevMode=='N' || prevMode=='R'){score=score+POINTS_MATCH2()-POINTS_MATCH();} //Don't penalize first match after N
+//				}else if(mode=='S'){
+//					score+=calcSubScore(current);
+//					if(prevMode=='N' || prevMode=='R'){score=score+POINTS_SUB2()-POINTS_SUB();} //Don't penalize first sub after N
+//					else if(prevMode=='m' && prevStreak<2){score=score+POINTS_SUBR()-POINTS_SUB();}
+//				}else if(mode=='D'){
+//					score+=calcDelScore(current, true);
+//				}else if(mode=='I'){
+//					score+=calcInsScore(current);
+//				}else if(mode=='C'){
+//					//do nothing
+//				}else if(mode=='X' || mode=='Y'){
+//					score+=calcInsScore(current);
+//				}else if(mode=='N'){
+//					score+=calcNocallScore(current);
+//				}else if(mode=='R'){
+//					score+=calcNorefScore(current);
+//				}else{
+//					assert(false) : "Unhandled symbol "+mode+"\n"+(char)mode+"\n"+new String(match);
+//				}
+//				if(verbose){System.err.println("mode "+(char)mode+"->"+(char)c+"\tcurrent="+current+"\tscore="+score);}
+//				prevMode=mode;
+//				prevStreak=current;
+//				mode=c;
+//				current=1;
+//			}
+//		}
+//		if(current>0){
+//			assert(mode==match[match.length-1]);
+//			if(mode=='m'){
+//				score+=calcMatchScore(current);
+////				if(prevMode=='N' || prevMode=='R'){score=score+POINTS_MATCH2()-POINTS_MATCH();} //Don't penalize first match after N
+//			}else if(mode=='S'){
+//				score+=calcSubScore(current);
+//				if(prevMode=='N' || prevMode=='R'){score=score+POINTS_SUB2()-POINTS_SUB();} //Don't penalize first sub after N
+//				else if(prevMode=='m' && prevStreak<2){score=score+POINTS_SUBR()-POINTS_SUB();}
+//			}else if(mode=='D'){
+//				score+=calcDelScore(current, true);
+//			}else if(mode=='I'){
+//				score+=calcInsScore(current);
+//			}else if(mode=='C'){
+//				//do nothing
+//			}else if(mode=='X' || mode=='Y'){
+//				score+=calcInsScore(current);
+//			}else if(mode=='N'){
+//				score+=calcNocallScore(current);
+//			}else if(mode=='R'){
+//				score+=calcNorefScore(current);
+//			}else if(mode!=0){
+//				assert(false) : "Unhandled symbol "+mode+"\n"+(char)mode+"\n"+new String(match);
+//			}
+//			if(verbose){System.err.println("mode "+(char)mode+"->end; score="+score);}
+//		}
+//		
+//		return score;
+//	}
+	
+
+	/** Works in short or long format. */
 	public final int score(byte[] match){
 		if(match==null || match.length<1){return 0;}
 		
 		byte mode=match[0], prevMode='0';
 		int current=0, prevStreak=0;
 		int score=0;
+		boolean hasDigit=false;
 		
 		for(int mpos=0; mpos<match.length; mpos++){
 			byte c=match[mpos];
 			
 			if(mode==c){
 				current++;
+			}else if(Tools.isDigit(c)){
+				current=(hasDigit ? current : 0)*10+c-'0';
+				hasDigit=true;
 			}else{
 				if(mode=='m'){
 					score+=calcMatchScore(current);
@@ -525,10 +629,11 @@ public abstract class MSA {
 				prevStreak=current;
 				mode=c;
 				current=1;
+				hasDigit=false;
 			}
 		}
 		if(current>0){
-			assert(mode==match[match.length-1]);
+			assert(hasDigit || mode==match[match.length-1]);
 			if(mode=='m'){
 				score+=calcMatchScore(current);
 //				if(prevMode=='N' || prevMode=='R'){score=score+POINTS_MATCH2()-POINTS_MATCH();} //Don't penalize first match after N
@@ -556,6 +661,7 @@ public abstract class MSA {
 		
 		return score;
 	}
+	
 	
 //	//TODO
 //	public final byte[] softClipBoundsShortmatch(byte[] match, byte[] bases, int minToClip){

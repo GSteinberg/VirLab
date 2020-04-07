@@ -29,6 +29,8 @@ public class FastaReadInputStream extends ReadInputStream {
 		if(TARGET_READ_LEN<1){
 			TARGET_READ_LEN=Integer.MAX_VALUE;
 			SPLIT_READS=false;
+		}else{
+			SPLIT_READS=true;
 		}
 		
 		Timer t=new Timer();
@@ -38,7 +40,7 @@ public class FastaReadInputStream extends ReadInputStream {
 		int i=0;
 		
 		while(r!=null){
-			if(i<a){System.out.println(r.toText(false));}
+			if(i<a){System.out.println("'"+r.toText(false)+"'");}
 			r=fris.next();
 			if(++i>=a){break;}
 		}
@@ -403,12 +405,12 @@ public class FastaReadInputStream extends ReadInputStream {
 	}
 	
 	private void handleNoSequence(int x){
-		if(currentSection>1){return;}
+		if(currentSection>0){return;}//This section is spuriously entered for reads that are a multiple of the target read length when splitting.
 		if(WARN_IF_NO_SEQUENCE){
 			synchronized(getClass()){
 				if(reportedHeader==header){return;}
 				reportedHeader=header;
-				System.err.println("Warning: A fasta header with no sequence was encountered:\n"+header);
+				System.err.println("Warning: A fasta header with no sequence was encountered ("+currentSection+"):\n"+header+"\n");
 				if(WARN_FIRST_TIME_ONLY){WARN_IF_NO_SEQUENCE=false;}
 			}
 		}
@@ -510,6 +512,8 @@ public class FastaReadInputStream extends ReadInputStream {
 	
 	public boolean isOpen(){return open;}
 	
+	/** Validate fasta settings for auto-shredding input.
+	 * This is kind of obsolete legacy code for BBMap. */
 	public static final boolean settingsOK(){
 		if(MIN_READ_LEN>=Integer.MAX_VALUE-1){
 			throw new RuntimeException("Minimum FASTA read length is too long: "+MIN_READ_LEN);

@@ -3,7 +3,7 @@
 usage(){
 echo "
 Written by Brian Bushnell
-Last modified January 28, 2019
+Last modified August 6, 2019
 
 Description:  Creates a mutant version of a genome.
 
@@ -21,6 +21,8 @@ ziplevel=2      (zl) Set to 1 (lowest) through 9 (max) to change compression
 Processing parameters:
 subrate=0       Substitution rate, 0 to 1.     
 indelrate=0     Indel rate, 0 to 1.
+maxindel=1      Max indel length.
+indelspacing=10 Minimum distance between subsequent indels.
 id=1            Target identity, 0 to 1; 1 means 100%.
                 If this is used it will override subrate and indelrate;
                 99% of the mutations will be substitutions, and 1% indels.
@@ -32,6 +34,14 @@ period=-1       If positive, place exactly one mutation every X bases.
 prefix=         Set this flag to rename the new contigs with this prefix
                 and a number.
 amino=f         Treat the input as amino acid sequence.
+ploidy=1        Set the ploidy.  ploidy>1 allows heterozygous mutations.
+                This will create one copy of each input sequence per ploidy.
+hetrate=0.5     If polyploid, fraction of mutations that are heterozygous.
+nohomopolymers=f  If true, prevent indels in homopolymers that lead to
+                ambiguous variant calls.  For example, inserting A between
+                AC or deleting T from TTTT.  This is mainly for grading 
+                purposes.  It does not fully solve the problem, but greatly
+                improves concordance (reducing disagreements by 70%).
 
 Java Parameters:
 -Xmx            This will set Java's memory usage, overriding autodetection.
@@ -61,8 +71,6 @@ CP="$DIR""current/"
 
 z="-Xmx4g"
 z2="-Xms4g"
-EA="-ea"
-EOOM=""
 set=0
 
 if [ -z "$1" ] || [[ $1 == -h ]] || [[ $1 == --help ]]; then
@@ -72,6 +80,7 @@ fi
 
 calcXmx () {
 	source "$DIR""/calcmem.sh"
+	setEnvironment
 	parseXmx "$@"
 	if [[ $set == 1 ]]; then
 		return
@@ -83,24 +92,6 @@ calcXmx () {
 calcXmx "$@"
 
 mutate() {
-	if [[ $SHIFTER_RUNTIME == 1 ]]; then
-		#Ignore NERSC_HOST
-		shifter=1
-	elif [[ $NERSC_HOST == genepool ]]; then
-		module unload oracle-jdk
-		module load oracle-jdk/1.8_144_64bit
-		module load pigz
-	elif [[ $NERSC_HOST == denovo ]]; then
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	elif [[ $NERSC_HOST == cori ]]; then
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/jgi
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/usg
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	fi
 	local CMD="java $EA $EOOM $z $z2 -cp $CP jgi.MutateGenome $@"
 	echo $CMD >&2
 	eval $CMD

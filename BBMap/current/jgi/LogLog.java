@@ -30,6 +30,45 @@ import ukmer.Kmer;
  */
 public class LogLog {
 	
+	/** Create a LogLog with default parameters */
+	public LogLog(){
+		this(1999, 8, 31, -1, 0);
+	}
+	
+	/** Create a LogLog with parsed parameters */
+	public LogLog(Parser p){
+		this(p.loglogbuckets, p.loglogbits, p.loglogk, p.loglogseed, p.loglogMinprob);
+	}
+	
+	/**
+	 * Create a LogLog with specified parameters
+	 * @param buckets_ Number of buckets (counters)
+	 * @param bits_ Bits per buckets
+	 * @param k_ Kmer length
+	 * @param seed Random number generator seed; -1 for a random seed
+	 * @param minProb_ Ignore kmers with under this probability of being correct
+	 */
+	public LogLog(int buckets_, int bits_, int k_, long seed, float minProb_){
+//		hashes=hashes_;
+//		if((buckets_&1)==0){buckets_=(int)Primes.primeAtLeast(buckets_);}
+		buckets=buckets_;
+		assert(Integer.bitCount(buckets)==1) : "Buckets must be a power of 2: "+buckets;
+		bucketMask=buckets-1;
+		bits=bits_;
+		k=Kmer.getKbig(k_);
+		minProb=minProb_;
+		assert(atomic);
+		maxArray=(atomic ? new AtomicIntegerArray(buckets) : null);
+		maxArray2=(atomic ? null : new int[buckets]);
+		steps=(63+bits)/bits;
+		tables=new long[numTables][][];
+		for(int i=0; i<numTables; i++){
+			tables[i]=makeCodes(steps, bits, (seed<0 ? -1 : seed+i));
+		}
+		
+//		assert(false) : "steps="+steps+", "+tables.length+", "+tables[0].length+", "+tables[0][0].length;
+	}
+	
 	public static void main(String[] args){
 		LogLogWrapper llw=new LogLogWrapper(args);
 		
@@ -77,31 +116,6 @@ public class LogLog {
 		}
 		double mean=buckets/sum;
 		return (long)((Math.pow(2, mean)*buckets*SKIPMOD));
-	}
-	
-	public LogLog(Parser p){
-		this(p.loglogbuckets, p.loglogbits, p.loglogk, p.loglogseed, p.loglogMinprob);
-	}
-	
-	public LogLog(int buckets_, int bits_, int k_, long seed, float minProb_){
-//		hashes=hashes_;
-//		if((buckets_&1)==0){buckets_=(int)Primes.primeAtLeast(buckets_);}
-		buckets=buckets_;
-		assert(Integer.bitCount(buckets)==1) : "Buckets must be a power of 2: "+buckets;
-		bucketMask=buckets-1;
-		bits=bits_;
-		k=Kmer.getKbig(k_);
-		minProb=minProb_;
-		assert(atomic);
-		maxArray=(atomic ? new AtomicIntegerArray(buckets) : null);
-		maxArray2=(atomic ? null : new int[buckets]);
-		steps=(63+bits)/bits;
-		tables=new long[numTables][][];
-		for(int i=0; i<numTables; i++){
-			tables[i]=makeCodes(steps, bits, (seed<0 ? -1 : seed+i));
-		}
-		
-//		assert(false) : "steps="+steps+", "+tables.length+", "+tables[0].length+", "+tables[0][0].length;
 	}
 	
 //	public long hashOld(final long value0, final long[][] table){
@@ -271,9 +285,7 @@ public class LogLog {
 	}
 	
 	private static long[][] makeCodes(int length, int bits, long seed){
-		Random randy;
-		if(seed>=0){randy=new Random(seed);}
-		else{randy=new Random();}
+		Random randy=Shared.threadLocalRandom(seed);
 		int modes=1<<bits;
 		long[][] r=new long[length][modes];
 		for(int i=0; i<length; i++){

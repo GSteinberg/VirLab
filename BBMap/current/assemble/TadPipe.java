@@ -367,6 +367,9 @@ public class TadPipe {
 //			assembleArgs.add("quitearly");
 			assembleArgs.add("expand");
 			assembleArgs.add("bisect");
+			assembleArgs.add("shave");
+			assembleArgs.add("rinse");
+			assembleArgs.add("pop");
 			if(deleteTemp){assembleArgs.add("delete");}
 			
 			Collections.reverse(assembleArgs);

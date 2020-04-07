@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 import dna.AminoAcid;
+import gff.GffLine;
 import stream.Read;
 import structures.IntList;
 

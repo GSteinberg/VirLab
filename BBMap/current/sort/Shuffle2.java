@@ -507,7 +507,7 @@ public class Shuffle2 {
 		for(int i=0; i<fnames.size(); i++){
 			String fname=fnames.get(i);
 //			int size=(dumpCount==null ? -1 : dumpCount.get(i));
-			CrisContainer cc=new CrisContainer(fname, null);
+			CrisContainer cc=new CrisContainer(fname, null, false);
 			if(cc.peek()!=null){
 				cclist.add(cc);
 			}
@@ -704,7 +704,7 @@ public class Shuffle2 {
 	/** Max files to merge per pass */
 	private int maxFiles=16;
 	
-	static Random randy=new Random();
+	static Random randy=Shared.threadLocalRandom();
 	
 	/*--------------------------------------------------------------*/
 	/*----------------         Final Fields         ----------------*/

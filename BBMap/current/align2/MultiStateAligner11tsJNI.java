@@ -1,9 +1,9 @@
 package align2;
-import java.io.File;
 import java.util.Arrays;
 
 import dna.AminoAcid;
 import shared.KillSwitch;
+import shared.Shared;
 import shared.Tools;
 import stream.SiteScore;
 
@@ -11,34 +11,9 @@ import stream.SiteScore;
  * Modification of MultiStateAligner9ts to replace fixed affine steps with an array */
 public final class MultiStateAligner11tsJNI extends MSA{
 	
-        static {
-                String name = "bbtoolsjni";
-                try {
-                        System.loadLibrary(name);
-                } catch (UnsatisfiedLinkError e1) {
-			// System.loadLibrary() does not work with MPI.
-			// Need to use System.load() with an explicit full
-			// path to the native library file for the MPI case.
-                        boolean success = false;
-                        String libpath=System.getProperty("java.library.path");
-                        libpath = libpath.replace("-Djava.library.path=","");
-                        String[] libpathEntries = libpath.split(File.pathSeparator);
-                        for(int i = 0; i < libpathEntries.length; i++) {
-                                if(success) break;
-                                String lib = libpathEntries[i]+"/"+System.mapLibraryName(name);
-                                try {
-                                        System.load(lib);
-                                        success = true;
-                                } catch (UnsatisfiedLinkError e2) {
-                                        success = false;
-                                        if((i+1) >= libpathEntries.length) {
-                                                System.err.println("Native library can not be found in java.library.path. ");
-                                                System.exit(1);
-                                        }
-                                }
-                        }
-                }
-        }
+	static {
+		Shared.loadJNI();
+	}
 
 	private native void fillUnlimitedJNI(byte[] read, byte[] ref, int refStartLoc, int refEndLoc, int[] result, long[] iterationsUnlimited, int[] packed, int[] POINTSoff_SUB_ARRAY, int[] POINTSoff_INS_ARRAY, int maxRows, int maxColumns);
 

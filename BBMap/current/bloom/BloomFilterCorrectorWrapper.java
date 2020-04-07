@@ -24,6 +24,7 @@ import stream.ConcurrentReadOutputStream;
 import stream.FASTQ;
 import stream.FastaReadInputStream;
 import stream.Read;
+import stream.SamLine;
 import structures.IntList;
 import structures.ListNum;
 import structures.LongList;
@@ -84,6 +85,7 @@ public class BloomFilterCorrectorWrapper {
 		
 		boolean setBits=false;
 		int k_=31;
+		int ksmall_=-1;
 		int hashes_=3;
 		int bits_=2;
 		int minCount_=0;
@@ -97,7 +99,7 @@ public class BloomFilterCorrectorWrapper {
 		boolean vstrict_=true;
 		boolean ustrict_=false;
 		float highCountFraction_=1.0f;
-		corrector=new BloomFilterCorrector(null, k_);
+		corrector=new BloomFilterCorrector(null, k_, k_);
 		
 		//Parse each argument
 		for(int i=0; i<args.length; i++){
@@ -114,8 +116,11 @@ public class BloomFilterCorrectorWrapper {
 				ordered=Tools.parseBoolean(b);
 			}
 			
-			else if(a.equalsIgnoreCase("k") || a.equalsIgnoreCase("bloomK") || a.equalsIgnoreCase("bloomFilterK")){
+			else if(a.equalsIgnoreCase("k") || a.equalsIgnoreCase("bloomK") || a.equalsIgnoreCase("bloomFilterK") || a.equalsIgnoreCase("kbig")){
 				k_=Integer.parseInt(b);
+				assert(k_>0 && k_<=31) : "K must be between 1 and 31, inclusive.";
+			}else if(a.equalsIgnoreCase("ksmall") || a.equalsIgnoreCase("bloomKsmall") || a.equalsIgnoreCase("bloomFilterKsmall")){
+				ksmall_=Integer.parseInt(b);
 			}else if(a.equalsIgnoreCase("hashes") || a.equalsIgnoreCase("bloomHashes") || a.equalsIgnoreCase("bloomFilterHashes")){
 				hashes_=Integer.parseInt(b);
 			}else if(a.equals("rcomp")){
@@ -204,8 +209,13 @@ public class BloomFilterCorrectorWrapper {
 		while(minCount_>0 && (1L<<bits_)-1<minCount_){bits_*=2;}
 		if(!setBits && ecc_ && bits_<4){bits_=4;}
 		
+		if(ksmall_<=0){ksmall_=k_;}
+		assert(ksmall_<=k_) : k_+", "+ksmall_;
+		
 		k=k_;
+		ksmall=Tools.min(k, ksmall_);
 		corrector.k=k_;
+		corrector.ksmall=ksmall_;
 		bits=bits_;
 		hashes=hashes_;
 		minCount=minCount_;
@@ -247,6 +257,8 @@ public class BloomFilterCorrectorWrapper {
 			parser.loglogMinprob=KmerCount7MTA.minProb;
 			loglogOut=((parser.loglog&parser.loglogOut) ? new LogLog(parser) : null);
 		}
+		
+		SamLine.SET_FROM_OK=!ecc;
 		
 		//Do input file # replacement
 		if(in1!=null && in2==null && in1.indexOf('#')>-1 && !new File(in1).exists()){
@@ -338,11 +350,11 @@ public class BloomFilterCorrectorWrapper {
 		{
 			Timer t=new Timer(outstream, true);
 			if(ref.isEmpty()){
-				filter=new BloomFilter(in1, in2, extra, k, bits, hashes, 1,
+				filter=new BloomFilter(in1, in2, extra, ksmall, k, bits, hashes, 1,
 						rcomp, ecco, merge, memFraction);
 			}else{
 				ref.addAll(extra);
-				filter=new BloomFilter(null, null, ref, k, bits, hashes, 1,
+				filter=new BloomFilter(null, null, ref, ksmall, k, bits, hashes, 1,
 						rcomp, ecco, merge, memFraction);
 			}
 			t.stop("Filter creation: \t\t");
@@ -360,7 +372,7 @@ public class BloomFilterCorrectorWrapper {
 				double usedFraction2=filter.filter.usedFraction(2);
 				double b=filter.filter.estimateUniqueKmersFromUsedFraction(hashes, usedFraction2);
 				outstream.println("Estimated kmers of depth 2+: \t"+(long)b);
-				outstream.println("Used fraction for depth 2+:  \t"+String.format("%.3f%%", usedFraction2*100));
+				outstream.println("Used fraction for depth 2+:  \t"+String.format(Locale.ROOT, "%.3f%%", usedFraction2*100));
 			}
 		}
 	}
@@ -937,8 +949,9 @@ public class BloomFilterCorrectorWrapper {
 	final BloomFilter filter;
 	
 	final BloomFilterCorrector corrector;
-	
+
 	final int k;
+	final int ksmall;
 	final int hashes;
 	final int bits;
 	final boolean rcomp;

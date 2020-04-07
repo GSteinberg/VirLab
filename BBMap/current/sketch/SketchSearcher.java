@@ -13,6 +13,7 @@ import shared.Shared;
 import shared.Tools;
 import structures.AbstractBitSet;
 import structures.Heap;
+import structures.IntHashMap;
 import tax.TaxNode;
 import tax.TaxTree;
 
@@ -115,8 +116,12 @@ public class SketchSearcher extends SketchObject {
 			final AbstractBitSet cbs=(buffer.cbs==null ? a.compareBitSet() : buffer.cbs);
 			for(int i=pid; i<localRefSketches.size(); i+=incr){
 				Sketch b=localRefSketches.get(i);
-				processPair(a, b, buffer, cbs, fakeID, map, params);
+				if(params.passesFilter(b)){
+					processPair(a, b, buffer, cbs, fakeID, map, params);
+					localComparisons++;
+				}
 			}
+			comparisons.getAndAdd(localComparisons);
 		}
 		
 		final AtomicInteger fakeID;
@@ -127,10 +132,12 @@ public class SketchSearcher extends SketchObject {
 		final Sketch a;
 		final DisplayParams params;
 		final ArrayList<Sketch> localRefSketches;
+		long localComparisons=0;
 		
 	}
 	
-	public SketchResults processSketch(Sketch a, CompareBuffer buffer, AtomicInteger fakeID, ConcurrentHashMap<Integer, Comparison> map, DisplayParams params, int maxThreads){
+	public SketchResults processSketch(Sketch a, CompareBuffer buffer, AtomicInteger fakeID, 
+			ConcurrentHashMap<Integer, Comparison> map, DisplayParams params, int maxThreads){
 		if(a.length()<1 || a.length()<params.minHits){return new SketchResults(a);}
 		//		Timer t=new Timer();
 		//		t.start("Began query.");
@@ -144,10 +151,8 @@ public class SketchSearcher extends SketchObject {
 		final SketchResults sr;
 		if(index!=null){
 			sr=index.getSketches(a, params);
-			sr.filterMeta(params);//Just added this...
 		}else{
 			sr=new SketchResults(a, refSketches, null);
-			sr.filterMeta(params);//Maybe not a good place for this due to concurrent modification?
 		}
 		
 		if(verbose2){System.err.println("At processSketch 2");} //123
@@ -159,12 +164,6 @@ public class SketchSearcher extends SketchObject {
 		
 		if(verbose2){System.err.println("At processSketch 2.1");} //123
 		
-		//		t.stop("Got "+hits.size()+" hits.");
-		//		t.start();
-		//		System.err.println("hits: "+hits.size());
-		
-		comparisons.getAndAdd(sr.refSketchList.size());
-		
 		if(verbose2){System.err.println("At processSketch 2.2");} //123
 		
 		if(maxThreads>1 && Shared.threads()>1 && sr.refSketchList.size()>31){
@@ -175,11 +174,14 @@ public class SketchSearcher extends SketchObject {
 		}else{
 			if(verbose2){System.err.println("At processSketch 2.5");} //123
 			assert(buffer.cbs==null);
+			long comp=0;
 			for(Sketch b : sr.refSketchList){
-//				if(verbose2){System.err.println("before: a.compareBitSet()="+a.compareBitSet());}
-				processPair(a, b, buffer, a.compareBitSet(), /*sr.taxHits,*/ fakeID, map, params);
-//				if(verbose2){System.err.println("after: a.compareBitSet()="+a.compareBitSet());}
+				if(params.passesFilter(b)){
+					comp++;
+					processPair(a, b, buffer, a.compareBitSet(), /*sr.taxHits,*/ fakeID, map, params);
+				}
 			}
+			comparisons.getAndAdd(comp);
 			if(verbose2){System.err.println("At processSketch 2.6");} //123
 		}
 		if(verbose2){System.err.println("At processSketch 3");} //123
@@ -239,7 +241,7 @@ public class SketchSearcher extends SketchObject {
 		if(params.needContamCounts()){
 			for(CompareThread ct : alct){
 				if(ct.buffer.cbs==null){
-					assert(AUTOSIZE && index!=null);
+					assert((AUTOSIZE || AUTOSIZE_LINEAR) && index!=null);//Not really what this does
 					break;
 				}
 				a.addToBitSet(ct.buffer.cbs);
@@ -365,49 +367,49 @@ public class SketchSearcher extends SketchObject {
 	public void addRefFiles(String a){
 		if(a.equalsIgnoreCase("nr")){
 			addRefFiles(NR_PATH);
-			if(blacklist!=null){blacklist=Blacklist.nrBlacklist();}
+			if(blacklist==null){blacklist=Blacklist.nrBlacklist();}
 			if(defaultParams.dbName==null){defaultParams.dbName="nr";}
 			if(!setK){k=defaultKAmino; k2=defaultK2Amino;}
 		}else if(a.equalsIgnoreCase("nt")){
 			addRefFiles(NT_PATH);
-			if(blacklist!=null){blacklist=Blacklist.ntBlacklist();}
+			if(blacklist==null){blacklist=Blacklist.ntBlacklist();}
 			if(defaultParams.dbName==null){defaultParams.dbName="nt";}
 			if(!setK){k=defaultK; k2=defaultK2;}
 		}else if(a.equalsIgnoreCase("refseq")){
 			addRefFiles(REFSEQ_PATH);
-			if(blacklist!=null){blacklist=Blacklist.refseqBlacklist();}
+			if(blacklist==null){blacklist=Blacklist.refseqBlacklist();}
 			if(defaultParams.dbName==null){defaultParams.dbName="RefSeq";}
 			if(!setK){k=defaultK; k2=defaultK2;}
 			if(!SET_AUTOSIZE_FACTOR){AUTOSIZE_FACTOR=2.0f;}
 		}else if(a.equalsIgnoreCase("silva")){
 //			TaxTree.SILVA_MODE=Tools.parseBoolean(b);
 			addRefFiles(SILVA_PATH);
-			if(blacklist!=null){blacklist=Blacklist.silvaBlacklist();}
+			if(blacklist==null){blacklist=Blacklist.silvaBlacklist();}
 			if(defaultParams.dbName==null){defaultParams.dbName="Silva";}
 			if(!setK){k=defaultK; k2=defaultK2;}
 		}else if(a.equalsIgnoreCase("img")){
 			addRefFiles(IMG_PATH);
-			if(blacklist!=null){blacklist=Blacklist.imgBlacklist();}
+			if(blacklist==null){blacklist=Blacklist.imgBlacklist();}
 			if(defaultParams.dbName==null){defaultParams.dbName="IMG";}
 			if(!setK){k=defaultK; k2=defaultK2;}
 		}else if(a.equalsIgnoreCase("prokprot") || a.equalsIgnoreCase("protein")){
 			addRefFiles(PROKPROT_PATH);
-			if(blacklist!=null){blacklist=Blacklist.prokProtBlacklist();}
+			if(blacklist==null){blacklist=Blacklist.prokProtBlacklist();}
 			if(defaultParams.dbName==null){defaultParams.dbName="ProkProt";}
 			if(!setK){k=defaultKAmino; k2=defaultK2Amino;}
 			if(!amino && !translate) {
 				translate=true;
 				System.err.println("Setting translate to true because a protein dataset is being used.");
 			}
-			if(!SET_AUTOSIZE_FACTOR){AUTOSIZE_FACTOR=2.0f;}
+			if(!SET_AUTOSIZE_FACTOR){AUTOSIZE_FACTOR=3.0f;}
 		}else if(a.equalsIgnoreCase("mito") || a.equalsIgnoreCase("refseqmito")){
 			addRefFiles(MITO_PATH);
-			if(blacklist!=null){blacklist=Blacklist.mitoBlacklist();}
+			if(blacklist==null){blacklist=Blacklist.mitoBlacklist();}
 			if(defaultParams.dbName==null){defaultParams.dbName="RefSeqMito";}
 			if(!setK){k=defaultK; k2=defaultK2;}
 		}else if(a.equalsIgnoreCase("fungi") || a.equalsIgnoreCase("refseqfungi")){
 			addRefFiles(FUNGI_PATH);
-			if(blacklist!=null){blacklist=Blacklist.fungiBlacklist();}
+			if(blacklist==null){blacklist=Blacklist.fungiBlacklist();}
 			if(defaultParams.dbName==null){defaultParams.dbName="RefSeqFungi";}
 			if(!setK){k=defaultK; k2=defaultK2;}
 		}else{
@@ -441,11 +443,22 @@ public class SketchSearcher extends SketchObject {
 		index.load();
 	}
 	
-	public void loadReferences(int mode_, int minKeyOccuranceCount, float minEntropy) {
+	public void loadReferences(int mode_, DisplayParams params){
+		loadReferences(mode_, params.minKeyOccuranceCount, params.minEntropy, params.minProb, params.minQual);
+	}
+	
+	public void loadReferences(int mode_, int minKeyOccuranceCount, float minEntropy, float minProb, byte minQual) {
 		makeTool(minKeyOccuranceCount, false, false);
-		refSketches=tool.loadSketches_MT(mode_, 1f, -1, minEntropy, refFiles);
+		refSketches=tool.loadSketches_MT(mode_, 1f, -1, minEntropy, minProb, minQual, refFiles);
 		if(mode_==PER_FILE){
 			Collections.sort(refSketches, SketchIdComparator.comparator);
+		}
+		taxIDToSketchIDMap=new IntHashMap(Tools.max(3, (int)(refSketches.size()*1.2f)));
+		for(int i=0; i<refSketches.size(); i++){
+			Sketch sk=refSketches.get(i);
+			if(sk!=null && sk.taxID>0){
+				taxIDToSketchIDMap.set(sk.taxID, i);
+			}
 		}
 //		System.err.println("Sketches: "+refSketches.get(0).name());
 		if(makeIndex){
@@ -466,14 +479,22 @@ public class SketchSearcher extends SketchObject {
 	public int refFileCount(){return refFiles==null ? 0 : refFiles.size();}
 	public int refSketchCount(){return refSketches==null ? 0 : refSketches.size();}
 	
+	public Sketch findReferenceSketch(int taxID){
+		if(taxID<1){return null;}
+		int skid=taxIDToSketchIDMap.get(taxID);
+		return skid<0 ? null : refSketches.get(skid);
+	}
+	
 	/*--------------------------------------------------------------*/
 	
 	public SketchIndex index=null;
 	public boolean autoIndex=true;
 	
 	public SketchTool tool=null;
-	public ArrayList<Sketch> refSketches=new ArrayList<Sketch>();
+	public ArrayList<Sketch> refSketches;
 	LinkedHashSet<String> refFiles=new LinkedHashSet<String>();
+	/** For ref sketch lookups by TaxID */
+	private IntHashMap taxIDToSketchIDMap;
 	public int threads=Shared.threads();
 	boolean verbose;
 	boolean errorState=false;

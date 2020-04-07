@@ -119,7 +119,7 @@ public class SamReadInputStream extends ReadInputStream {
 			SamLine sl1=new SamLine(line);
 			
 			Read r1=sl1.toRead(parseCustom);
-			r1.obj=sl1;
+			r1.samline=sl1;
 			r1.numericID=nextReadID2;
 			list.add(r1);
 			if(interleaved && (sl1.flag&0x1)!=0){

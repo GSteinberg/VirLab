@@ -146,6 +146,11 @@ public class CoverageArray2 extends CoverageArray {
 	}
 
 	@Override
+	public synchronized void incrementRangeSynchronized(int min, int max, int amt) {
+		incrementRange(min, max, amt);
+	}
+
+	@Override
 	public void incrementRange(int min, int max, int amt) {
 		if(min<0){min=0;}
 		if(max>=array.length){//Increase size

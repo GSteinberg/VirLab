@@ -820,9 +820,9 @@ public class BBMerge {
 			Timer t=new Timer(outstream, true);
 			KmerCountAbstract.CANONICAL=true;
 			tadpole=null;
-			bloomFilter=new BloomFilter(in1, in2, extra, kmerLength, bloomBits, bloomHashes, 1,
+			bloomFilter=new BloomFilter(in1, in2, extra, kmerLength, kmerLength, bloomBits, bloomHashes, 1,
 					true, false, false, 0.9f);
-			corrector=new BloomFilterCorrector(bloomFilter, kmerLength);
+			corrector=new BloomFilterCorrector(bloomFilter, kmerLength, kmerLength);
 			t.stop("Filter creation: \t\t");
 			outstream.println(bloomFilter.filter.toShortString());
 		}else{

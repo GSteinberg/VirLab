@@ -109,7 +109,7 @@ public class RandomReadInputStream3 extends ReadInputStream {
 		if(toMake<1){return;}
 		toMake=Tools.min(toMake, BUF_LEN);
 		
-		ArrayList<Read> reads=rr.makeRandomReadsX((int)toMake, minreadlen, maxreadlen,
+		ArrayList<Read> reads=rr.makeRandomReadsX((int)toMake, minreadlen, maxreadlen, -1,
 				maxSnps, maxInss, maxDels, maxSubs, maxNs,
 				snpRate, insRate, delRate, subRate, NRate,
 				minInsertionLen, minDeletionLen, minSubLen, minNLen,

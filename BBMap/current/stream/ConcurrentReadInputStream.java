@@ -10,6 +10,7 @@ import structures.ListNum;
 
 /**
  * Abstract superclass of all ConcurrentReadStreamInterface implementations.
+ * ConcurrentReadInputStreams allow paired reads from twin files to be treated as a single stream.
  * @author Brian Bushnell
  * @date Nov 26, 2014
  *
@@ -22,6 +23,11 @@ public abstract class ConcurrentReadInputStream implements ConcurrentReadStreamI
 	
 	protected ConcurrentReadInputStream(){}
 	
+	/**
+	 * Special method for testing, handles some parsing.
+	 * Used by MultiCros.
+	 * Not really necessary; safe to remove.
+	 */
 	protected static ConcurrentReadInputStream getReadInputStream(long maxReads, boolean keepSamHeader, boolean allowSubprocess, String...args){
 		assert(args.length>0) : Arrays.toString(args);
 		for(int i=0; i<args.length; i++){
@@ -41,50 +47,34 @@ public abstract class ConcurrentReadInputStream implements ConcurrentReadStreamI
 		return getReadInputStream(maxReads, keepSamHeader, ff1, ff2, qf1, qf2);
 	}
 	
+	/** @See primary method */
 	public static ConcurrentReadInputStream getReadInputStream(long maxReads, boolean keepSamHeader, FileFormat ff1, FileFormat ff2){
 		return getReadInputStream(maxReads, keepSamHeader, ff1, ff2, (String)null, (String)null, Shared.USE_MPI, Shared.MPI_KEEP_ALL);
 	}
 	
+	/** @See primary method */
 	public static ConcurrentReadInputStream getReadInputStream(long maxReads, boolean keepSamHeader, FileFormat ff1, FileFormat ff2,
 			final boolean mpi, final boolean keepAll){
 		return getReadInputStream(maxReads, keepSamHeader, ff1, ff2, (String)null, (String)null, mpi, keepAll);
 	}
 	
+	/** @See primary method */
 	public static ConcurrentReadInputStream getReadInputStream(long maxReads, boolean keepSamHeader,
 			FileFormat ff1, FileFormat ff2, String qf1, String qf2){
 		return getReadInputStream(maxReads, keepSamHeader, ff1, ff2, qf1, qf2, Shared.USE_MPI, Shared.MPI_KEEP_ALL);
 	}
 	
-	public static ArrayList<Read> getReads(long maxReads, boolean keepSamHeader,
-			FileFormat ff1, FileFormat ff2, String qf1, String qf2){
-		ConcurrentReadInputStream cris=getReadInputStream(maxReads, keepSamHeader, ff1, ff2, qf1, qf2, Shared.USE_MPI, Shared.MPI_KEEP_ALL);
-		cris.start();
-		return cris.getReads();
-	}
-	
-	public ArrayList<Read> getReads(){
-		
-		ListNum<Read> ln=nextList();
-		ArrayList<Read> reads=(ln!=null ? ln.list : null);
-		
-		ArrayList<Read> out=new ArrayList<Read>();
-		
-		while(ln!=null && reads!=null && reads.size()>0){//ln!=null prevents a compiler potential null access warning
-			out.addAll(reads);
-			returnList(ln.id, ln.list.isEmpty());
-			ln=nextList();
-			reads=(ln!=null ? ln.list : null);
-		}
-		if(ln!=null){
-			returnList(ln.id, ln.list==null || ln.list.isEmpty());
-		}
-		boolean error=ReadWrite.closeStream(this);
-		if(error){
-			System.err.println("Warning - an error was encountered during read input.");
-		}
-		return out;
-	}
-	
+	/**
+	 * @param maxReads Quit producing after this many reads (or pairs)
+	 * @param keepSamHeader If the input is sam, store the header in the static shared header object 
+	 * @param ff1 Read 1 file (required)
+	 * @param ff2 Read 2 file (optional)
+	 * @param qf1 Qual file 1 (optional)
+	 * @param qf2 Qual file 2 (optional)
+	 * @param mpi True if MPI will be used
+	 * @param keepAll In MPI mode, tells this stream to keep all reads instead of just a fraction
+	 * @return
+	 */
 	public static ConcurrentReadInputStream getReadInputStream(long maxReads, boolean keepSamHeader,
 			FileFormat ff1, FileFormat ff2, String qf1, String qf2, final boolean mpi, final boolean keepAll){
 		if(mpi){
@@ -212,6 +202,35 @@ public abstract class ConcurrentReadInputStream implements ConcurrentReadStreamI
 	/*----------------         Outer Methods        ----------------*/
 	/*--------------------------------------------------------------*/
 	
+	public static ArrayList<Read> getReads(long maxReads, boolean keepSamHeader,
+			FileFormat ff1, FileFormat ff2, String qf1, String qf2){
+		ConcurrentReadInputStream cris=getReadInputStream(maxReads, keepSamHeader, ff1, ff2, qf1, qf2, Shared.USE_MPI, Shared.MPI_KEEP_ALL);
+		cris.start();
+		return cris.getReads();
+	}
+	
+	public ArrayList<Read> getReads(){
+		
+		ListNum<Read> ln=nextList();
+		ArrayList<Read> reads=(ln!=null ? ln.list : null);
+		
+		ArrayList<Read> out=new ArrayList<Read>();
+		
+		while(ln!=null && reads!=null && reads.size()>0){//ln!=null prevents a compiler potential null access warning
+			out.addAll(reads);
+			returnList(ln.id, ln.list.isEmpty());
+			ln=nextList();
+			reads=(ln!=null ? ln.list : null);
+		}
+		if(ln!=null){
+			returnList(ln.id, ln.list==null || ln.list.isEmpty());
+		}
+		boolean error=ReadWrite.closeStream(this);
+		if(error){
+			System.err.println("Warning - an error was encountered during read input.");
+		}
+		return out;
+	}
 	
 	@Override
 	public void start(){

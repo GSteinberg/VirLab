@@ -263,13 +263,13 @@ public class ReadStreamByteWriter extends ReadStreamWriter {
 		if(read1){
 			for(final Read r : job.list){
 				if(r!=null){
-					if(r.obj==null){/*bb.append('.').append('\n');*/}
-					else{bb.append(r.obj.toString()).append('\n');}
+					if(r.obj!=null){bb.append(r.obj.toString()).nl();}
+					else if(r.samline!=null){r.samline.toBytes(bb).nl();}
 					readsWritten++;
 					Read r2=r.mate;
 					if(OUTPUT_INTERLEAVED && r2!=null){
-						if(r2.obj==null){/*bb.append('.').append('\n');*/}
-						else{bb.append(r2.obj.toString()).append('\n');}
+						if(r2.obj!=null){bb.append(r2.obj.toString()).nl();}
+						else if(r2.samline!=null){r2.samline.toBytes(bb).nl();}
 						readsWritten++;
 					}
 				}
@@ -283,8 +283,8 @@ public class ReadStreamByteWriter extends ReadStreamWriter {
 				if(r1!=null){
 					final Read r2=r1.mate;
 					if(r2!=null){
-						if(r2.obj==null){/*bb.append('.').append('\n');*/}
-						else{bb.append(r2.obj.toString()).append('\n');}
+						if(r2.obj!=null){bb.append(r2.obj.toString()).nl();}
+						else if(r2.samline!=null){r2.samline.toBytes(bb).nl();}
 						readsWritten++;
 					}else{
 //						bb.append('.').append('\n');
@@ -571,8 +571,8 @@ public class ReadStreamByteWriter extends ReadStreamWriter {
 		for(final Read r : job.list){
 			Read r2=(r==null ? null : r.mate);
 			
-			SamLine sl1=(r==null ? null : (USE_ATTACHED_SAMLINE && r.obj!=null ? (SamLine)r.obj : new SamLine(r, 0)));
-			SamLine sl2=(r2==null ? null : (USE_ATTACHED_SAMLINE && r2.obj!=null ? (SamLine)r2.obj : new SamLine(r2, 1)));
+			SamLine sl1=(r==null ? null : (USE_ATTACHED_SAMLINE && r.samline!=null ? r.samline : new SamLine(r, 0)));
+			SamLine sl2=(r2==null ? null : (USE_ATTACHED_SAMLINE && r2.samline!=null ? r2.samline : new SamLine(r2, 1)));
 
 			if(r!=null){
 				

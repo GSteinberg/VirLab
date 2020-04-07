@@ -3,15 +3,15 @@
 usage(){
 echo "
 Written by Brian Bushnell.
-Last modified May 11, 2016
+Last modified July 29, 2019
 
-Description:  Creates gitable.int1d from gi_taxid_nucl.dmp and/or gi_taxid_prot.dmp.
-gitable.int1d is a much more efficient representation,
-allowing easy translation of gi numbers to ncbi taxids.
-Dump files are at ftp://ftp.ncbi.nih.gov/pub/taxonomy/
+Description:  Creates gitable.int1d from accession files:
+ftp://ftp.ncbi.nih.gov/pub/taxonomy/accession2taxid/*.accession2taxid.gz
+This is for use of gi numbers, which are deprecated by NCBI, and areneither 
+necessary nor recemmended if accession numbers are present.
 See TaxonomyGuide and fetchTaxonomy.sh for more information.
 
-Usage:  gitable.sh gi_taxid_nucl.dmp.gz,gi_taxid_prot.dmp.gz gitable.int1d.gz
+Usage:  gitable.sh shrunk.dead_nucl.accession2taxid.gz,shrunk.dead_prot.accession2taxid.gz,shrunk.dead_wgs.accession2taxid.gz,shrunk.nucl_gb.accession2taxid.gz,shrunk.nucl_wgs.accession2taxid.gz,shrunk.pdb.accession2taxid.gz,shrunk.prot.accession2taxid.gz gitable.int1d.gz
 
 Java Parameters:
 -Xmx            This will set Java's memory usage, overriding autodetection.
@@ -37,12 +37,11 @@ popd > /dev/null
 
 #DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/"
 CP="$DIR""current/"
-NATIVELIBDIR="$DIR""jni/"
+JNI="-Djava.library.path=""$DIR""jni/"
+JNI=""
 
-z="-Xmx12g"
-z2="-Xms12g"
-EA="-ea"
-EOOM=""
+z="-Xmx24g"
+z2="-Xms24g"
 set=0
 
 if [ -z "$1" ] || [[ $1 == -h ]] || [[ $1 == --help ]]; then
@@ -52,11 +51,12 @@ fi
 
 calcXmx () {
 	source "$DIR""/calcmem.sh"
+	setEnvironment
 	parseXmx "$@"
 	if [[ $set == 1 ]]; then
 		return
 	fi
-	freeRam 12000m 84
+	freeRam 24000m 84
 	z="-Xmx${RAM}m"
 	z2="-Xms${RAM}m"
 }
@@ -64,25 +64,7 @@ calcXmx "$@"
 
 
 gitable() {
-	if [[ $SHIFTER_RUNTIME == 1 ]]; then
-		#Ignore NERSC_HOST
-		shifter=1
-	elif [[ $NERSC_HOST == genepool ]]; then
-		module unload oracle-jdk
-		module load oracle-jdk/1.8_144_64bit
-		module load pigz
-	elif [[ $NERSC_HOST == denovo ]]; then
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	elif [[ $NERSC_HOST == cori ]]; then
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/jgi
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/usg
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	fi
-	local CMD="java $EA $EOOM $z $z2 -cp $CP tax.GiToNcbi $@"
+	local CMD="java $EA $EOOM $z $z2 -cp $CP tax.GiToTaxid $@"
 	echo $CMD >&2
 	eval $CMD
 }

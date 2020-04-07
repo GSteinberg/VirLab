@@ -69,6 +69,8 @@ public class FilterSam {
 		ReadWrite.USE_PIGZ=ReadWrite.USE_UNPIGZ=true;
 		ReadWrite.MAX_ZIP_THREADS=Shared.threads();
 		SamLine.SET_FROM_OK=true;
+		Var.CALL_INS=false;
+		Var.CALL_DEL=false;
 		
 		//Create a parser object
 		Parser parser=new Parser();
@@ -88,6 +90,10 @@ public class FilterSam {
 				ordered=Tools.parseBoolean(b);
 			}else if(a.equals("ss") || a.equals("streamer")){
 				useStreamer=Tools.parseBoolean(b);
+			}else if(a.equals("ploidy")){
+				ploidy=Integer.parseInt(b);
+			}else if(a.equals("prefilter")){
+				prefilter=Tools.parseBoolean(b);
 			}else if(a.equals("ref")){
 				ref=b;
 			}else if(a.equals("outbad") || a.equals("outb")){
@@ -96,12 +102,25 @@ public class FilterSam {
 				varFile=b;
 			}else if(a.equals("vcf") || a.equals("vcffile")){
 				vcfFile=b;
-			}else if(a.equals("maxbadsubs") || a.equals("maxbadbars")){
-				maxBadSubs=Integer.parseInt(b);
-			}else if(a.equals("maxbadsubdepth") || a.equals("maxbadvardepth") || a.equals("maxbadsuballeledepth") || a.equals("maxbadvaralleledepth") || a.equals("mbsad")){
-				maxBadSubAlleleDepth=Integer.parseInt(b);
-			}else if(a.equals("minbadsubreaddepth") || a.equals("minbadvarreaddepth") || a.equals("mbsrd")){
-				minBadSubReadDepth=Integer.parseInt(b);
+			}else if(a.equals("maxbadsubs") || a.equals("maxbadvars") || a.equals("mbv")){
+				maxBadVars=Integer.parseInt(b);
+			}else if(a.equals("maxbadsubdepth") || a.equals("maxbadvardepth") || a.equals("maxbadsuballeledepth")
+					|| a.equals("maxbadvaralleledepth") || a.equals("mbsad") || a.equals("mbvad") || a.equals("mbad")){
+				maxBadAlleleDepth=Integer.parseInt(b);
+			}else if(a.equals("maxbadallelefraction") || a.equals("mbaf")){
+				maxBadAlleleFraction=Float.parseFloat(b);
+			}else if(a.equals("minbadsubreaddepth") || a.equals("minbadreaddepth") || a.equals("mbsrd") || a.equals("mbrd")){
+				minBadReadDepth=Integer.parseInt(b);
+			}else if(a.equals("sub") || a.equals("subs")){
+				Var.CALL_SUB=Tools.parseBoolean(b);
+			}else if(a.equals("ins") || a.equals("inss")){
+				Var.CALL_INS=Tools.parseBoolean(b);
+			}else if(a.equals("del") || a.equals("dels")){
+				Var.CALL_DEL=Tools.parseBoolean(b);
+			}else if(a.equals("indel") || a.equals("indels")){
+				Var.CALL_INS=Var.CALL_DEL=Tools.parseBoolean(b);
+			}else if(a.equals("minedist") || a.equals("minenddist") || a.equals("border")){
+				minEDist=Integer.parseInt(b);
 			}else if(a.equals("parse_flag_goes_here")){
 				long fake_variable=Tools.parseKMG(b);
 				//Set a variable here
@@ -129,7 +148,8 @@ public class FilterSam {
 		assert(FastaReadInputStream.settingsOK());
 		
 		//Ensure there is an input file
-		if(in1==null || (vcfFile==null && varFile==null)){throw new RuntimeException("Error - an input file and a VCF file are required.");}
+//		if(in1==null){throw new RuntimeException("Error - an input file and a VCF file are required.");}
+		if(in1==null){throw new RuntimeException("Error - an input file is required.");}
 		
 		//Adjust the number of threads for input file reading
 		if(!ByteFile.FORCE_MODE_BF1 && !ByteFile.FORCE_MODE_BF2 && Shared.threads()>2){
@@ -174,13 +194,33 @@ public class FilterSam {
 		t.start();
 		if(varFile!=null){
 			outstream.print("Loading vars:       ");
-			varMap=VcfLoader.loadVars(varFile, scafMap);
+			varMap=VcfLoader.loadVarFile(varFile, scafMap);
 			t.stop(pad(varMap.size(), 12)+" \t");
 		}else if(vcfFile!=null){t.start();
 			outstream.print("Loading vcf:        ");
-			varMap=VcfLoader.loadVcf(vcfFile, scafMap, true, false);
+			varMap=VcfLoader.loadVcfFile(vcfFile, scafMap, true, false);
 			t.stop(pad(varMap.size(), 12)+" \t");
+		}else{
+			outstream.print("Calling variants:\n");
+			String inString="in="+in1;
+			
+//			private int maxBadAlleleDepth=2;
+//			/** Maximum allele fraction for variants considered unsupported */
+//			private float maxBadAlleleFraction=0.01f;
+			
+			String[] cvargs=new String[] {inString, "ref="+ref, "clearfilters", "minreads="+(maxBadAlleleDepth), 
+					"minallelefraction="+maxBadAlleleFraction, "printexecuting=f"};
+			CallVariants cv=new CallVariants(cvargs);
+			cv.prefilter=prefilter;
+			cv.ploidy=ploidy;
+
+			varMap=cv.process(new Timer());
+			scafMap=cv.scafMap;
+			t.stop(/*pad(varMap.size(), 12)+" \t"*/);
 		}
+		
+		assert(Var.CALL_INS || Var.CALL_DEL || Var.CALL_SUB) : "Must enable at least one of subs, insertions, or deletions.";
+		subsOnly=!Var.CALL_INS && !Var.CALL_DEL;
 	}
 	
 	/*--------------------------------------------------------------*/
@@ -198,9 +238,9 @@ public class FilterSam {
 		final SamReadStreamer ss;
 		//Create a read input stream
 		final ConcurrentReadInputStream cris;
-		if(useStreamer && (maxReads<0 || maxReads==Long.MAX_VALUE)){
+		if(useStreamer){
 			cris=null;
-			ss=new SamReadStreamer(ffin1, streamerThreads, true);
+			ss=new SamReadStreamer(ffin1, streamerThreads, true, maxReads);
 			ss.start();
 			if(verbose){outstream.println("Started streamer");}
 		}else{
@@ -273,18 +313,18 @@ public class FilterSam {
 			final String bbstring=pad(bb, len);
 			
 			final double mappedReadsDiscarded=mappedReadsProcessed-mappedReadsRetained;
-			double avgQGood=(qSumGood/(double)mappedReadsRetained);
-			double avgQBad=(qSumBad/(double)mappedReadsDiscarded);
+			double avgQGood=(bqSumGood/(double)mappedReadsRetained);
+			double avgQBad=(bqSumBad/(double)mappedReadsDiscarded);
 			double avgMapQGood=(mapqSumGood/(double)mappedReadsRetained);
 			double avgMapQBad=(mapqSumBad/(double)mappedReadsDiscarded);
-			double avgSubsGood=(subSumGood/(double)mappedReadsRetained);
-			double avgSubsBad=(subSumBad/(double)mappedReadsDiscarded);
+			double avgVarsGood=(varSumGood/(double)mappedReadsRetained);
+			double avgVarsBad=(varSumBad/(double)mappedReadsDiscarded);
 			final String avgQGoodS=pad(String.format(Locale.ROOT, "%.2f", avgQGood), len);
 			final String avgQBadS=pad(String.format(Locale.ROOT, "%.2f", avgQBad), len);
 			final String avgMapQGoodS=pad(String.format(Locale.ROOT, "%.2f", avgMapQGood), len);
 			final String avgMapQBadS=pad(String.format(Locale.ROOT, "%.2f", avgMapQBad), len);
-			final String avgSubsGoodS=pad(String.format(Locale.ROOT, "%.2f", avgSubsGood), len);
-			final String avgSubsBadS=pad(String.format(Locale.ROOT, "%.2f", avgSubsBad), len);
+			final String avgVarsGoodS=pad(String.format(Locale.ROOT, "%.2f", avgVarsGood), len);
+			final String avgVarsBadS=pad(String.format(Locale.ROOT, "%.2f", avgVarsBad), len);
 			
 			outstream.println("Time:                         \t\t"+t);
 			outstream.println("Reads Processed:    "+rpstring+" \t"+String.format(Locale.ROOT, "%.2fk reads/sec", rpnano*1000000));
@@ -294,13 +334,13 @@ public class FilterSam {
 			outstream.println("Bases Retained:     "+bgstring+" \t"+String.format(Locale.ROOT, "%.2f%%", (bg*100.0/basesProcessed)));
 			outstream.println("Avg. Qual Retained: "+avgQGoodS);
 			outstream.println("Avg. MapQ Retained: "+avgMapQGoodS);
-			outstream.println("Avg. Subs Retained: "+avgSubsGoodS);
+			outstream.println("Avg. Vars Retained: "+avgVarsGoodS);
 			outstream.println();
 			outstream.println("Reads Discarded:    "+rbstring+" \t"+String.format(Locale.ROOT, "%.2f%%", (rb*100.0/readsProcessed)));
 			outstream.println("Bases Discarded:    "+bbstring+" \t"+String.format(Locale.ROOT, "%.2f%%", (bb*100.0/basesProcessed)));
 			outstream.println("Avg. Qual Discarded:"+avgQBadS);
 			outstream.println("Avg. MapQ Discarded:"+avgMapQBadS);
-			outstream.println("Avg. Subs Discarded:"+avgSubsBadS);
+			outstream.println("Avg. Vars Discarded:"+avgVarsBadS);
 		}
 		
 		//Throw an exception of there was an error in a thread
@@ -361,10 +401,14 @@ public class FilterSam {
 			mappedBasesRetained+=pt.mappedBasesRetainedT;
 			readsOut+=pt.readsOutT;
 			basesOut+=pt.basesOutT;
-			qSumGood+=pt.qSumGoodT;
-			qSumBad+=pt.qSumBadT;
-			subSumGood+=pt.subSumGoodT;
-			subSumBad+=pt.subSumBadT;
+			bqSumGood+=pt.qSumGoodT;
+			bqSumBad+=pt.qSumBadT;
+//			adSumGood+=pt.adSumGoodT;
+//			adSumBad+=pt.adSumBadT;
+//			rdSumGood+=pt.rdSumGoodT;
+//			rdSumBad+=pt.rdSumBadT;
+			varSumGood+=pt.varSumGoodT;
+			varSumBad+=pt.varSumBadT;
 			mapqSumGood+=pt.mapqSumGoodT;
 			mapqSumBad+=pt.mapqSumBadT;
 			success&=pt.success;
@@ -558,32 +602,43 @@ public class FilterSam {
 		}
 		
 		private final boolean passesVariantFilter(Read r){
-			if(!r.mapped() || r.bases==null || r.obj==null || r.match==null){return true;}
-			final int subs=(Read.countSubs(r.match));
+			if(!r.mapped() || r.bases==null || r.samline==null || r.match==null){return true;}
+			final int vars=(subsOnly ? Read.countSubs(r.match) : Read.countVars(r.match, Var.CALL_SUB, Var.CALL_INS, Var.CALL_DEL));
 			final int len=r.length();
 			final double q=r.avgQualityByProbabilityDouble(false, r.length());
-			final SamLine sl=(SamLine) r.obj;
+			final SamLine sl=r.samline;
 			mappedReadsProcessedT++;
 			mappedBasesProcessedT+=len;
 			
-			if(subs<=maxBadSubs){
-				subSumGoodT+=subs;
+			if(vars<=maxBadVars){
+				varSumGoodT+=vars;
 				qSumGoodT+=q;
 				mapqSumGoodT+=sl.mapq;
 				mappedReadsRetainedT++;
 				mappedBasesRetainedT+=len;
 				return true;
 			}
-			ArrayList<Var> list=CallVariants.findUniqueSubs(r, sl, varMap, scafMap, maxBadSubAlleleDepth, minBadSubReadDepth);
-			if(list==null || list.size()<=maxBadSubs){
-				subSumGoodT+=subs;
+			final ArrayList<Var> list;
+			if(subsOnly){
+				list=CallVariants.findUniqueSubs(r, sl, varMap, scafMap, maxBadAlleleDepth, maxBadAlleleFraction, minBadReadDepth, minEDist);
+			}else{
+				list=CallVariants.findUniqueVars(r, sl, varMap, scafMap, maxBadAlleleDepth, maxBadAlleleFraction, minBadReadDepth, minEDist);
+			}
+			if(list==null || list.size()<=maxBadVars){
+				varSumGoodT+=vars;
 				qSumGoodT+=q;
 				mapqSumGoodT+=sl.mapq;
 				mappedReadsRetainedT++;
 				mappedBasesRetainedT+=len;
 				return true;
 			}else{
-				subSumBadT+=subs;
+				assert(list.size()>maxBadVars) : list.size()+", "+maxBadVars;
+				for(Var v : list){
+					assert(v!=null) : sl.cigar+"\n"+vars+"\n"+v+"\n"+list;
+					assert((v.type()==Var.SUB && Var.CALL_SUB) || (v.type()==Var.INS && Var.CALL_INS) || (v.type()==Var.DEL && Var.CALL_DEL)) : 
+						list.size()+", "+maxBadVars+"\n"+sl.cigar+"\n"+v+"\n"+list;
+				}
+				varSumBadT+=vars;
 				qSumBadT+=q;
 				mapqSumBadT+=sl.mapq;
 				return false;
@@ -608,8 +663,8 @@ public class FilterSam {
 		protected long basesOutT=0;
 		protected double qSumGoodT=0;
 		protected double qSumBadT=0;
-		protected long subSumGoodT=0;
-		protected long subSumBadT=0;
+		protected long varSumGoodT=0;
+		protected long varSumBadT=0;
 		protected long mapqSumGoodT=0;
 		protected long mapqSumBadT=0;
 		
@@ -653,11 +708,17 @@ public class FilterSam {
 	/*--------------------------------------------------------------*/
 	
 	/** Maximum allowed unsupported substitutions in a read */
-	private int maxBadSubs=1;
+	private int maxBadVars=1;
 	/** Maximum variant depth for a variant to be considered unsupported */
-	private int maxBadSubAlleleDepth=2;
+	private int maxBadAlleleDepth=2;
+	/** Maximum allele fraction for variants considered unsupported */
+	private float maxBadAlleleFraction=0.01f;
 	/** Minimum read depth for a variant to be considered unsupported */
-	private int minBadSubReadDepth=2;
+	private int minBadReadDepth=2;
+	/** Ignore vars within this distance of the ends */
+	private int minEDist=5;
+	private int ploidy=1;
+	private boolean prefilter=false;
 
 	/** Number of reads processed */
 	protected long readsProcessed=0;
@@ -675,11 +736,16 @@ public class FilterSam {
 	protected long readsOut=0;
 	/** Number of good bases processed */
 	protected long basesOut=0;
+
+	protected double bqSumGood=0;
+	protected double bqSumBad=0;
+//	protected double adSumGood=0;
+//	protected double adSumBad=0;
+//	protected double rdSumGood=0;
+//	protected double rdSumBad=0;
 	
-	protected double qSumGood=0;
-	protected double qSumBad=0;
-	protected long subSumGood=0;
-	protected long subSumBad=0;
+	protected long varSumGood=0;
+	protected long varSumBad=0;
 	protected long mapqSumGood=0;
 	protected long mapqSumBad=0;
 
@@ -700,6 +766,8 @@ public class FilterSam {
 	private final FileFormat ffoutGood;
 	/** Secondary output file */
 	private final FileFormat ffoutBad;
+	
+	private final boolean subsOnly;
 	
 	/*--------------------------------------------------------------*/
 	/*----------------        Common Fields         ----------------*/

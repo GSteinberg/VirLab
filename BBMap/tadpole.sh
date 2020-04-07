@@ -3,7 +3,7 @@
 usage(){
 echo "
 Written by Brian Bushnell
-Last modified November 14, 2018
+Last modified September 30, 2019
 
 Description:  Uses kmer counts to assemble contigs, extend sequences, 
 or error-correct reads.  Tadpole has no upper bound for kmer length,
@@ -15,6 +15,9 @@ Usage:
 Assembly:     tadpole.sh in=<reads> out=<contigs>
 Extension:    tadpole.sh in=<reads> out=<extended> mode=extend
 Correction:   tadpole.sh in=<reads> out=<corrected> mode=correct
+
+Recommended parameters for optimal assembly:
+tadpole.sh in=<reads> out=<contigs> shave rinse pop k=<50-70% of read length>
 
 Extension and correction may be done simultaneously.  Error correction on 
 multiple files may be done like this:
@@ -67,7 +70,9 @@ prealloc=t          Pre-allocate memory rather than dynamically growing;
                     may be specified; default is 1.
 minprob=0.5         Ignore kmers with overall probability of correctness below this.
 minprobmain=t       (mpm) Use minprob for the primary kmer counts.
-threads=X           Spawn X hashing threads (default is number of logical processors).
+threads=X           Spawn X worker threads; default is number of logical processors.
+buildthreads=X      Spawn X contig-building threads. If not set, defaults to the same
+                    as threads.  Setting this to 1 will make contigs deterministic.
 rcomp=t             Store and count each kmer together and its reverse-complement.
 coremask=t          All kmer extensions share the same hashcode.
 fillfast=t          Speed up kmer extension lookups.
@@ -92,7 +97,9 @@ trimcircular=t      Trim one end of contigs ending in LOOP/LOOP by K-1,
 contigpasses=16     Build contigs with decreasing seed depth for this many iterations.
 contigpassmult=1.7  Ratio between seed depth of two iterations.
 ownership=auto      For concurrency; do not touch.
-processcontigs=f    Explore the contig connectivity graph. (partially implemented)
+processcontigs=f    Explore the contig connectivity graph.
+popbubbles=t        (pop) Pop bubbles; increases contiguity.  Requires 
+                    additional time and memory and forces processcontigs=t.
 
 Processing modes:
 mode=contig         contig: Make contigs from kmers.
@@ -212,8 +219,6 @@ CP="$DIR""current/"
 
 z="-Xmx14g"
 z2="-Xms14g"
-EA="-ea"
-EOOM=""
 set=0
 
 if [ -z "$1" ] || [[ $1 == -h ]] || [[ $1 == --help ]]; then
@@ -223,6 +228,7 @@ fi
 
 calcXmx () {
 	source "$DIR""/calcmem.sh"
+	setEnvironment
 	parseXmx "$@"
 	if [[ $set == 1 ]]; then
 		return
@@ -234,24 +240,6 @@ calcXmx () {
 calcXmx "$@"
 
 tadpole() {
-	if [[ $SHIFTER_RUNTIME == 1 ]]; then
-		#Ignore NERSC_HOST
-		shifter=1
-	elif [[ $NERSC_HOST == genepool ]]; then
-		module unload oracle-jdk
-		module load oracle-jdk/1.8_144_64bit
-		module load pigz
-	elif [[ $NERSC_HOST == denovo ]]; then
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	elif [[ $NERSC_HOST == cori ]]; then
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/jgi
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/usg
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	fi
 	local CMD="java $EA $EOOM $z $z2 -cp $CP assemble.Tadpole $@"
 	echo $CMD >&2
 	eval $CMD

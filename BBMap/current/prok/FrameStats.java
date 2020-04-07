@@ -88,7 +88,7 @@ public class FrameStats {
 					
 //					if(name.equals("startStats")){
 //						System.err.println("frame="+frame+" kmer="+AminoAcid.kmerToString(kmer, k)+
-//								String.format(" prob=%.4f\tdif=%.4f\tscore=%.4f", prob, dif, score)+
+//								String.format(Locale.ROOT, " prob=%.4f\tdif=%.4f\tscore=%.4f", prob, dif, score)+
 //								"\tvalid="+counts[1][frame][kmer]+"\tinvalid="+counts[0][frame][kmer]);
 //					}
 				}

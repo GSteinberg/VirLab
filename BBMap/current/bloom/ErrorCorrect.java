@@ -307,7 +307,7 @@ public class ErrorCorrect extends Thread{
 				if(DONT_OUTPUT_BAD_READS){removeBad(reads);}
 				for(Read r : reads){
 					if(r!=null){
-						r.obj=null;
+						r.samline=null;
 						assert(r.bases!=null);
 						if(r.sites!=null && r.sites.isEmpty()){r.sites=null;}
 					}

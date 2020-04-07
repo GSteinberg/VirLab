@@ -82,7 +82,6 @@ public class ReclusterByKmer {
 				ByteFile2.verbose=verbose;
 				stream.FastaReadInputStream.verbose=verbose;
 				ConcurrentGenericReadInputStream.verbose=verbose;
-//				align2.FastaReadInputStream2.verbose=verbose;
 				stream.FastqReadInputStream.verbose=verbose;
 				ReadWrite.verbose=verbose;
 			}else if(a.equals("build") || a.equals("genome")){
@@ -377,12 +376,12 @@ public class ReclusterByKmer {
 			ambigModeT=ambigMode_;
 			clusterMode=clusterMode_;
 			cris=cris_;
-			
-			randy=(ambigModeT==AMBIG_MODE_RAND) ? Shared.threadLocalRandom() : null;
 		}
 		
 		@Override
 		public void run(){
+			randy=(ambigModeT==AMBIG_MODE_RAND) ? Shared.threadLocalRandom() : null;
+			
 			ListNum<Read> ln=cris.nextList();
 			ArrayList<Read> reads=(ln!=null ? ln.list : null);
 			
@@ -516,7 +515,7 @@ public class ReclusterByKmer {
 		final int ambigModeT;
 		final ConcurrentReadInputStream cris;
 		
-		final Random randy;
+		Random randy;
 		
 		long readsInT;
 		long basesInT;

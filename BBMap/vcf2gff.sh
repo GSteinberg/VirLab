@@ -3,13 +3,13 @@
 usage(){
 echo "
 Written by Brian Bushnell
-Last modified March 20, 2018
+Last modified August 13, 2019
 
 Description:  Generates a GFF3 from a VCF.
 
 Usage:  vcf2gff.sh in=<vcf file> out=<gff file>
 
-Peak-calling parameters:
+Parameters:
 in=<file>       Input VCF file.
 out=<file>      Output GFF file.
 "
@@ -30,8 +30,6 @@ popd > /dev/null
 CP="$DIR""current/"
 
 z="-Xmx200m"
-EA="-ea"
-EOOM=""
 set=0
 
 if [ -z "$1" ] || [[ $1 == -h ]] || [[ $1 == --help ]]; then
@@ -41,30 +39,13 @@ fi
 
 calcXmx () {
 	source "$DIR""/calcmem.sh"
+	setEnvironment
 	parseXmx "$@"
 }
 calcXmx "$@"
 
 gff() {
-	if [[ $SHIFTER_RUNTIME == 1 ]]; then
-		#Ignore NERSC_HOST
-		shifter=1
-	elif [[ $NERSC_HOST == genepool ]]; then
-		module unload oracle-jdk
-		module load oracle-jdk/1.8_144_64bit
-		module load pigz
-	elif [[ $NERSC_HOST == denovo ]]; then
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	elif [[ $NERSC_HOST == cori ]]; then
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/jgi
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/usg
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	fi
-	local CMD="java $EA $EOOM $z -cp $CP var2.GffLine $@"
+	local CMD="java $EA $EOOM $z -cp $CP gff.GffLine $@"
 #	echo $CMD >&2
 	eval $CMD
 }

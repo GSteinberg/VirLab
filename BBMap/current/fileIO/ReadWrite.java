@@ -384,7 +384,7 @@ public class ReadWrite {
 			assert(!append) : "Append is not allowed for zip archives.";
 			return getZipOutputStream(fname, buffered, allowSubprocess);
 		}else if(bzipped){
-			assert(!append) : "Append is not allowed for bz2 archives.";
+			assert(!append) : "Append is not allowed for bz2 archives.";//TODO: This might be OK; try it.
 			return getBZipOutputStream(fname, buffered, append, allowSubprocess);
 		}else if(xz){
 			assert(!append) : "Append is not allowed for xz archives.";
@@ -469,9 +469,9 @@ public class ReadWrite {
 			return raw;
 		}
 		
-		if(USE_LBZIP2 && Data.LBZIP2() /* && (Data.SH() /*|| fname.equals("stdout") || fname.startsWith("stdout."))*/){return getLbzip2Stream(fname, append);}
-		if(USE_PBZIP2 && Data.PBZIP2() /* && (Data.SH() /*|| fname.equals("stdout") || fname.startsWith("stdout."))*/){return getPbzip2Stream(fname, append);}
-		if(USE_BZIP2 && Data.BZIP2() /* && (Data.SH() /*|| fname.equals("stdout") || fname.startsWith("stdout."))*/){return getBzip2Stream(fname, append);}
+		if(USE_LBZIP2 && Data.LBZIP2()){return getLbzip2Stream(fname, append);}
+		if(USE_PBZIP2 && Data.PBZIP2()){return getPbzip2Stream(fname, append);}
+		if(USE_BZIP2 && Data.BZIP2()){return getBzip2Stream(fname, append);}
 		
 		throw new RuntimeException("bz2 compression not supported in this version, unless lbzip2, pbzip2 or bzip2 is installed.");
 		
@@ -524,13 +524,15 @@ public class ReadWrite {
 	}
 	
 	public static OutputStream getGZipOutputStream(String fname, boolean append, boolean allowSubprocess){
-		if(verbose){System.err.println("getGZipOutputStream("+fname+", "+append+", "+allowSubprocess+")");}
+		if(verbose){System.err.println("getGZipOutputStream("+fname+", "+append+", "+allowSubprocess+"); "+USE_BGZIP+", "+USE_PIGZ+", "+USE_GZIP+", "+RAWMODE);}
 //		assert(false) : ReadWrite.ZIPLEVEL+", "+Shared.threads()+", "+MAX_ZIP_THREADS+", "+ZIP_THREAD_MULT+", "+allowSubprocess+", "+USE_PIGZ+", "+Data.PIGZ();
 		
-		if(USE_BGZIP && Data.BGZIP()){return getBgzipStream(fname, append);}
+		if(FORCE_BGZIP && USE_BGZIP && Data.BGZIP()){return getBgzipStream(fname, append);}
 		
 		if(FORCE_PIGZ || (allowSubprocess && Shared.threads()>=2)){
-			if(USE_PIGZ && Data.PIGZ()/* && (Data.SH() /*|| fname.equals("stdout") || fname.startsWith("stdout."))*/){return getPigzStream(fname, append);}
+			if((fname.endsWith(".vcf.gz") || fname.endsWith(".sam.gz") || (PREFER_BGZIP && ZIPLEVEL<10)) && USE_BGZIP && Data.BGZIP()){return getBgzipStream(fname, append);}
+			if(USE_PIGZ && Data.PIGZ()){return getPigzStream(fname, append);}
+			if(USE_BGZIP && Data.BGZIP()){return getBgzipStream(fname, append);}
 			if(USE_GZIP && Data.GZIP()/* && (Data.SH() /*|| fname.equals("stdout") || fname.startsWith("stdout."))*/){return getGzipStream(fname, append);}
 		}
 		
@@ -609,7 +611,19 @@ public class ReadWrite {
 	
 	public static OutputStream getBgzipStream(String fname, boolean append){
 		if(verbose){System.err.println("getBgzipStream("+fname+")");}
-		String command="bgzip -c "+(append ? "" : "-f ")/*+"-"+Tools.min(ZIPLEVEL, 9)*/;
+		
+		int threads=Tools.min(MAX_ZIP_THREADS, Tools.max((int)((Shared.threads()+1)*ZIP_THREAD_MULT), 1));
+//		System.err.println(threads); //123
+		threads=Tools.max(1, Tools.min(Shared.threads(), threads));
+//		System.err.println(threads); //123
+		int zl=Tools.mid(ZIPLEVEL, 1, 9);
+		if(ALLOW_ZIPLEVEL_CHANGE && threads>=4 && zl>0 && zl<4){zl=4;}
+		if(zl<3){threads=Tools.min(threads, 12);}
+		else if(zl<5){threads=Tools.min(threads, 16);}
+		else if(zl<7){threads=Tools.min(threads, 40);}
+		
+//		assert(false) : Data.BGZIP()+", "+Data.PIGZ();
+		String command="bgzip -c "+(append ? "" : "-f ")+(Data.BGZIP_VERSION_levelFlag ? "-l "+zl+" " : "")+(Data.BGZIP_VERSION_threadsFlag ? "-@ "+threads+" " : "");
 		if(verbose){System.err.println(command);}
 		OutputStream out=getOutputStreamFromProcess(fname, command, true, append, true, true);
 		if(verbose){System.err.println("fetched bgzip stream.");}
@@ -836,7 +850,7 @@ public class ReadWrite {
 			if(dsrced){return getDsrcInputStream(fname);}
 			if(bam){
 				if(SAMBAMBA()){
-					String command="sambamba view -h";
+					String command="sambamba -q view -h";
 //					new Exception().printStackTrace(); //123
 					if(SAMTOOLS_IGNORE_FLAG!=0){
 						command=command+" --num-filter=0/"+SAMTOOLS_IGNORE_FLAG;
@@ -1001,17 +1015,27 @@ public class ReadWrite {
 			System.err.println("getGZipInputStream("+fname+", "+allowSubprocess+")");
 //			new Exception().printStackTrace(System.err);
 		}
-		
-//		assert(!fname.contains("latest")) : fname+", "+TaxTree.TAX_PATH;
-//		assert(!ReadWrite.USE_UNPIGZ) : ReadWrite.USE_UNPIGZ;
-		
+//		assert(!fname.contains("temp")) : fname+", "+USE_UNBGZIP+", "+allowSubprocess;
 		if(allowSubprocess && Shared.threads()>2){
 			if(!fname.startsWith("jar:")){
-				if(verbose){System.err.println("Fetching gzip input stream: "+fname+", "+allowSubprocess+", "+USE_UNPIGZ+", "+Data.PIGZ());}
+				if(verbose){
+					System.err.println("Fetching gzip input stream: "+fname+", allowSubprocess="+allowSubprocess+", USE_UNPIGZ="+USE_UNPIGZ+", Data.PIGZ()="+Data.PIGZ());
+				}
+				if((PREFER_UNBGZIP || fname.endsWith(".vcf.gz")) && USE_UNBGZIP && Data.BGZIP()){
+					if(!fname.contains("stdin") && new File(fname).exists()){
+						int magicNumber=getMagicNumber(fname);
+						if(magicNumber==529205252){return getUnbgzipStream(fname);}
+//						System.err.println(magicNumber);
+					}
+				}
 				if(USE_UNPIGZ && Data.PIGZ()){return getUnpigzStream(fname);}
+//				if(USE_UNBGZIP && Data.BGZIP()){return getUnbgzipStream(fname);}
 				if(USE_GUNZIP && Data.GUNZIP()){return getGunzipStream(fname);}
 			}
 		}
+//		assert(false) : "allowSubprocess="+allowSubprocess+", Shared.threads()="+Shared.threads()+", fname="+fname+"\n"
+//				+"PREFER_UNBGZIP="+PREFER_UNBGZIP+", "+"USE_UNBGZIP="+USE_UNBGZIP+", "+"Data.BGZIP()="+Data.BGZIP()+"\n"
+//				+"USE_UNPIGZ="+USE_UNPIGZ+", "+"Data.PIGZ()="+Data.PIGZ()+"\n";
 		InputStream raw=getRawInputStream(fname, buffer);//123
 		InputStream in=null;
 		try {
@@ -1035,6 +1059,12 @@ public class ReadWrite {
 	public static InputStream getUnpigzStream(String fname){
 		if(verbose){System.err.println("getUnpigzStream("+fname+")");}
 		return getInputStreamFromProcess(fname, "pigz -c -d", false, true, true);
+	}
+	
+	public static InputStream getUnbgzipStream(String fname){
+		if(verbose){System.err.println("getUnbgzipStream("+fname+")");}
+		int threads=Tools.mid(4, 1, Shared.threads());
+		return getInputStreamFromProcess(fname, "bgzip -c -d"+(Data.BGZIP_VERSION_threadsFlag ? " -@ "+threads : ""), false, true, true);
 	}
 	
 	public static InputStream getUnpbzip2Stream(String fname){
@@ -1081,6 +1111,7 @@ public class ReadWrite {
 				}else{
 					pb.redirectInput(new File(fname));
 				}
+//				System.err.println(command+", "+appendFname);
 				pb.command(command.split(" "));
 			}
 			try {
@@ -1641,12 +1672,18 @@ public class ReadWrite {
 	public static final boolean closeStream(ConcurrentReadStreamInterface cris){return closeStreams(cris, (ConcurrentReadOutputStream[])null);}
 	public static final boolean closeStream(ConcurrentReadOutputStream ross){return closeStreams((ConcurrentReadStreamInterface)null, ross);}
 	public static final boolean closeOutputStreams(ConcurrentReadOutputStream...ross){return closeStreams(null, ross);}
-	
+
 	public static final boolean closeStreams(MultiCros mc){
 		if(mc==null){return false;}
 		return closeStreams(null, mc.streamList.toArray(new ConcurrentReadOutputStream[0]));
 	}
 	
+	/** 
+	 * Close these streams and wait for them to finish.
+	 * @param cris An input stream.  May be null.
+	 * @param ross Zero or more output streams.
+	 * @return True if an error was encountered.
+	 */
 	public static final boolean closeStreams(ConcurrentReadStreamInterface cris, ConcurrentReadOutputStream...ross){
 		if(verbose){
 			System.err.println("closeStreams("+cris+", "+(ross==null ? "null" : ross.length)+")");
@@ -1768,6 +1805,60 @@ public class ReadWrite {
 			atp.add(pt);
 		}
 	}
+
+	/** 
+	 * Note:
+	 * Magic number of bgzip files is (first 4 bytes):
+	 * 1f 8b 08 04
+	 * 31 139 8 4
+	 *  = 529205252
+	 * 
+	 * gzip/pigz:
+	 * 1f 8b 08 00
+	 * 31 139 8 0
+	 *  = 529205248
+	 * 
+	 * od --format=x1 --read-bytes=16 names.txt_gzip.gz
+	 */
+	public static int getMagicNumber(String fname) {
+		InputStream is=null;
+		try {
+			FileInputStream fis=new FileInputStream(fname);
+			is=new BufferedInputStream(fis); 
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		//This is fine but uses Java11 methods
+//		byte[] array=new byte[4];
+//		int read=0;
+//		try {
+////			read=is.readNBytes(array, 0, 4);
+//			read=is.readNBytes(array, 0, 4);
+//		} catch (IOException e) {
+//			// TODO Auto-generated catch block
+//			e.printStackTrace();
+//		}
+//		assert(read==4) : read;
+//		int x=0;
+//		for(int i=0; i<read; i++){
+//			int b=((int)array[i])&255;
+//			x=(x<<8)|b;
+//		}
+		
+		int x=0;
+		for(int i=0; i<4; i++){
+			try {
+				x=(x<<8)|(is.read()&255);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+		
+		return x;
+	}
 	
 	/** {active, waiting, running} <br>
 	 * Active means running or waiting.
@@ -1783,10 +1874,18 @@ public class ReadWrite {
 	public static boolean FORCE_KILL=false;
 
 	public static boolean USE_GZIP=false;
-	public static boolean USE_BGZIP=false;
-	public static boolean USE_PIGZ=false;
+	public static boolean USE_BGZIP=true;
+	public static boolean USE_PIGZ=true;
 	public static boolean USE_GUNZIP=false;
-	public static boolean USE_UNPIGZ=false;
+	public static boolean USE_UNBGZIP=true;
+	public static boolean USE_UNPIGZ=true;
+	
+	public static boolean FORCE_PIGZ=false;
+	public static boolean FORCE_BGZIP=false;
+	
+	public static boolean PREFER_BGZIP=true;
+	public static boolean PREFER_UNBGZIP=true;
+	
 	public static boolean USE_BZIP2=true;
 	public static boolean USE_PBZIP2=true;
 	public static boolean USE_LBZIP2=true;
@@ -1795,7 +1894,7 @@ public class ReadWrite {
 	public static boolean USE_ALAPY=true;
 	public static boolean USE_SAMBAMBA=true;
 	public static boolean SAMBAMBA(){return USE_SAMBAMBA && Data.SAMBAMBA();}
-
+	
 //	public static boolean SAMTOOLS_IGNORE_UNMAPPED_INPUT=false;
 	public static int SAMTOOLS_IGNORE_FLAG=0;
 	public static final int SAM_UNMAPPED=0x4;
@@ -1810,13 +1909,15 @@ public class ReadWrite {
 	public static final int INBUF=16384;
 	public static final int OUTBUF=16384;
 
+	/** Gzip compression level */
 	public static int ZIPLEVEL=4;
+	/** Bzip2 compression level */
 	public static int BZIPLEVEL=9;
 	public static int MAX_ZIP_THREADS=96;
 	public static int MAX_SAMTOOLS_THREADS=64;
 	public static int PIGZ_BLOCKSIZE=128;
 	public static int PIGZ_ITERATIONS=-1;
-	public static boolean FORCE_PIGZ=false;
+	
 	public static void setZipThreadMult(float x){
 		ZIP_THREAD_MULT=Tools.min(1, Tools.max(0.125f, x));
 	}

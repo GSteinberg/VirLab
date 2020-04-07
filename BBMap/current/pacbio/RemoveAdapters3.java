@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.Locale;
 
 import align2.MultiStateAligner9PacBio;
-import align2.MultiStateAligner9PacBioAdapter;
 import dna.AminoAcid;
 import dna.Data;
 import fileIO.FileFormat;
@@ -294,7 +293,7 @@ public class RemoveAdapters3 {
 					if(DONT_OUTPUT_BROKEN_READS){removeDiscarded(readlist);}
 					for(Read r : readlist){
 						if(r!=null){
-							r.obj=null;
+							r.obj=null;//Not sure what r.obj is here
 							assert(r.bases!=null);
 							if(r.sites!=null && r.sites.isEmpty()){r.sites=null;}
 						}
@@ -328,7 +327,7 @@ public class RemoveAdapters3 {
 			for(Read r : in){
 				if(r!=null){
 					assert(r.mate==null);
-					if(!r.hasadapter()){out.add(r);}
+					if(!r.hasAdapter()){out.add(r);}
 					else{out.addAll(split(r));}
 				}
 			}

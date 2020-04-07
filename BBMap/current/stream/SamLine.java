@@ -95,12 +95,10 @@ public class SamLine implements Serializable {
 		Read r2=r1.mate;
 		final boolean perfect=r1.perfect();
 		
-		if(Data.scaffoldLocs==null && r1.obj!=null){
-			if(r1.obj.getClass()==SamLine.class){
-				assert(SET_FROM_OK) : "Sam format cannot be used as input to this program when no genome build is loaded.\n" +
-						"Please index the reference first and rerun with e.g. 'build=1', or use a different input format.";
-				setFrom((SamLine)r1.obj);
-			}
+		if(Data.scaffoldLocs==null && r1.samline!=null){
+			assert(SET_FROM_OK) : "Sam format cannot be used as input to this program when no genome build is loaded.\n" +
+					"Please index the reference first and rerun with e.g. 'build=1', or use a different input format.";
+			setFrom(r1.samline);
 			return;
 		}
 		
@@ -610,8 +608,13 @@ public class SamLine implements Serializable {
 //		System.err.println("rname= "+new String(rname));
 //		System.err.println("qname= "+new String(qname));
 		if(Shared.TRIM_RNAME){
-			setRname(Tools.trimToWhitespace(rname()));
-			setRnext(Tools.trimToWhitespace(rnext()));
+			if(RNAME_AS_BYTES){
+				setRname(Tools.trimToWhitespace(rname()));
+				setRnext(Tools.trimToWhitespace(rnext()));
+			}else{
+				setRname(Tools.trimToWhitespace(rnameS()));
+				setRnext(Tools.trimToWhitespace(rnext()));
+			}
 		}
 		if(Shared.TRIM_READ_COMMENTS){
 			qname=(Tools.trimToWhitespace(qname));
@@ -834,6 +837,10 @@ public class SamLine implements Serializable {
 		return calcCigarLength(cigar, includeSoftClip, includeHardClip);
 	}
 	
+	public int calcCigarReadLength(boolean includeSoftClip, boolean includeHardClip){
+		return calcCigarReadLength(cigar, includeSoftClip, includeHardClip);
+	}
+	
 	/** Reference length of cigar string */
 	public static int calcCigarLength(String cigar, boolean includeSoftClip, boolean includeHardClip){
 		if(cigar==null){return 0;}
@@ -856,6 +863,41 @@ public class SamLine implements Serializable {
 
 					if(includeHardClip){len+=current;}
 				}else if(c=='I'){
+					//do nothing
+				}else if(c=='P'){
+					throw new RuntimeException("Unhandled cigar symbol: "+c+"\n"+cigar+"\n");
+					//'P' is currently poorly defined
+				}else{
+					throw new RuntimeException("Unhandled cigar symbol: "+c+"\n"+cigar+"\n");
+				}
+				current=0;
+			}
+		}
+		return len;
+	}
+	
+	/** Reference length of cigar string */
+	public static int calcCigarReadLength(String cigar, boolean includeSoftClip, boolean includeHardClip){
+		if(cigar==null){return 0;}
+		int len=0;
+		int current=0;
+		for(int i=0; i<cigar.length(); i++){
+			char c=cigar.charAt(i);
+			if(Tools.isDigit(c)){
+				current=(current*10)+(c-'0');
+			}else{
+				if(c=='M' || c=='=' || c=='X' || c=='I'){
+					len+=current;
+				}else if(c=='S'){
+					if(includeSoftClip){len+=current;}
+				}else if (c=='H'){
+					//In this case, the base string is the wrong length since letters were truncated.
+					//Therefore, the bases cannot be used for calling variations after mapping.
+					//Hard clipping messes up original location verification.
+					//Therefore...  len+=current would be best in practice, but for GRADING purposes, leaving it disabled is best.
+
+					if(includeHardClip){len+=current;}
+				}else if(c=='D' || c=='N'){
 					//do nothing
 				}else if(c=='P'){
 					throw new RuntimeException("Unhandled cigar symbol: "+c+"\n"+cigar+"\n");
@@ -1097,6 +1139,33 @@ public class SamLine implements Serializable {
 		}
 		return dels-inss;
 	}
+
+	public int mappedNonClippedBases() {
+		if(!mapped() || cigar==null || seq==null){return 0;}
+		
+		int len=0;
+		int current=0;
+		for(int i=0; i<cigar.length(); i++){
+			char c=cigar.charAt(i);
+			if(Tools.isDigit(c)){
+				current=(current*10)+(c-'0');
+			}else{
+				if(c=='M' || c=='='){
+					len+=current;
+				}else if(c=='X'){
+					len+=current;
+				}else if(c=='D' || c=='N'){
+					
+				}else if(c=='I'){
+					len+=current;
+				}else if(c=='S' || c=='H' || c=='P'){
+					
+				}
+				current=0;
+			}
+		}
+		return len;
+	}
 	
 	/**
 	 * @param cigar
@@ -1127,6 +1196,37 @@ public class SamLine implements Serializable {
 			}
 		}
 		return msdic;
+	}
+
+	public float calcIdentity() {
+		assert(cigar!=null);
+		int match=0, other=0;
+		
+		int current=0;
+		for(int i=0; i<cigar.length(); i++){
+			char c=cigar.charAt(i);
+			if(Tools.isDigit(c)){
+				current=(current*10)+(c-'0');
+			}else{
+				if(c=='='){
+					match+=current;
+				}else if(c=='M'){
+					
+				}else if(c=='X'){
+					other+=current;
+				}else if(c=='D'){
+					other+=current;
+				}else if(c=='N'){
+					
+				}else if(c=='I'){
+					other+=current;
+				}else if(c=='S' || c=='H' || c=='P'){
+					
+				}
+				current=0;
+			}
+		}
+		return match/(float)Tools.max(match+other, 1);
 	}
 	
 	/**
@@ -2118,7 +2218,7 @@ public class SamLine implements Serializable {
 		bb.append(tlen).append('\t');
 		
 		if(mapped() && strand()==Shared.MINUS){
-			appendReverseComplimented(bb, seq).append('\t');
+			appendReverseComplemented(bb, seq).append('\t');
 			appendQualReversed(bb, qual);
 		}else{
 			appendTo(bb, seq).append('\t');
@@ -2151,7 +2251,7 @@ public class SamLine implements Serializable {
 		return sb.append(a);
 	}
 	
-	private static ByteBuilder appendReverseComplimented(ByteBuilder sb, byte[] a){
+	private static ByteBuilder appendReverseComplemented(ByteBuilder sb, byte[] a){
 		if(a==null || a==bytestar || (a.length==1 && a[0]=='*')){return sb.append('*');}
 
 		sb.ensureExtra(a.length);
@@ -2275,7 +2375,8 @@ public class SamLine implements Serializable {
 	public byte strand(){
 		return ((flag&0x10)==0x10 ? (byte)1 : (byte)0);
 	}
-	
+
+	public byte mateStrand(){return nextStrand();}
 	public byte nextStrand(){
 		return ((flag&0x20)==0x20 ? (byte)1 : (byte)0);
 	}
@@ -2311,6 +2412,11 @@ public class SamLine implements Serializable {
 	
 	public boolean supplementary(){
 		return (flag&0x800)==0x800;
+	}
+	
+	public boolean leftmost(){
+		if(!pairedOnSameChrom() || tlen==0){return true;}
+		return tlen>0;
 	}
 	
 	/*--------------------------------------------------------------*/
@@ -2431,6 +2537,9 @@ public class SamLine implements Serializable {
 
 	public void setRname(byte[] x){assert(RNAME_AS_BYTES);rname=x;}
 	public void setRnext(byte[] x){rnext=x;}
+
+	public void setRname(String x){assert(!RNAME_AS_BYTES);rnameS=x;}
+	public void setRnext(String x){rnext=(x==null ? null : x.getBytes());}
 	
 	public String rnameS(){return rnameS!=null ? rnameS : rname==null ? null : new String(rname);}
 	public String rnextS(){return rnext==null ? null : new String(rnext);}
@@ -2458,6 +2567,15 @@ public class SamLine implements Serializable {
 		}
 		if(name!=null){scafnum=scafMap.getNumber(name);}
 		return scafnum;
+	}
+	
+	public long countBytes(){
+		long sum=76;
+		sum+=(cigar==null ? 0 : cigar.length()*2+16);
+		sum+=(optional==null ? 0 : optional.size()*32+16);
+		sum+=(rname==null ? 0 : rname.length+16);
+		sum+=(rnext==null ? 0 : rnext.length+16);
+		return sum;
 	}
 	
 	public String qname;
@@ -2562,7 +2680,7 @@ public class SamLine implements Serializable {
 	public static boolean CONVERT_CIGAR_TO_MATCH=true;
 	public static boolean SOFT_CLIP=true;
 	public static boolean SECONDARY_ALIGNMENT_ASTERISKS=true;
-	/** OK to use the "setFrom" function which uses the old SamLine instead of translating the read, if a genome is not loaded. Should be false when processing occurs. */
+	/** OK to use the "setFrom" function which uses the old SamLine instead of translating the read, if a genome is not loaded. */
 	public static boolean SET_FROM_OK=false;
 	/** For paired reads, keep original names rather than changing read2's name to match read1 */
 	public static boolean KEEP_NAMES=false;

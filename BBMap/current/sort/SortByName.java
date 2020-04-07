@@ -26,7 +26,7 @@ import stream.Read;
 import stream.SamLine;
 import structures.ListNum;
 import tax.AccessionToTaxid;
-import tax.GiToNcbi;
+import tax.GiToTaxid;
 import tax.TaxTree;
 import var2.ScafMap;
 
@@ -286,7 +286,7 @@ public class SortByName {
 		if((comparator==ReadComparatorTaxa.comparator)){
 			if(giTableFile!=null){
 				outstream.println("Loading gi table.");
-				GiToNcbi.initialize(giTableFile);
+				GiToTaxid.initialize(giTableFile);
 			}
 			if(accessionFile!=null){
 				outstream.println("Loading accession table.");
@@ -465,7 +465,7 @@ public class SortByName {
 				Shared.capBufferLen(4);
 				Shared.capBuffers(1);
 			}
-			mergeAndDump(outTemp, /*dumpCount, */useSharedHeader);
+			mergeAndDump(outTemp, /*dumpCount, */useSharedHeader, false);
 		}
 		
 	}
@@ -490,7 +490,7 @@ public class SortByName {
 	/*----------------         Inner Methods        ----------------*/
 	/*--------------------------------------------------------------*/
 	
-	private ArrayList<String> mergeRecursive(final ArrayList<String> inList){
+	private ArrayList<String> mergeRecursive(final ArrayList<String> inList, boolean allowSubprocess){
 		assert(maxFiles>1);
 		ArrayList<String> currentList=inList;
 		final int oldZL=ReadWrite.ZIPLEVEL;
@@ -510,7 +510,7 @@ public class SortByName {
 			for(ArrayList<String> subList : listList){
 				String temp=getTempFile();
 				FileFormat ff=FileFormat.testOutput(temp, FileFormat.FASTQ, null, true, false, false, false);
-				merge(subList, ff, null);
+				merge(subList, ff, null, allowSubprocess);
 				outList.add(temp);
 			}
 			currentList=outList;
@@ -519,8 +519,8 @@ public class SortByName {
 		return currentList;
 	}
 	
-	public void merge(ArrayList<String> inList, FileFormat ff1, FileFormat ff2){
-		errorState|=mergeAndDump(inList, /*null, */ff1, ff2, delete, useSharedHeader, outstream, maxLengthObserved);
+	public void merge(ArrayList<String> inList, FileFormat ff1, FileFormat ff2, boolean allowSubprocess){
+		errorState|=mergeAndDump(inList, /*null, */ff1, ff2, delete, useSharedHeader, allowSubprocess, outstream, maxLengthObserved);
 	}
 	
 	private String getTempFile(){
@@ -538,16 +538,16 @@ public class SortByName {
 		return temp;
 	}
 	
-	private boolean mergeAndDump(ArrayList<String> fnames, /*IntList dumpCount, */boolean useHeader) {
+	private boolean mergeAndDump(ArrayList<String> fnames, /*IntList dumpCount, */boolean useHeader, boolean allowSubprocess) {
 		if(fnames.size()*maxLengthObserved>2000000000 || fnames.size()>64){
 			outstream.println("Performing recursive merge to reduce open files.");
-			fnames=mergeRecursive(fnames);
+			fnames=mergeRecursive(fnames, allowSubprocess);
 		}
-		return mergeAndDump(fnames, /*dumpCount,*/ ffout1, ffout2, delete, useHeader, outstream, maxLengthObserved);
+		return mergeAndDump(fnames, /*dumpCount,*/ ffout1, ffout2, delete, useHeader, allowSubprocess, outstream, maxLengthObserved);
 	}
 	
 	public static boolean mergeAndDump(ArrayList<String> fnames, FileFormat ffout1, FileFormat ffout2, 
-			boolean delete, boolean useHeader, PrintStream outstream, long maxLengthObserved) {
+			boolean delete, boolean useHeader, boolean allowSubprocess, PrintStream outstream, long maxLengthObserved) {
 		
 		final int oldBuffers=Shared.numBuffers();
 		final int oldBufferLen=Shared.bufferLen();
@@ -578,7 +578,7 @@ public class SortByName {
 		for(int i=0; i<fnames.size(); i++){
 			String fname=fnames.get(i);
 //			int size=(dumpCount==null ? -1 : dumpCount.get(i));
-			CrisContainer cc=new CrisContainer(fname, /*size, */comparator);
+			CrisContainer cc=new CrisContainer(fname, /*size, */comparator, allowSubprocess);
 			if(cc.peek()!=null){
 				cclist.add(cc);
 				q.add(cc);

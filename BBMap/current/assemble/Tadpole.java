@@ -4,6 +4,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -192,8 +193,23 @@ public abstract class Tadpole extends ShaveObject{
 				}
 			}else if(a.equals("dot") || a.equals("outdot")){
 				outDot=b;
+			}else if(a.equals("buildthreads") || a.equals("bt")){
+				BUILD_THREADS=Integer.parseInt(b);
 			}else if(a.equals("processcontigs")){
 				processContigs=Tools.parseBoolean(b);
+			}else if(a.equals("pop") || a.equalsIgnoreCase("popBubbles")){
+				popBubbles=Tools.parseBoolean(b);
+			}else if(a.equalsIgnoreCase("bubblePasses")){
+				bubblePasses=Tools.max(1, Integer.parseInt(b));
+			}else if(a.equalsIgnoreCase("popDirect")){
+				BubblePopper.popDirect=Tools.parseBoolean(b);
+			}else if(a.equalsIgnoreCase("popIndirect")){
+				BubblePopper.popIndirect=Tools.parseBoolean(b);
+			}else if(a.equalsIgnoreCase("debranch")){
+				BubblePopper.debranch=Tools.parseBoolean(b);
+			}else if(a.equals("etr") || a.equalsIgnoreCase("expandTandemRepeats")){
+				expandTandemRepeats=Tools.parseBoolean(b);
+				assert(false) : "TODO";
 			}else if(a.equals("outkmers") || a.equals("outk") || a.equals("dump")){
 				outKmers=b;
 			}else if(a.equals("mincounttodump")){
@@ -497,7 +513,7 @@ public abstract class Tadpole extends ShaveObject{
 		
 		kmerRangeMin=Tools.max(prefilter+1, kmerRangeMin);
 		
-		if(outDot!=null){processContigs=true;}
+		if(outDot!=null || popBubbles){processContigs=true;}
 		
 		if(ECC_AGGRESSIVE){
 			ECC_REQUIRE_BIDIRECTIONAL=false;
@@ -539,7 +555,8 @@ public abstract class Tadpole extends ShaveObject{
 		}
 		
 		if(verbose){
-			assert(false) : "Verbose is disabled.";
+			BubblePopper.verbose=true;
+//			assert(false) : "Verbose is disabled.";
 //			AbstractKmerTableU.verbose=true;
 		}
 		THREADS=Shared.threads();
@@ -875,6 +892,8 @@ public abstract class Tadpole extends ShaveObject{
 			outstream.println("Bases generated:            \t"+basesBuilt);
 			outstream.println("Contigs generated:          \t"+contigsBuilt);
 			outstream.println("Longest contig:             \t"+longestContig);
+			if(popBubbles){outstream.println("Bubbles popped:             \t"+bubblesPopped);}
+			
 			outstream.println("Contig-building time:       \t"+t);
 		}
 	}
@@ -982,7 +1001,9 @@ public abstract class Tadpole extends ShaveObject{
 			if(allContigs!=null){
 				for(int i=0; i<allContigs.size(); i++){
 					Contig r=allContigs.get(i);
-					bsw.println(r);
+					if(r.length()>=minContigLen){
+						bsw.println(r);
+					}
 				}
 			}
 			errorState|=bsw.poisonAndWait();
@@ -990,9 +1011,13 @@ public abstract class Tadpole extends ShaveObject{
 	}
 	
 	void runBuildThreads(int mode, ConcurrentReadInputStream[] crisa){
+		Timer t=new Timer(outstream, true);
+		
+		if(BUILD_THREADS<1){BUILD_THREADS=THREADS;}
+		
 		/* Create ProcessThreads */
-		ArrayList<AbstractBuildThread> alpt=new ArrayList<AbstractBuildThread>(THREADS);
-		for(int i=0; i<THREADS; i++){alpt.add(makeBuildThread(i, mode, crisa));}
+		ArrayList<AbstractBuildThread> alpt=new ArrayList<AbstractBuildThread>(BUILD_THREADS);
+		for(int i=0; i<BUILD_THREADS; i++){alpt.add(makeBuildThread(i, mode, crisa));}
 		for(AbstractBuildThread pt : alpt){pt.start();}
 		
 		/* Wait for threads to die, and gather statistics */
@@ -1020,13 +1045,26 @@ public abstract class Tadpole extends ShaveObject{
 			lowqReads+=pt.lowqReadsT;
 			lowqBases+=pt.lowqBasesT;
 		}
+		t.stop("Time: ");
 	}
 	
 	void processContigs(){
 //		outstream.println("Initializing contigs.\n");
-		initializeContigs(allContigs);
+		Timer t=new Timer(outstream, true);
 		outstream.println("Making contig graph.");
+		initializeContigs(allContigs);
 		runProcessContigThreads();
+		outstream.println("Finished contig graph.");
+		t.stop("Time: ");
+		
+		if(popBubbles){
+			t.start();
+			for(int popped=1, i=0; popped>0 && i<bubblePasses; i++){
+				popped=popBubbles(BubblePopper.debranch && (i==bubblePasses-1));
+			}
+			t.stop("Time: ");
+		}
+		
 		if(outDot!=null){
 			outstream.println("Writing contig graph.");
 			FileFormat ff=FileFormat.testOutput(outDot, FileFormat.TEXT, null, true, overwrite, append, false);
@@ -1042,29 +1080,15 @@ public abstract class Tadpole extends ShaveObject{
 				bb.append("\\nleft=").append(codeStrings[c.leftCode]);
 				bb.append("\\nright=").append(codeStrings[c.rightCode]).append("\"]").append('\n');
 				if(c.leftEdges!=null){
-					for(int x=0; x<4; x++){
-						Edge e=c.leftEdges[x];
-						if(e!=null){
-							bb.tab();
-							bb.append(e.origin);
-							bb.append(" -> ");
-							bb.append(e.destination);
-							bb.append(" [label=\"LEFT\\nlen=").append(e.length);
-							bb.append("\\norient=").append(e.orientation).append("\"]").append('\n');
-						}
+					for(Edge e : c.leftEdges){
+						bb.tab();
+						e.toDot(bb);
 					}
 				}
 				if(c.rightEdges!=null){
-					for(int x=0; x<4; x++){
-						Edge e=c.rightEdges[x];
-						if(e!=null){
-							bb.tab();
-							bb.append(e.origin);
-							bb.append(" -> ");
-							bb.append(e.destination);
-							bb.append(" [label=\"RIGHT\\nlen=").append(e.length);
-							bb.append("\\norient=").append(e.orientation).append("\"]").append('\n');
-						}
+					for(Edge e : c.rightEdges){
+						bb.tab();
+						e.toDot(bb);
 					}
 				}
 				bsw.print(bb);
@@ -1074,7 +1098,118 @@ public abstract class Tadpole extends ShaveObject{
 			bsw.print(bb);
 			bsw.poisonAndWait();
 		}
-		outstream.println("Finished contig graph.");
+	}
+	
+	HashMap<Integer, ArrayList<Edge>> destToEdgeMap(){
+		HashMap<Integer, ArrayList<Edge>> destToEdgeMap=new HashMap<Integer, ArrayList<Edge>>();
+		for(Contig c : allContigs){
+			if(!c.used() && !c.associate()){
+				if(c.leftEdges!=null){
+					for(Edge e : c.leftEdges){
+						Integer d=e.destination;
+						ArrayList<Edge> list=destToEdgeMap.get(d);
+						if(list==null){
+							list=new ArrayList<Edge>(2);
+							destToEdgeMap.put(d,  list);
+						}
+						list.add(e);
+					}
+				}
+				if(c.rightEdges!=null){
+					for(Edge e : c.rightEdges){
+						Integer d=e.destination;
+						ArrayList<Edge> list=destToEdgeMap.get(d);
+						if(list==null){
+							list=new ArrayList<Edge>(2);
+							destToEdgeMap.put(d,  list);
+						}
+						list.add(e);
+					}
+				}
+			}
+		}
+		return destToEdgeMap;
+	}
+	
+	int popBubbles(boolean debranch){
+		outstream.println("Popping bubbles; contigs="+allContigs.size());
+		HashMap<Integer, ArrayList<Edge>> destToEdgeMap=destToEdgeMap();
+		
+		int bubblesPoppedThisPass=0;
+		BubblePopper bp=new BubblePopper(allContigs, destToEdgeMap, kbig);
+		
+		if(debranch) {
+			for(Contig c : allContigs){
+				bp.debranch(c);
+			}
+		}
+		
+		for(Contig c : allContigs){
+			if(!c.used() && (c.leftForwardBranch() || c.rightForwardBranch())) {
+				bubblesPoppedThisPass+=bp.expand(c);
+			}
+		}
+		
+		ArrayList<Contig> temp=new ArrayList<Contig>(allContigs.size());
+		
+		basesBuilt=0;
+		contigsBuilt=0;
+		longestContig=0;
+		
+		for(Contig c : allContigs){
+			if(c.used()){
+//				assert(bp.validate(c));
+				//Potentially do something about inbound edges...  there shouldn't be any, though.
+			}else{
+				bp.removeDeadEdges(c);//Should not be necessary but found cases where it is.
+				
+//				assert(bp.validate(c));
+				temp.add(c);
+				final int len=c.length();
+				if(len>=minContigLen){
+					basesBuilt+=len;
+					contigsBuilt++;
+					longestContig=Tools.max(len, longestContig);
+				}
+			}
+		}
+		Shared.sort(temp, ContigLengthComparator.comparator);
+		
+		int newID=0;
+		destToEdgeMap=destToEdgeMap();
+		for(Contig c : temp){
+			c.renumber(newID, destToEdgeMap.get(c.id));
+			newID++;
+		}
+		
+		allContigs.clear();
+		allContigs.addAll(temp);
+		
+//		destToEdgeMap=destToEdgeMap();
+//		bp=new BubblePopper(allContigs, destToEdgeMap, kbig);
+//		
+//		for(int i=0; i<allContigs.size(); i++){
+////			assert(i<allContigs.size()) : i+", "+allContigs.size();
+//			Contig c=allContigs.get(i);
+//			assert(c.id==i);
+//			assert(bp.validate(c));
+//		}
+		
+//		for(Contig c : temp){
+//			if(!c.used && c.length()>minContigLen){
+//				
+//				allContigs.add(c);
+//				
+//				int len=c.length();
+//				basesBuilt+=len;
+//				contigsBuilt++;
+//				longestContig=Tools.max(len, longestContig);
+//			}
+//		}
+		bubblesPopped+=bubblesPoppedThisPass;
+		
+		outstream.println("Popped "+bubblesPoppedThisPass+" bubbles"+(bp.debranch ? "; removed "+bp.branchesRemoved+" branches." : "."));
+		return bubblesPoppedThisPass;
 	}
 	
 	void runProcessContigThreads(){
@@ -2018,6 +2153,7 @@ public abstract class Tadpole extends ShaveObject{
 		return isJunction(leftMax, leftSecond);
 	}
 	
+	/** Technically, returns true if it is junction or max */
 	protected final boolean isJunction(int max, int second){
 		if(second<1 || second*branchMult1<max || (second<=branchLowerConst && max>=Tools.max(minCountExtend, second*branchMult2))){
 			return false;
@@ -2254,7 +2390,15 @@ public abstract class Tadpole extends ShaveObject{
 	protected boolean discardUncorrectable=false;
 	
 	/** Look for contig-contig edges */
-	boolean processContigs;
+	boolean processContigs=false;
+	
+	/** Pop simple bubbles in contig graph */
+	boolean popBubbles=true;
+	
+	int bubblePasses=1;
+	
+	/** Expand simple tandem repeats in contig graph */
+	boolean expandTandemRepeats=false;
 	
 	/*--------------------------------------------------------------*/
 	/*----------------       ThreadLocal Temps      ----------------*/
@@ -2332,6 +2476,8 @@ public abstract class Tadpole extends ShaveObject{
 	/** For numbering contigs */
 	final AtomicLong contigNum=new AtomicLong(0);
 	
+	int bubblesPopped=0;
+	
 	int contigPasses=16;
 	double contigPassMult=1.7;
 	
@@ -2357,6 +2503,8 @@ public abstract class Tadpole extends ShaveObject{
 	public static boolean DISPLAY_PROGRESS=true;
 	/** Number of ProcessThreads */
 	public static int THREADS=Shared.threads();
+	/** Number of BuildThreads */
+	public static int BUILD_THREADS=-1;
 	/** Do garbage collection prior to printing memory usage */
 	private static final boolean GC_BEFORE_PRINT_MEMORY=false;
 

@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.PrintStream;
 import java.util.ArrayList;
 
+import dna.Data;
 import fileIO.ByteStreamWriter;
 import fileIO.FileFormat;
 import fileIO.ReadWrite;
@@ -89,7 +90,7 @@ public class PGMTools {
 		Shared.closeStream(outstream);
 	}
 	
-	static boolean parseStatic(String arg, String a, String b){
+	public static boolean parseStatic(String arg, String a, String b){
 		if(a.equals("kinnercds")){
 			int k=Integer.parseInt(b);
 			GeneModel.setInnerK(k);
@@ -189,6 +190,13 @@ public class PGMTools {
 		if(!Tools.testOutputFiles(overwrite, false, false, out)){
 			outstream.println((out==null)+", "+out);
 			throw new RuntimeException("\n\noverwrite="+overwrite+"; Can't write to output file "+out+"\n");
+		}
+		
+		for(int i=0; i<in.size(); i++){
+			String s=in.get(i);
+			if(s.equalsIgnoreCase("auto") || s.equalsIgnoreCase("default")){
+				in.set(i, Data.findPath("?model.pgm"));
+			}
 		}
 		
 		//Ensure input files can be read

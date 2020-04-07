@@ -862,9 +862,9 @@ public class TaxTree implements Serializable{
 	/*--------------------------------------------------------------*/
 	
 	
-	public static int getID(String s){return GiToNcbi.getID(s);}
+	public static int getID(String s){return GiToTaxid.getID(s);}
 	
-	public static int getID(byte[] s){return GiToNcbi.getID(s);}
+	public static int getID(byte[] s){return GiToTaxid.getID(s);}
 	
 	/** Return the ancestor with taxonomic level at least minLevel */
 	public TaxNode getNode(String s, int minLevelExtended){
@@ -1013,9 +1013,9 @@ public class TaxTree implements Serializable{
 			if(index==2 && s.length()>3 && s.startsWith("gi") && Tools.isDigit(s.charAt(3))){
 //				System.err.println("Parsing gi number.");
 				
-				if(GiToNcbi.isInitialized()){
+				if(GiToTaxid.isInitialized()){
 					try {
-						number=GiToNcbi.parseGiToNcbi(s, delimiter);
+						number=GiToTaxid.parseGiToTaxid(s, delimiter);
 					} catch (Throwable e2) {
 						e=e2;
 					}
@@ -1023,17 +1023,17 @@ public class TaxTree implements Serializable{
 					assert(!CRASH_IF_NO_GI_TABLE) : "To use gi numbers, you must load a gi table.\n"+s;
 				}
 //				if(number!=-1){System.err.println("number="+number);}
-			}else if(index==4 && s.length()>5 && s.startsWith("ncbi") && Tools.isDigit(s.charAt(5))){
-//				System.err.println("Parsing ncbi number.");
-				number=GiToNcbi.parseNcbiNumber(s, delimiter);
 			}else if(index==3 && s.length()>4 && s.startsWith("tid") && Tools.isDigit(s.charAt(4))){
 //				System.err.println("Parsing ncbi number.");
-				number=GiToNcbi.parseNcbiNumber(s, delimiter);
+				number=GiToTaxid.parseTaxidNumber(s, delimiter);
 			}else if(index==3 && s.length()>4 && s.startsWith("img") && Tools.isDigit(s.charAt(4))){
 //				System.err.println("Parsing ncbi number.");
 				long img=parseDelimitedNumber(s, delimiter);
 				ImgRecord record=imgMap.get(img);
 				number=(record==null ? -1 : record.taxID);
+			}else if(index==4 && s.length()>5 && s.startsWith("ncbi") && Tools.isDigit(s.charAt(5))){//obsolete
+//				System.err.println("Parsing ncbi number.");
+				number=GiToTaxid.parseTaxidNumber(s, delimiter);
 			}
 			
 			if(number<0 && index>=0 && (delimiter=='|' || delimiter=='~')){
@@ -1217,7 +1217,7 @@ public class TaxTree implements Serializable{
 //			int number=-1;
 //			if(index==2 && s.length>3 && Tools.startsWith(s, "gi") && Tools.isDigit(s[3])){
 ////				System.err.println("Parsing gi number.");
-//				number=GiToNcbi.parseGiToNcbi(s);
+//				number=GiToNcbi.parseGiToTaxid(s);
 //			}else if(index==4 && s.length>5 && Tools.startsWith(s, "ncbi") && Tools.isDigit(s[5])){
 ////				System.err.println("Parsing ncbi number.");
 //				number=GiToNcbi.getID(s);
@@ -1632,14 +1632,14 @@ public class TaxTree implements Serializable{
 	/*----------------             IMG              ----------------*/
 	/*--------------------------------------------------------------*/
 	
-	public static int imgToNcbi(long img){
+	public static int imgToTaxid(long img){
 		ImgRecord ir=imgMap.get(img);
 //		assert(false) : "\n"+img+"\n"+imgMap.get(img)+"\n"+562+"\n"+imgMap.get(562)+"\n"+imgMap.size()+"\n"+IMGHQ+"\n"+defaultImgFile()+"\n";
 		return ir==null ? -1 : ir.taxID;
 	}
 	
-	public TaxNode imgToNcbiNode(long img){
-		int tid=imgToNcbi(img);
+	public TaxNode imgToTaxNode(long img){
+		int tid=imgToTaxid(img);
 		return tid<1 ? null : getNode(tid);
 	}
 	
@@ -1710,6 +1710,54 @@ public class TaxTree implements Serializable{
 		return level;
 	}
 	
+	public boolean isUnclassified(int tid){
+		TaxNode tn=getNode(tid);
+		while(tn!=null && tn.id!=tn.pid){
+			if(tn.isUnclassified()){return true;}
+			if(tn.pid==tn.id){break;}
+			tn=getNode(tn.pid);
+		}
+		return false;
+	}
+	
+	public boolean isEnvironmentalSample(int tid){
+		TaxNode tn=getNode(tid);
+		while(tn!=null && tn.id!=tn.pid){
+			if(tn.isEnvironmentalSample()){return true;}
+			if(tn.pid==tn.id){break;}
+			tn=getNode(tn.pid);
+		}
+		return false;
+	}
+	
+	public boolean isVirus(int tid){
+		TaxNode tn=getNode(tid);
+		while(tn!=null && tn.id!=tn.pid){
+			if(tn.id==VIRUSES_ID){return true;}
+			if(tn.pid==tn.id){break;}
+			tn=getNode(tn.pid);
+		}
+		return false;
+	}
+	
+	public long definedLevels(int tid){
+		long levels=0;
+		TaxNode tn=getNode(tid);
+		while(tn!=null && tn.id!=tn.pid){
+			levels=levels|(1L<<tn.level);
+		}
+		return levels;
+	}
+	
+	public long definedLevelsExtended(int tid){
+		long levels=0;
+		TaxNode tn=getNode(tid);
+		while(tn!=null && tn.id!=tn.pid){
+			levels=levels|(1L<<tn.levelExtended);
+		}
+		return levels;
+	}
+	
 	/*--------------------------------------------------------------*/
 	/*----------------            Fields            ----------------*/
 	/*--------------------------------------------------------------*/
@@ -1746,6 +1794,10 @@ public class TaxTree implements Serializable{
 	/*--------------------------------------------------------------*/
 	/*----------------           Statics            ----------------*/
 	/*--------------------------------------------------------------*/
+	
+	public static TaxTree getTree(){
+		return sharedTree;
+	}
 	
 	public static boolean assignStrains=true;
 	public static boolean SILVA_MODE=false;
@@ -1799,6 +1851,18 @@ public class TaxTree implements Serializable{
 		}
 	}
 	
+	public static boolean isSimple(int levelExtended){
+		int level=extendedToLevel(levelExtended);
+//		return levelExtended!=NO_RANK_E && (levelExtended==levelToExtended(level)/* || levelExtended==STRAIN_E*/);
+		return levelExtended!=NO_RANK_E && (levelExtended==levelToExtended(level)/* || levelExtended==STRAIN_E*/);
+	}
+	
+	public static boolean isSimple2(int levelExtended){
+		int level=extendedToLevel(levelExtended);
+		return levelExtended!=NO_RANK_E && (levelExtended==levelToExtended(level) 
+				|| levelExtended==STRAIN_E || levelExtended==SUBSPECIES_E);
+	}
+	
 	/*--------------------------------------------------------------*/
 	/*----------------          Constants           ----------------*/
 	/*--------------------------------------------------------------*/
@@ -1820,7 +1884,7 @@ public class TaxTree implements Serializable{
 		{"no rank"},
 		{"substrain", "strain", "forma", "varietas", "subspecies"},
 		{"species"},
-		{"species subgroup", "species group", "subgenus", "genus"},
+		{"species subgroup", "species group", "series", "subsection", "section", "subgenus", "genus"},
 		{"subtribe", "tribe", "subfamily", "family"},
 		{"superfamily", "parvorder", "infraorder", "suborder", "order"},
 		{"superorder", "subcohort", "cohort", "infraclass", "subclass", "class"},
@@ -1915,17 +1979,10 @@ public class TaxTree implements Serializable{
 //	private static final Pattern delimiterBang = Pattern.compile("\\!");
 	private static final Pattern delimiterTilde = Pattern.compile("\\~");
 	private static final Pattern delimiter2 = Pattern.compile("[\\s_]+");
-
-	public static String TAX_PATH="/global/projectb/sandbox/gaag/bbtools/tax/latest";
-
-	public static final String defaultTableFile(){return defaultTableFile.replaceAll("TAX_PATH", TAX_PATH);}
-	public static final String defaultTreeFile(){return defaultTreeFile.replaceAll("TAX_PATH", TAX_PATH);}
-	public static final String defaultAccessionFile(){return defaultAccessionFile.replaceAll("TAX_PATH", TAX_PATH);}
-	public static final String defaultPatternFile(){return defaultPatternFile.replaceAll("TAX_PATH", TAX_PATH);}
-	public static final String defaultImgFile(){return defaultImgFile.replaceAll("TAX_PATH", TAX_PATH);}
-	public static final String defaultSizeFile(){return defaultSizeFile.replaceAll("TAX_PATH", TAX_PATH);} 
 	
 	public static boolean IMG_HQ=false;
+	
+	public static final String defaultTaxPath="/global/projectb/sandbox/gaag/bbtools/tax/latest";
 	private static final String defaultImgFile="TAX_PATH/imgDump.txt";
 	private static final String defaultTableFile="TAX_PATH/gitable.int1d.gz";
 	private static final String defaultTreeFile="TAX_PATH/tree.taxtree.gz";
@@ -1941,11 +1998,21 @@ public class TaxTree implements Serializable{
 			+ "TAX_PATH/shrunk.nucl_wgs.accession2taxid.gz,"
 			+ "TAX_PATH/shrunk.nucl_gb.accession2taxid.gz,"
 			+ "TAX_PATH/shrunk.dead_prot.accession2taxid.gz,"
-			+ "TAX_PATH/shrunk.nucl_est.accession2taxid.gz,"
+//			+ "TAX_PATH/shrunk.nucl_est.accession2taxid.gz,"
 			+ "TAX_PATH/shrunk.dead_wgs.accession2taxid.gz,"
-			+ "TAX_PATH/shrunk.nucl_gss.accession2taxid.gz,"
+//			+ "TAX_PATH/shrunk.nucl_gss.accession2taxid.gz,"
 			+ "TAX_PATH/shrunk.dead_nucl.accession2taxid.gz,"
 			+ "TAX_PATH/shrunk.pdb.accession2taxid.gz";
+
+	public static String TAX_PATH=defaultTaxPath;
+
+	public static final String defaultTableFile(){return defaultTableFile.replaceAll("TAX_PATH", TAX_PATH);}
+	public static final String defaultTreeFile(){return defaultTreeFile.replaceAll("TAX_PATH", TAX_PATH);}
+	public static final String defaultAccessionFile(){return defaultAccessionFile.replaceAll("TAX_PATH", TAX_PATH);}
+	public static final String defaultPatternFile(){return defaultPatternFile.replaceAll("TAX_PATH", TAX_PATH);}
+	public static final String defaultImgFile(){return defaultImgFile.replaceAll("TAX_PATH", TAX_PATH);}
+	public static final String defaultSizeFile(){return defaultSizeFile.replaceAll("TAX_PATH", TAX_PATH);}
+	public static final String defaultSsuFile(){return "/global/projectb/sandbox/gaag/bbtools/silva/latest/ssu_sorted.fa.gz";}
 	
 	private static PrintStream outstream=System.out;
 	

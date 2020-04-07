@@ -589,15 +589,7 @@ public class CalcUniqueness {
 	/*--------------------------------------------------------------*/
 	
 	public void setSampleSeed(long seed){
-		randy=Shared.threadLocalRandom();
-		if(seed>-1){
-			randy=new java.util.Random(seed);
-//			 && randy.getClass()==java.util.Random.class
-//			randy.setSeed(seed);
-		}else{
-			//Note: ThreadLocalRandom does not allow seed to be set.
-			randy=Shared.threadLocalRandom();
-		}
+		randy=Shared.threadLocalRandom(seed);
 	}
 	
 	/*--------------------------------------------------------------*/

@@ -45,6 +45,9 @@ public final class BBMap extends AbstractMapper {
 	
 	@Override
 	public void setDefaults(){
+		ReadWrite.USE_PIGZ=ReadWrite.USE_UNPIGZ=false;
+		ReadWrite.USE_BGZIP=ReadWrite.USE_UNBGZIP=true;
+		ReadWrite.PREFER_BGZIP=true;
 		ReadWrite.ZIPLEVEL=2;
 		MAKE_MATCH_STRING=true;
 		keylen=13;
@@ -429,7 +432,7 @@ public final class BBMap extends AbstractMapper {
 				t.stop("Loaded Bloom Filter: ");
 			}else{
 				if(bloomSerial){System.out.println("Could not read "+serialPath+", generating filter from reference.");}
-				bloomFilter=new BloomFilter(true, bloomFilterK, 1, bloomFilterHashes, bloomFilterMinHits, true);
+				bloomFilter=new BloomFilter(true, bloomFilterK, bloomFilterK, 1, bloomFilterHashes, bloomFilterMinHits, true);
 				t.stop("Made Bloom Filter: ");
 				if(bloomSerial && !RefToIndex.NODISK && !RefToIndex.FORCE_READ_ONLY){
 //					 && serialFile.canWrite()
@@ -488,7 +491,7 @@ public final class BBMap extends AbstractMapper {
 						SLOW_ALIGN_PADDING, SLOW_RESCUE_PADDING, OUTPUT_MAPPED_ONLY, DONT_OUTPUT_BLACKLISTED_READS, MAX_SITESCORES_TO_PRINT, PRINT_SECONDARY_ALIGNMENTS,
 						REQUIRE_CORRECT_STRANDS_PAIRS, SAME_STRAND_PAIRS, KILL_BAD_PAIRS, rcompMate,
 						PERFECTMODE, SEMIPERFECTMODE, FORBID_SELF_MAPPING, TIP_SEARCH_DIST,
-						ambiguousRandom, ambiguousAll, KFILTER, IDFILTER, qtrimLeft, qtrimRight, untrim, TRIM_QUALITY, minTrimLength,
+						ambiguousRandom, ambiguousAll, KFILTER, MIN_IDFILTER, qtrimLeft, qtrimRight, untrim, TRIM_QUALITY, minTrimLength,
 						LOCAL_ALIGN, RESCUE, STRICT_MAX_INDEL, MSA_TYPE, bloomFilter);
 			} catch (Throwable e) {
 				e.printStackTrace();

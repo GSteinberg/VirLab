@@ -3,6 +3,7 @@ package jgi;
 import java.io.File;
 import java.io.PrintStream;
 import java.util.ArrayList;
+import java.util.regex.Pattern;
 
 import dna.Data;
 import fileIO.ByteFile;
@@ -81,9 +82,10 @@ public class RenameReads {
 				ByteFile2.verbose=verbose;
 				stream.FastaReadInputStream.verbose=verbose;
 				ConcurrentGenericReadInputStream.verbose=verbose;
-//				align2.FastaReadInputStream2.verbose=verbose;
 				stream.FastqReadInputStream.verbose=verbose;
 				ReadWrite.verbose=verbose;
+			}else if(a.equalsIgnoreCase("fixSRA")){
+				fixSRA=Tools.parseBoolean(b);
 			}else if(a.equals("reads") || a.equals("maxreads")){
 				maxReads=Tools.parseKMG(b);
 			}else if(a.equals("build") || a.equals("genome")){
@@ -120,9 +122,11 @@ public class RenameReads {
 				renameByTrim=Tools.parseBoolean(b);
 			}else if(a.equals("addprefix")){
 				addPrefix=Tools.parseBoolean(b);
+			}else if(a.equals("addpairnum")){
+				addPairnum=Tools.parseBoolean(b);
 			}else if(a.equals("prefixonly")){
 				prefixOnly=Tools.parseBoolean(b);
-			}else if(a.equals("underscore")){
+			}else if(a.equals("underscore") || a.equals("addunderscore")){
 				addUnderscore=Tools.parseBoolean(b);
 			}else if(a.startsWith("minscaf") || a.startsWith("mincontig")){
 				stream.FastaReadInputStream.MIN_READ_LEN=Integer.parseInt(b);
@@ -138,6 +142,7 @@ public class RenameReads {
 		}
 		
 		if(addUnderscore && prefix!=null && !prefix.endsWith("_")){prefix+="_";}
+		if(!addPairnum){pairnums=new String[] {"",""};}
 		
 		{//Process parser fields
 			Parser.processQuality();
@@ -245,7 +250,10 @@ public class RenameReads {
 			for(Read r1 : reads){
 				final Read r2=r1.mate;
 				
-				if(renameByMapping){
+				if(fixSRA){
+					fixSRA(r1);
+					fixSRA(r2);
+				}else if(renameByMapping){
 					//Should be handled automatically, if output is fastq.
 				}else if(r2!=null && (renameByInsert || renameByTrim)){
 					
@@ -254,13 +262,13 @@ public class RenameReads {
 					x=Read.insertSizeMapped(r1, r2, false);
 					if(verbose){System.err.println("True Insert: "+x);}
 					if(renameByTrim){
-						r1.id=r1.numericID+"_"+r1.length()+"_"+Tools.min(x, r1.length())+" 1:";
-						r2.id=r2.numericID+"_"+r2.length()+"_"+Tools.min(x, r2.length())+" 2:";
+						r1.id=r1.numericID+"_"+r1.length()+"_"+Tools.min(x, r1.length())+pairnums[0];
+						r2.id=r2.numericID+"_"+r2.length()+"_"+Tools.min(x, r2.length())+pairnums[1];
 					}else{
 						String s=prefix+x;
-						r1.id=s+" 1:"+r1.numericID;
+						r1.id=s+(addPairnum ? " 1:"+r1.numericID : "");
 						if(r2!=null){
-							r2.id=s+" 2:"+r1.numericID;
+							r2.id=s+(addPairnum ? " 2:"+r1.numericID : "");
 						}
 					}
 					
@@ -279,8 +287,8 @@ public class RenameReads {
 				}else{
 					r1.id=prefix+x;
 					if(r2!=null){
-						r1.id=r1.id+" 1:";
-						r2.id=prefix+x+" 2:";
+						r1.id=r1.id+pairnums[0];
+						r2.id=prefix+x+pairnums[1];
 					}
 					x++;
 				}
@@ -295,6 +303,18 @@ public class RenameReads {
 		
 		t.stop();
 		System.err.println("Time: "+t);
+	}
+	
+	private void fixSRA(Read r){
+		//SRR1726611.11001 HWI-ST797:117:D091UACXX:4:1101:21093:8249 length=101
+		if(r==null){return;}
+		String id=r.id;
+		String[] split=spacePattern.split(id);
+		assert(split.length==3) : "Unrecognized format: "+id;
+		assert(split.length>0 && split[0].indexOf(':')<0) : "Unrecognized format: "+id;
+		if(split.length>1){
+			r.id=split[1]+pairnums[r.pairnum()];
+		}
 	}
 	
 	private PrintStream outstream=System.err;
@@ -334,5 +354,11 @@ public class RenameReads {
 	public boolean renameByTrim=false;
 	public boolean addPrefix=false;
 	public boolean prefixOnly=false;
+	public boolean fixSRA=false;
+	public boolean addPairnum=true;
+	private String[] pairnums={" 1:", " 2:"};
+
+	private static final Pattern spacePattern=Pattern.compile("\\s+");
+	private static final Pattern whitespacePattern=Pattern.compile(" ");
 	
 }

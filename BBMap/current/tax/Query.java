@@ -181,7 +181,7 @@ public class Query {
 //		return urlc;
 //	}
 	
-	public static String host="http://taxonomy.jgi-psf.org/tax/";
+	public static String host="http://taxonomy.jgi.doe.gov/tax/";
 //	public static String host="gpint209.nersc.gov:3068/tax/";
 	
 }

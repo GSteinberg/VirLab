@@ -8,7 +8,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import fileIO.TextStreamWriter;
 import json.JsonObject;
 import shared.Shared;
-import shared.Tools;
 import structures.ByteBuilder;
 import structures.IntHashMap;
 
@@ -36,19 +35,6 @@ public class SketchResults extends SketchObject {
 		if((true || params.needContamCounts())){
 			recompare(buffer, params);
 		}
-		if(params.taxFilter!=null){
-			int removed=0;
-			for(int i=0; i<list.size(); i++){
-				Comparison c=list.get(i);
-				if((c.taxID()>0 && !params.taxFilter.passesFilter(c.taxID())) || (c.name()!=null && !params.taxFilter.passesFilterByNameOnly(c.name()))){
-					list.set(i, null);
-					removed++;
-				}
-			}
-			if(removed>0){
-				Tools.condenseStrict(list);
-			}
-		}
 	}
 	
 	public void recompare(CompareBuffer buffer, DisplayParams params){
@@ -68,45 +54,33 @@ public class SketchResults extends SketchObject {
 	}
 	
 	private static ArrayList<Comparison> addToList(ConcurrentHashMap<Integer, Comparison> map, DisplayParams params, ArrayList<Comparison> old){
-
+		
 //		System.err.println(map.size());
 //		System.err.println(map.keySet());
-		
-		ArrayList<Comparison> al=(old==null ? new ArrayList<Comparison>(map.size()) : old);
+
+//		final TaxFilter white=params.taxFilterWhite;
+//		final TaxFilter black=params.taxFilterBlack;
+//		final boolean noFilter=(white==null && black==null);
+		final int size=map.size();
+		ArrayList<Comparison> al=(old==null ? new ArrayList<Comparison>(size) : old);
 		for(Entry<Integer, Comparison> e : map.entrySet()){
-			al.add(e.getValue());
+			final Comparison c=e.getValue();
+			al.add(c);
+//			if(noFilter || c.passesFilter(white, black)){
+//				al.add(c);
+//			}
 		}
 		Shared.sort(al, params.comparator);
 		Collections.reverse(al);
-		while(al.size()>params.maxRecords*2+10){
+		final long limit=(params.maxRecords*2+5);
+		while(al.size()>limit){
 			al.remove(al.size()-1);
 		}
 		return al;
 	}
 	
-	int filterMeta(DisplayParams params) {
-		if(refSketchList==null || refSketchList.isEmpty() || !params.hasMetaFilters()){return 0;}
-		return filterMeta(params.requiredMeta, params.bannedMeta, params.requiredMetaAnd);
-	}
-	
-	/**
-	 * @param requiredMeta Required metadata tags
-	 * @param bannedMeta Banned metadata tags
-	 * @param requiredMetaAnd True if all required tags are needed, false if any is sufficient
-	 * @return Number of remaining sketches
-	 */
-	private int filterMeta(ArrayList<String> requiredMeta, ArrayList<String> bannedMeta, boolean requiredMetaAnd) {
-		if(refSketchList==null || refSketchList.isEmpty()){return 0;}
-		int removed=0;
-		for(int i=0; i<refSketchList.size(); i++){
-			Sketch ref=refSketchList.get(i);
-			if(!ref.passesMeta(requiredMeta, bannedMeta, requiredMetaAnd)){
-				refSketchList.set(i, null);
-				removed++;
-			}
-		}
-		if(removed>0){Tools.condenseStrict(refSketchList);}
-		return refSketchList.size();
+	public boolean isEmpty(){
+		return list==null || list.isEmpty();
 	}
 	
 	/*--------------------------------------------------------------*/
@@ -133,6 +107,7 @@ public class SketchResults extends SketchObject {
 
 	public ByteBuilder toText(DisplayParams params){
 		assert(params.postParsed);
+		if(params.printSSU){alignSSUs(params.maxRecords);}
 		if(params.json()){
 			JsonObject j=params.toJson(this);
 			return j.toText();
@@ -166,6 +141,23 @@ public class SketchResults extends SketchObject {
 			}
 		}
 		return sb;
+	}
+	
+	/*--------------------------------------------------------------*/
+	/*----------------          Alignment           ----------------*/
+	/*--------------------------------------------------------------*/
+	
+	void alignSSUs(int maxRecords){
+//		if(list!=null && list.size()>0){
+//			int idx=0;
+//			for(Comparison c : list){
+//				c.ssuIdentity();
+//				idx++;
+//				if(idx>=maxRecords){break;}
+//			}
+//		}
+		assert(alignerPool!=null);
+		alignerPool.addJobs(list, maxRecords);
 	}
 	
 	/*--------------------------------------------------------------*/

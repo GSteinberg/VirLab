@@ -1,8 +1,7 @@
 package align2;
 
-import java.io.File;
-
 import dna.AminoAcid;
+import shared.Shared;
 
 /**
  * @author Jonathan Rood
@@ -11,34 +10,9 @@ import dna.AminoAcid;
  */
 public class BandedAlignerJNI extends BandedAligner{
 
-        static {
-                String name = "bbtoolsjni";
-                try {
-                        System.loadLibrary(name);
-                } catch (UnsatisfiedLinkError e1) {
-			// System.loadLibrary() does not work with MPI.
-			// Need to use System.load() with an explicit full
-			// path to the native library file for the MPI case.
-                        boolean success = false;
-                        String libpath=System.getProperty("java.library.path");
-                        libpath = libpath.replace("-Djava.library.path=","");
-                        String[] libpathEntries = libpath.split(File.pathSeparator);
-                        for(int i = 0; i < libpathEntries.length; i++) {
-                                if(success) break;
-                                String lib = libpathEntries[i]+"/"+System.mapLibraryName(name);
-                                try {
-                                        System.load(lib);
-                                        success = true;
-                                } catch (UnsatisfiedLinkError e2) {
-                                        success = false;
-                                        if((i+1) >= libpathEntries.length) {
-                                                System.err.println("Native library can not be found in java.library.path. ");
-                                                System.exit(1);
-                                        }
-                                }
-                        }
-                }
-        }
+	static {
+		Shared.loadJNI();
+	}
 
 	private native int alignForwardJNI(byte[] query, byte[] ref, int qstart, int rstart, int maxEdits, boolean exact, int maxWidth, byte[] baseToNumber, int[] returnVals);
 

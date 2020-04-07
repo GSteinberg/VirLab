@@ -167,7 +167,7 @@ public class RenameIMG {
 				return;
 			}
 		}
-		final int tid=TaxTree.imgToNcbi(img);
+		final int tid=TaxTree.imgToTaxid(img);
 		ByteFile bf=ByteFile.makeByteFile(ffin);
 		
 		byte[] line=bf.nextLine();

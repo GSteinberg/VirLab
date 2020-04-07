@@ -7,6 +7,7 @@ import java.util.Random;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 
 import shared.Primes;
+import shared.Shared;
 import shared.Timer;
 import shared.Tools;
 import structures.ByteBuilder;
@@ -506,7 +507,7 @@ public final class KCountArray7MTA extends KCountArray {
 		
 		Timer t=new Timer();
 		long[][] r=new long[rows][cols];
-		Random randy=new Random(seed);
+		Random randy=Shared.threadLocalRandom(seed);
 		for(int i=0; i<r.length; i++){
 			fillMasks(r[i], randy);
 		}

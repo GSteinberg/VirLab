@@ -255,11 +255,12 @@ public final class AssemblyStats2 {
 			try {
 				ff=FileFormat.testInput(in, FileFormat.FA, null, false, true, true);
 			} catch (Throwable e) {
-				//Ignore
+				e.printStackTrace();
 			}
 			if(ff!=null){
 				fastqMode=ff.fastq();
 			}
+			assert(!ff.samOrBam()) : "AssemblyStats does not support sam/bam files, only fasta and fastq.";
 //			assert(ff==null || (!ff.fastq())) : "AssemblyStats only supports fasta files.  To override this message, use the -da flag.";
 		}
 		

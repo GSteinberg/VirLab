@@ -33,6 +33,7 @@ import sketch.SketchTool;
 import stream.ConcurrentReadInputStream;
 import stream.FASTQ;
 import stream.Read;
+import structures.IntHashMapBinary;
 import structures.ListNum;
 import structures.LongPair;
 import structures.SuperLongList;
@@ -70,7 +71,7 @@ public class TestFormat {
 		Read.CHANGE_QUALITY=false;
 		Read.NULLIFY_BROKEN_QUALITY=true;
 		ReadWrite.USE_PIGZ=ReadWrite.USE_UNPIGZ=true;
-		SketchObject.minProb=0;
+		SketchObject.defaultParams.minProb=0;
 		
 		Parser parser=new Parser();
 		for(int i=0; i<args.length; i++){
@@ -89,8 +90,19 @@ public class TestFormat {
 				sketchSize=Tools.parseIntKMG(b);
 			}
 			
+			else if(a.equalsIgnoreCase("parseZmw") || a.equals("zmw") || a.equals("zmws")){
+				parseZmw=Tools.parseBoolean(b);
+			}
+			
 			else if(a.equals("barcodes") || a.equals("barcodefile")){
 				barcodeFile=b;
+			}
+			
+			
+			else if(a.equals("hist") || a.equals("hists")){
+				if(!Tools.parseBoolean(b)){
+					qhistFile=ihistFile=khistFile=bhistFile=lhistFile=gchistFile=zmwhistFile=null;
+				}
 			}else if(a.equals("qhist") || a.equals("qhistfile")){
 				qhistFile=b;
 			}else if(a.equals("ihist") || a.equals("ihistfile")){
@@ -111,6 +123,8 @@ public class TestFormat {
 				maxBhistLen=Tools.parseIntKMG(b);
 			}else if(a.equals("lhist") || a.equals("lhistfile")){
 				lhistFile=b;
+			}else if(a.equals("zmwhist") || a.equals("zmwhistfile")){
+				zmwhistFile=b;
 			}else if(a.equals("gchist") || a.equals("gchistfile")){
 				gchistFile=b;
 			}else if(a.equals("junk") || a.equals("junkfile")){
@@ -158,9 +172,12 @@ public class TestFormat {
 //		assert(false) : sketch+", "+parser.loglog;
 		if(makeSketch){
 			SketchObject.AUTOSIZE=false;
+//			SketchObject.defaultParams.minKeyOccuranceCount=2;
+			SketchObject.defaultParams.parse("trackcounts", "trackcounts", null);
+//			SketchObject.defaultParams.minProb=0;
 			SketchObject.postParse();
-			tool=new SketchTool(sketchSize, 0, true, false);
-			smm=new SketchMakerMini(tool, SketchObject.ONE_SKETCH, 0);
+			tool=new SketchTool(sketchSize, SketchObject.defaultParams);
+			smm=new SketchMakerMini(tool, SketchObject.ONE_SKETCH, SketchObject.defaultParams);
 		}else{
 			tool=null;
 			smm=null;
@@ -178,6 +195,11 @@ public class TestFormat {
 		
 		initialQin=FASTQ.ASCII_OFFSET;
 		initialDetectQuality=FASTQ.DETECT_QUALITY;
+		
+		//TODO: in is not considered here.
+		if(!Tools.testForDuplicateFiles(true, qhistFile, ihistFile, khistFile, bhistFile, lhistFile, gchistFile, zmwhistFile, barcodeFile, junkFile)){
+			throw new RuntimeException("\nSome file names were specified multiple times.\n");
+		}
 	}
 	
 	
@@ -223,10 +245,10 @@ public class TestFormat {
 		println("HeaderLines\t"+headerLinesProcessed);
 		println("Variants\t"+variantsProcessed);
 		if(ploidy>0){println("Ploidy\t\t"+ploidy);}
-		if(pairingRate>0){println("PairingRate\t"+String.format("%.4f", pairingRate));}
-		if(mapqAvg>0){println("MapqAvg\t\t"+String.format("%.2f", mapqAvg));}
-		if(totalQualityAvg>0){println("QualityAvg\t\t"+String.format("%.2f", totalQualityAvg));}
-		if(readLengthAvg>0){println("ReadLengthAvg\t"+String.format("%.2f", readLengthAvg));}
+		if(pairingRate>0){println("PairingRate\t"+String.format(Locale.ROOT, "%.4f", pairingRate));}
+		if(mapqAvg>0){println("MapqAvg\t\t"+String.format(Locale.ROOT, "%.2f", mapqAvg));}
+		if(totalQualityAvg>0){println("QualityAvg\t\t"+String.format(Locale.ROOT, "%.2f", totalQualityAvg));}
+		if(readLengthAvg>0){println("ReadLengthAvg\t"+String.format(Locale.ROOT, "%.2f", readLengthAvg));}
 	}
 	
 	void printSequenceResults(){
@@ -236,9 +258,9 @@ public class TestFormat {
 		println("Interleaved\t"+interleaved);
 		println("MaxLen\t\t"+maxLen);
 		println("MinLen\t\t"+(minLen<Integer.MAX_VALUE ? minLen : 0));
-		println("AvgLen\t\t"+String.format("%.2f",basesProcessed/Tools.max(1.0, readsProcessed)));
+		println("AvgLen\t\t"+String.format(Locale.ROOT, "%.2f",basesProcessed/Tools.max(1.0, readsProcessed)));
 		sll.sort();
-		println("StdevLen\t"+String.format("%.2f",sll.stdev()));
+		println("StdevLen\t"+String.format(Locale.ROOT, "%.2f",sll.stdev()));
 		println("ModeLen\t\t"+sll.mode());
 		
 		if(format!=FileFormat.FASTA && format!=FileFormat.UNKNOWN){
@@ -318,27 +340,52 @@ public class TestFormat {
 		println("-Gap\t\t"+(G));
 		println("-Invalid\t"+(O));
 		println("");
-		println("GC\t\t"+String.format("%.3f", GC*1.0/(GC+ATU)));
+		println("GC\t\t"+String.format(Locale.ROOT, "%.3f", GC*1.0/(GC+ATU)));
 		if(makeGChist){
-			println("-GCMedian\t"+String.format("%.3f", ReadStats.GCMedian));
-			println("-GCMode\t\t"+String.format("%.3f", ReadStats.GCMode));
-			println("-GCSTDev\t"+String.format("%.3f", ReadStats.GCSTDev));
+			println("-GCMedian\t"+String.format(Locale.ROOT, "%.3f", ReadStats.GCMedian));
+			println("-GCMode\t\t"+String.format(Locale.ROOT, "%.3f", ReadStats.GCMode));
+			println("-GCSTDev\t"+String.format(Locale.ROOT, "%.3f", ReadStats.GCSTDev));
 			println("");
 		}
 		
 //		if(loglog!=null){println("Cardinality\t"+loglog.cardinality());}
 		if(smm!=null){
-			sketch=smm.toSketch();
+			sketch=smm.toSketch(smm.pacBioDetected ? 2 : 1);
+//			System.err.println(smm.pacBioDetected);
 			println("Cardinality\t"+(sketch==null ? 0 : sketch.genomeSizeEstimate()));
 			if(khistFile!=null){
 				ArrayList<LongPair> list=sketch.toKhist();
-				TextStreamWriter tsw=new TextStreamWriter(khistFile, true, false, false);
-				tsw.start();
-				tsw.println("#Depth\tCount");
+				ByteStreamWriter bsw=new ByteStreamWriter(khistFile, true, false, false);
+				bsw.start();
+				bsw.println("#Depth\tCount");
 				for(LongPair lp : list){
-					tsw.println(lp.a+"\t"+lp.b);
+					bsw.print(lp.a).print('\t').print(lp.b).nl();
 				}
-				tsw.poisonAndWait();
+				bsw.poisonAndWait();
+			}
+			if(zmwhistFile!=null){
+				if(parseZmw && zmwMap.size()>0){
+					IntHashMapBinary counts=zmwMap.toCountHistogram();
+					int[] keys=counts.toKeyArray();
+					Arrays.sort(keys);
+					ByteStreamWriter bsw=new ByteStreamWriter(zmwhistFile, true, false, false);
+					bsw.start();
+					bsw.println("#Passes\tCount");
+					for(int i=0, prev=0; i<keys.length; i++){
+						int key=keys[i];
+						int value=counts.get(key);
+						while(prev<key-1){
+							prev++;
+							bsw.print(prev).print('\t').print(0).nl();
+						}
+						bsw.print(key).print('\t').print(value).nl();
+						prev=key;
+					}
+					bsw.poisonAndWait();
+					
+				}else{
+					ReadWrite.delete(zmwhistFile, false);
+				}
 			}
 			if(sketch!=null){
 				ServerTools.suppressErrors=true;
@@ -346,6 +393,7 @@ public class TestFormat {
 //				assert(results!=null) : results+", "+sketch.toString();
 				if(results!=null){
 					JsonObject all=JsonParser.parseJsonObjectStatic(results);
+//					System.err.println(all);
 					if(all!=null && all.jmapSize()>0){
 						JsonObject topHit=null;
 						for(String key : all.jmap.keySet()){
@@ -360,6 +408,7 @@ public class TestFormat {
 			}
 		}
 		println("Barcodes\t"+barcodes.size());
+		println("ZMWs    \t"+zmwMap.cardinality());
 		if(doMerge && pairsProcessed>0){
 			final long numMerged=Tools.sum(ihist);
 			final double insertAvg=Tools.averageHistogram(ihist);
@@ -367,12 +416,12 @@ public class TestFormat {
 			final double mergeFraction=(numMerged/(1.0*Tools.max(mergeAttempts, 1)));
 			final double adapterBaseFraction=(adapterBases/(1.0*Tools.max(basesProcessed, 1)));
 			final double adapterReadFraction=(adapterReads/(1.0*Tools.max(readsProcessed, 1)));
-			println("\nMergable\t"+String.format("%.2f%%", 100*mergeFraction));
+			println("\nMergable\t"+String.format(Locale.ROOT, "%.2f%%", 100*mergeFraction));
 			if(mergeFraction>0.02){
-				println("-InsertMean\t"+String.format("%.2f", insertAvg));
+				println("-InsertMean\t"+String.format(Locale.ROOT, "%.2f", insertAvg));
 				println("-InsertMode\t"+insertMode);
-				println("-AdapterReads\t"+String.format("%.3f%%", 100*adapterBaseFraction));
-				println("-AdapterBases\t"+String.format("%.3f%%", 100*adapterReadFraction));
+				println("-AdapterReads\t"+String.format(Locale.ROOT, "%.3f%%", 100*adapterBaseFraction));
+				println("-AdapterBases\t"+String.format(Locale.ROOT, "%.3f%%", 100*adapterReadFraction));
 			}
 		}
 	}
@@ -392,21 +441,21 @@ public class TestFormat {
 		double errorAvg=errorSum/qCalled;
 		double logAvg=QualityTools.probErrorToPhredDouble(errorAvg);
 		double trimMult=100.0/(Tools.max(basesProcessed, 1));
-		println("\nQErrorRate\t"+String.format("%.3f%%", 100*errorAvg));
-		println("-QAvgLog\t"+String.format("%.2f", logAvg));
-		println("-QAvgLinear\t"+String.format("%.2f", avg));
+		println("\nQErrorRate\t"+String.format(Locale.ROOT, "%.3f%%", 100*errorAvg));
+		println("-QAvgLog\t"+String.format(Locale.ROOT, "%.2f", logAvg));
+		println("-QAvgLinear\t"+String.format(Locale.ROOT, "%.2f", avg));
 		println("-qMinUncalled\t"+qMinUncalled);
 		println("-qMaxUncalled\t"+qMaxUncalled);
 		println("-qMinCalled\t"+qMinCalled);
 		println("-qMaxCalled\t"+qMaxCalled);
 		
 		if(doTrim){
-			println("-TrimmedAtQ5\t"+String.format("%.2f%%", trimhist[5]*trimMult));
-			println("-TrimmedAtQ10\t"+String.format("%.2f%%", trimhist[10]*trimMult));
-			println("-TrimmedAtQ15\t"+String.format("%.2f%%", trimhist[15]*trimMult));
-			println("-TrimmedAtQ20\t"+String.format("%.2f%%", trimhist[20]*trimMult));
-//			println("-TrimmedAtQ25\t"+String.format("%.2f%%", trimhist[25]*trimMult));
-//			println("-TrimmedAtQ30\t"+String.format("%.2f%%", trimhist[30]*trimMult));
+			println("-TrimmedAtQ5\t"+String.format(Locale.ROOT, "%.2f%%", trimhist[5]*trimMult));
+			println("-TrimmedAtQ10\t"+String.format(Locale.ROOT, "%.2f%%", trimhist[10]*trimMult));
+			println("-TrimmedAtQ15\t"+String.format(Locale.ROOT, "%.2f%%", trimhist[15]*trimMult));
+			println("-TrimmedAtQ20\t"+String.format(Locale.ROOT, "%.2f%%", trimhist[20]*trimMult));
+//			println("-TrimmedAtQ25\t"+String.format(Locale.ROOT, "%.2f%%", trimhist[25]*trimMult));
+//			println("-TrimmedAtQ30\t"+String.format(Locale.ROOT, "%.2f%%", trimhist[30]*trimMult));
 		}
 
 		if(printQhist){
@@ -419,9 +468,9 @@ public class TestFormat {
 		if(qhistFile!=null && Tools.sum(qhist)>0){
 			try {
 				StringBuilder sb=new StringBuilder();
-				sb.append("#QErrorRate\t"+String.format("%.3f%%\n", 100*errorAvg));
-				sb.append("#QAvgLog\t"+String.format("%.2f\n", logAvg));
-				sb.append("#QAvgLinear\t"+String.format("%.2f", avg));
+				sb.append("#QErrorRate\t"+String.format(Locale.ROOT, "%.3f%%\n", 100*errorAvg));
+				sb.append("#QAvgLog\t"+String.format(Locale.ROOT, "%.2f\n", logAvg));
+				sb.append("#QAvgLinear\t"+String.format(Locale.ROOT, "%.2f", avg));
 				printToFileOffset(qhist, true, sb.toString(), qhistFile, qOffset);
 			} catch (Throwable e) {
 				System.err.println("ERROR - Could not write qhist: "+e.toString());
@@ -449,10 +498,10 @@ public class TestFormat {
 		if(ihistFile!=null){
 			try {
 				StringBuilder sb=new StringBuilder();
-				sb.append("#InsertMean\t"+String.format("%.2f\n", insertAvg));
+				sb.append("#InsertMean\t"+String.format(Locale.ROOT, "%.2f\n", insertAvg));
 				sb.append("#InsertMode\t"+insertMode+"\n");
-				sb.append("#AdapterReads\t"+String.format("%.2f%%\n", 100*adapterBaseFraction));
-				sb.append("#AdapterBases\t"+String.format("%.2f%%\n", 100*adapterReadFraction));
+				sb.append("#AdapterReads\t"+String.format(Locale.ROOT, "%.2f%%\n", 100*adapterBaseFraction));
+				sb.append("#AdapterBases\t"+String.format(Locale.ROOT, "%.2f%%\n", 100*adapterReadFraction));
 				printToFile(ihist, true, sb.toString(), ihistFile);
 			} catch (Throwable e) {
 				System.err.println("ERROR - Could not write ihist: "+e.toString());
@@ -737,7 +786,10 @@ public class TestFormat {
 		//Do anything necessary prior to processing
 		
 		//Determine how many threads may be used
-		final int threads=Shared.threads();
+		int threads=Shared.threads();
+		if(threads>=48){
+			threads=Tools.min(40, threads/2);
+		}
 		
 		//Fill a list with ProcessThreads
 		ArrayList<TestThread> alpt=new ArrayList<TestThread>(threads);
@@ -790,6 +842,11 @@ public class TestFormat {
 			minLen=Tools.min(minLen, pt.minLen_T);
 			maxLen=Tools.max(maxLen, pt.maxLen_T);
 			sll.add(pt.sllT);
+			if(parseZmw && pt.parseZmwT){
+				zmwMap.incrementAll(pt.zmwMapT);
+			}else{
+				parseZmw=false;
+			}
 
 			qMinUncalled=Tools.min(qMinUncalled, pt.qMinUncalledT);
 			qMaxUncalled=Tools.max(qMaxUncalled, pt.qMaxUncalledT);
@@ -857,7 +914,7 @@ public class TestFormat {
 			ff=ff_;
 			cris=cris_;
 			if(makeSketch){
-				smm_T=new SketchMakerMini(tool, SketchObject.ONE_SKETCH, 0);
+				smm_T=new SketchMakerMini(tool, 0, SketchObject.defaultParams);
 			}else{
 				smm_T=null;
 			}
@@ -877,6 +934,12 @@ public class TestFormat {
 			if(reads!=null && !reads.isEmpty()){
 				Read r=reads.get(0);
 				assert((ff==null || ff.samOrBam()) || (r.mate!=null)==cris.paired());
+				if(parseZmw) {
+					try {
+						int zmw=Tools.parseZmw(r.id);
+						parseZmwT=(zmw>=0 && zmw<=1000000000);
+					} catch (Exception e) {}
+				}
 			}
 
 			while(ln!=null && reads!=null && reads.size()>0){//ln!=null prevents a compiler potential null access warning
@@ -943,6 +1006,21 @@ public class TestFormat {
 			maxLen_T=Tools.max(len, maxLen_T);
 			minLen_T=Tools.min(len, minLen_T);
 			sllT.add(len);
+			
+			if(parseZmwT && r.pairnum()==0){
+				int zmw=-1;
+				try {
+					zmw=Tools.parseZmw(r.id);
+				} catch (Exception e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+				if(zmw>=0){
+					zmwMapT.increment(zmw);
+				}else{
+					parseZmwT=false;
+				}
+			}
 			
 			if(makeBhist) {
 				if(maxBhistLen<1 || r.length()<=maxBhistLen){
@@ -1039,6 +1117,7 @@ public class TestFormat {
 			bc.increment();
 		}
 		
+		boolean parseZmwT=false;
 		private boolean success_T=false;
 		
 		private final FileFormat ff;
@@ -1075,6 +1154,9 @@ public class TestFormat {
 
 		SuperLongList sllT=new SuperLongList(lengthLimit);
 		private final ReadStats readstatsT=new ReadStats();
+
+//		private final BitSet zmwsT=new BitSet(8192);
+		private IntHashMapBinary zmwMapT=new IntHashMapBinary(2048);
 		
 	}
 	
@@ -1112,7 +1194,10 @@ public class TestFormat {
 	private int qMaxCalled=-999;
 	
 	private final int lengthLimit=100000;
-	SuperLongList sll=new SuperLongList(lengthLimit);
+	private SuperLongList sll=new SuperLongList(lengthLimit);
+//	private BitSet zmws=new BitSet(8192);
+	private IntHashMapBinary zmwMap=new IntHashMapBinary(2048);
+	private boolean parseZmw=true;
 	
 	private HashMap<String, Barcode> barcodes=new HashMap<String, Barcode>();
 	private ArrayList<String> invalidHeaders=new ArrayList<String>();
@@ -1169,6 +1254,8 @@ public class TestFormat {
 	private String bhistFile="bhist.txt";
 	private String lhistFile="lhist.txt";
 	private String gchistFile="gchist.txt";
+	private String zmwhistFile="zmwhist.txt";
+	
 	private String barcodeFile="barcodes.txt";
 	private String junkFile="junk.txt";
 	

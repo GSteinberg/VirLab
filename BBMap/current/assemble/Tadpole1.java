@@ -198,7 +198,7 @@ public class Tadpole1 extends Tadpole {
 			final int tnum=aint.getAndAdd(1);
 			if(tnum>=tables.ways){return false;}
 			final HashArray1D table=tables.getTable(tnum);
-			if(verbose && id==0){outstream.println("Processing table "+tnum+", size "+table.size());}
+			if(verbose2 && id==0){outstream.println("Processing table "+tnum+", size "+table.size());}
 			final int max=table.arrayLength();
 			for(int cell=0; cell<max; cell++){
 				int x=processCell(table, cell);
@@ -211,7 +211,7 @@ public class Tadpole1 extends Tadpole {
 			if(tnum>=tables.ways){return false;}
 			final HashArray1D table=tables.getTable(tnum);
 			final HashForest forest=table.victims();
-			if(verbose && id==0){outstream.println("Processing forest "+tnum+", size "+forest.size());}
+			if(verbose2 && id==0){outstream.println("Processing forest "+tnum+", size "+forest.size());}
 			final int max=forest.arrayLength();
 			for(int cell=0; cell<max; cell++){
 				KmerNode kn=forest.getNode(cell);
@@ -477,7 +477,7 @@ public class Tadpole1 extends Tadpole {
 			
 			if(trimEnds>0){bb.trimByAmount(trimEnds, trimEnds);}
 			else if(trimCircular && leftStatus==LOOP && rightStatus==LOOP){bb.trimByAmount(0, k-1);}
-			if(joinContigs || (bb.length()>=initialLength+minExtension && bb.length()>=minContigLen)){//TODO: for bubble-popping and etc, all contigs should be retained
+			if(joinContigs || (bb.length()>=initialLength+minExtension && (bb.length()>=minContigLen || popBubbles))){
 				if(success){
 					bb.reverseComplementInPlace();
 					byte[] bases=bb.toBytes();
@@ -566,7 +566,7 @@ public class Tadpole1 extends Tadpole {
 			//				if(useOwnership && THREADS==1){assert(claim(bases, bases.length, id, rid));}
 			success=(useOwnership ? doubleClaim(bb, id) : true);
 			if(verbose  /*|| true*/){outstream.println("Success for thread "+id+": "+success);}
-			if(bb.length()>=bases.length+minExtension && bb.length()>=minContigLen){
+			if(bb.length()>=bases.length+minExtension && (bb.length()>=minContigLen || popBubbles)){
 				if(success){
 					bb.reverseComplementInPlace();
 					return bb.toBytes();
@@ -622,22 +622,23 @@ public class Tadpole1 extends Tadpole {
 		}
 		
 		@Override
-		public void processContigLeft(Contig c, int[] leftCounts, int[] rightCounts, int[] extraCounts){
-			if(c.leftCode!=F_BRANCH){return;}
+		public void processContigLeft(Contig c, int[] leftCounts, int[] rightCounts, int[] extraCounts, ByteBuilder bb){
+			if(c.leftCode==DEAD_END){return;}
 			
 			final long kmer0=c.leftKmer(k);
 			final long rkmer0=rcomp(kmer0);
-			assert(tables.getCount(kmer0, rkmer0)>0);
 			
+			assert(tables.getCount(kmer0, rkmer0)>0);
 			assert(tables.findOwner(kmer0)==c.id) : tables.findOwner(kmer0)+", "+c.id;
 
 			int leftMaxPos=fillLeftCounts(kmer0, rkmer0, leftCounts);
 			int leftMax=leftCounts[leftMaxPos];
 			int leftSecondPos=Tools.secondHighestPosition(leftCounts);
 			int leftSecond=leftCounts[leftSecondPos];
-
+			
 			for(int x=0; x<leftCounts.length; x++){
-				int count=leftCounts[x];
+				bb.clear();
+				final int count=leftCounts[x];
 				int target=-1;
 				if(count>0 && isJunction(leftMax, count)){
 					long x2=3-x;
@@ -645,23 +646,24 @@ public class Tadpole1 extends Tadpole {
 					long kmer=(kmer0>>>2)|(((long)x)<<shift2);
 					assert(kmer==rcomp(rkmer));
 					assert(tables.getCount(kmer, rkmer)==count) : count+", "+tables.getCount(kmer, rkmer);
-					target=exploreRight(rkmer, kmer, extraCounts, rightCounts);
+					bb.append(AminoAcid.numberToBase[x]);
+					target=exploreRight(rkmer, kmer, extraCounts, rightCounts, bb);
 					if(verbose){
 						outstream.println(c.id+"L_F: x="+x+", cnt="+count+", dest="+target
 								+", "+codeStrings[lastExitCondition]+", len="+lastLength+", orient="+lastOrientation);
 					}
 				}
 				if(target>=0){
-					if(c.leftEdges==null){c.leftEdges=new Edge[4];}
-					c.leftEdges[x]=new Edge(c.id, target, lastLength, lastOrientation);
+					Edge se=new Edge(c.id, target, lastLength, lastOrientation, count, bb.toBytes());
+					c.addLeftEdge(se);
 					edgesMadeT++;
 				}
 			}
 		}
 
 		@Override
-		public void processContigRight(Contig c, int[] leftCounts, int[] rightCounts, int[] extraCounts){
-			if(c.rightCode!=F_BRANCH){return;}//TODO: D_BRANCH is unhandled
+		public void processContigRight(Contig c, int[] leftCounts, int[] rightCounts, int[] extraCounts, ByteBuilder bb){
+			if(c.rightCode==DEAD_END){return;}
 
 			final long kmer0=c.rightKmer(k);
 			final long rkmer0=rcomp(kmer0);
@@ -672,7 +674,8 @@ public class Tadpole1 extends Tadpole {
 			int rightSecond=rightCounts[rightSecondPos];
 
 			for(int x=0; x<rightCounts.length; x++){
-				int count=rightCounts[x];
+				bb.clear();
+				final int count=rightCounts[x];
 				int target=-1;
 				if(count>0 && isJunction(rightMax, count)){
 					long x2=3-x;
@@ -680,19 +683,22 @@ public class Tadpole1 extends Tadpole {
 					long rkmer=(rkmer0>>>2)|(((long)x2)<<shift2);
 					assert(kmer==rcomp(rkmer));
 					assert(tables.getCount(kmer, rkmer)==count) : count+", "+tables.getCount(kmer, rkmer);
-					target=exploreRight(kmer, rkmer, leftCounts, extraCounts);
+					bb.append(AminoAcid.numberToBase[x]);
+					target=exploreRight(kmer, rkmer, leftCounts, extraCounts, bb);
 					if(verbose){
 						outstream.println(c.id+"R_F: x="+x+", cnt="+count+", dest="+target+", "+codeStrings[lastExitCondition]+", len="+lastLength+", orient="+lastOrientation);
 					}
 				}
 				if(target>=0){
-					if(c.rightEdges==null){c.rightEdges=new Edge[4];}
-					c.rightEdges[x]=new Edge(c.id, target, lastLength, lastOrientation);
+					lastOrientation|=1;
+					Edge se=new Edge(c.id, target, lastLength, lastOrientation, count, bb.toBytes());
+					c.addRightEdge(se);
+					edgesMadeT++;
 				}
 			}
 		}
 
-		private int exploreRight(long kmer, long rkmer, int[] leftCounts, int[] rightCounts){
+		private int exploreRight(long kmer, long rkmer, int[] leftCounts, int[] rightCounts, ByteBuilder bb){
 			int length=1;
 			int owner=-1;
 			lastTarget=-1;
@@ -727,6 +733,7 @@ public class Tadpole1 extends Tadpole {
 					lastLength=length;
 					return -1;
 				}
+				bb.append(AminoAcid.numberToBase[rightMaxPos]);
 				long x=rightMaxPos;
 				long x2=3-x;
 				kmer=((kmer<<2)|x)&mask;
@@ -738,16 +745,26 @@ public class Tadpole1 extends Tadpole {
 				lastExitCondition=SUCCESS;
 				Contig dest=contigs.get(owner);
 				long left=dest.leftKmer(k);
-				if(left==kmer){
+//				if(left==kmer){
+//					lastOrientation=0;
+//				}else if(left==rkmer){
+//					lastOrientation=1;
+//				}else{
+//					long right=dest.rightKmer(k);
+//					if(right==kmer){
+//						lastOrientation=2;
+//					}else if(right==rkmer){
+//						lastOrientation=3;
+//					}
+//				}
+				if(left==kmer || left==rkmer){
 					lastOrientation=0;
-				}else if(left==rkmer){
-					lastOrientation=1;
 				}else{
 					long right=dest.rightKmer(k);
-					if(right==kmer){
+					if(right==kmer || right==rkmer){
 						lastOrientation=2;
-					}else if(right==rkmer){
-						lastOrientation=3;
+					}else{
+						assert(false);
 					}
 				}
 			}else{
@@ -986,7 +1003,7 @@ public class Tadpole1 extends Tadpole {
 			key=toValue(kmer, rkmer);
 			table=tables.getTableForKey(key);
 			
-			assert(table.getValue(key)==rightMax);
+			assert(table.getValue(key)==rightMax || rightMax==0) : key+", "+table.getValue(key)+", "+rightMax+", "+Arrays.toString(rightCounts);
 			count=rightMax;
 			
 			assert(count>=minCountExtend) : count;
@@ -1173,7 +1190,7 @@ public class Tadpole1 extends Tadpole {
 			key=toValue(kmer, rkmer);
 			table=tables.getTableForKey(key);
 			
-			assert(table.getValue(key)==rightMax);
+			assert(table.getValue(key)==rightMax || rightMax==0);
 			count=rightMax;
 			
 			assert(count>=minCountExtend) : count;
@@ -1267,7 +1284,7 @@ public class Tadpole1 extends Tadpole {
 					len=0;
 					kmer=rkmer=0;
 				}else{len++;}
-				if(verbose){outstream.println("Scanning i="+i+", len="+len+", kmer="+kmer+", rkmer="+rkmer+"\t"+new String(bases, Tools.max(0, i-k2), Tools.min(i+1, k)));}
+				if(verbose){outstream.println("C: Scanning i="+i+", len="+len+", kmer="+kmer+", rkmer="+rkmer+"\t"+new String(bases, Tools.max(0, i-k2), Tools.min(i+1, k)));}
 			}
 		}
 		
@@ -1304,7 +1321,7 @@ public class Tadpole1 extends Tadpole {
 						}
 					}
 				}
-				if(verbose){outstream.println("Scanning i="+i+", len="+len+", kmer="+kmer+", rkmer="+rkmer+"\t"+new String(bases, Tools.max(0, i-k2), Tools.min(i+1, k)));}
+				if(verbose){outstream.println("D: Scanning i="+i+", len="+len+", kmer="+kmer+", rkmer="+rkmer+"\t"+new String(bases, Tools.max(0, i-k2), Tools.min(i+1, k)));}
 			}
 		}
 		
@@ -1361,7 +1378,7 @@ public class Tadpole1 extends Tadpole {
 						}
 					}
 				}
-				if(verbose){outstream.println("Scanning i="+i+", len="+len+", kmer="+kmer+", rkmer="+rkmer+"\t"+new String(bases, Tools.max(0, i-k2), Tools.min(i+1, k)));}
+				if(verbose){outstream.println("E: Scanning i="+i+", len="+len+", kmer="+kmer+", rkmer="+rkmer+"\t"+new String(bases, Tools.max(0, i-k2), Tools.min(i+1, k)));}
 			}
 		}
 		

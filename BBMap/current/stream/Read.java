@@ -105,6 +105,7 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 		
 		final boolean passesJunk;
 		
+//		assert(false) : SKIP_SLOW_VALIDATION+","+VALIDATE_BRANCHLESS+","+JUNK_MODE;
 		if(SKIP_SLOW_VALIDATION){
 			passesJunk=true;
 		}else if(!aminoacid()){
@@ -115,7 +116,7 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 				passesJunk=validateCommonCase(processAssertions);
 			}
 		}else{
-			if(U_TO_T){uToT();}
+//			if(U_TO_T){uToT();}  This is amino, so...
 			fixCase();
 			passesJunk=validateJunk(processAssertions);
 			if(CHANGE_QUALITY){fixQuality();}
@@ -171,6 +172,7 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 		for(int i=0; i<bases.length; i++){
 			byte b=bases[i];
 			int num=toNum[b];
+//			System.err.println(Character.toString(b)+" -> "+num);
 			if(num<0){
 				if(JUNK_MODE==FIX_JUNK){
 					bases[i]=nocall;
@@ -288,13 +290,14 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 		
 		final byte nocall='N';
 		final byte[] toNum=AminoAcid.baseToNumber;
-		final byte[] ddxMap=AminoAcid.dotDashXToNocall;
+		final byte[] map=(DOT_DASH_X_TO_N && IUPAC_TO_N ? AminoAcid.baseToACGTN : 
+			DOT_DASH_X_TO_N ? AminoAcid.dotDashXToNocall : IUPAC_TO_N ? AminoAcid.iupacToNocall : null);
 		
 		if(JUNK_MODE==IGNORE_JUNK){
 			if(quality!=null && CHANGE_QUALITY){
-				if(DOT_DASH_X_TO_N){
+				if(DOT_DASH_X_TO_N || IUPAC_TO_N){
 					for(int i=0; i<bases.length; i++){
-						final byte b=ddxMap[bases[i]];
+						final byte b=map[bases[i]];
 						final byte q=quality[i];
 						final int num=toNum[b];
 						bases[i]=b;
@@ -308,9 +311,9 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 						quality[i]=(num>=0 ? qMap[q] : 0);
 					}
 				}
-			}else if(DOT_DASH_X_TO_N){
+			}else if(DOT_DASH_X_TO_N || IUPAC_TO_N){
 				for(int i=0; i<bases.length; i++){
-					byte b=ddxMap[bases[i]];
+					byte b=map[bases[i]];
 					bases[i]=b;
 				}
 			}
@@ -318,23 +321,30 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 		}
 		
 		int junkOr=0;
+//		int iupacOr=0;
 		final byte[] toNumE=AminoAcid.baseToNumberExtended;
-		if(DOT_DASH_X_TO_N){
+		
+//		asdf
+		
+		if(DOT_DASH_X_TO_N || IUPAC_TO_N){
 			if(quality!=null && CHANGE_QUALITY){
 				for(int i=0; i<bases.length; i++){
-					final byte b=ddxMap[bases[i]];
+					final byte b=map[bases[i]];
 					final byte q=quality[i];
 					final int numE=toNumE[b];
 					final int num=toNum[b];
 					junkOr|=numE;
+//					iupacOr|=num;
 					bases[i]=b;
 					quality[i]=(num>=0 ? qMap[q] : 0);
 				}
 			}else{
 				for(int i=0; i<bases.length; i++){
-					final byte b=ddxMap[bases[i]];
+					final byte b=map[bases[i]];
 					final int numE=toNumE[b];
+//					final int num=toNum[b];
 					junkOr|=numE;
+//					iupacOr|=num;
 					bases[i]=b;
 				}
 			}
@@ -346,19 +356,27 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 					final int numE=toNumE[b];
 					final int num=toNum[b];
 					junkOr|=numE;
+//					iupacOr|=num;
 					quality[i]=(num>=0 ? qMap[q] : 0);
 				}
 			}else{
 				for(int i=0; i<bases.length; i++){
 					final byte b=bases[i];
 					final int numE=toNumE[b];
+//					final int num=toNum[b];
 					junkOr|=numE;
+//					iupacOr|=num;
 				}
 			}
 		}
 		
+//		System.err.println(junkOr+", "+JUNK_MODE);
+		
 		//Common case
 		if(junkOr>=0){return true;}
+//		if(junkOr>=0 && (JUNK_MODE!=FIX_JUNK_AND_IUPAC || iupacOr>=0)){return true;}
+//		
+//		assert(junkOr<0 || (JUNK_MODE==FIX_JUNK_AND_IUPAC && iupacOr<0));
 		
 		//TODO: I could disable VALIDATE_BRANCHLESS here, if it's not final
 		//VALIDATE_BRANCHLESS=false;
@@ -376,6 +394,13 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 		}else if(JUNK_MODE==FLAG_JUNK){
 			setJunk(true);
 			return false;
+		}else if(JUNK_MODE==FIX_JUNK_AND_IUPAC){
+			for(int i=0; i<bases.length; i++){
+				byte b=bases[i];
+				final byte c=AminoAcid.baseToACGTN[b];
+				bases[i]=c;
+			}
+			return true;
 		}else{
 			if(processAssertions){
 				int i=0;
@@ -895,7 +920,7 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 	
 	public ByteBuilder toSam(ByteBuilder bb){
 		SamLine sl=new SamLine(this, pairnum());
-		return sl.toBytes(bb).append('\n');
+		return sl.toBytes(bb);//Note: This used to have a newline
 	}
 	
 	public static CharSequence header(){
@@ -1211,7 +1236,7 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 		int lastN=-1, lastBase=-1;
 		int contignum=1;
 		long feature=1;
-		StringBuilder sb=(agp ? new StringBuilder() : null);
+		ByteBuilder bb=(agp ? new ByteBuilder() : null);
 		assert(obj==null);
 		for(int i=0; i<bases.length; i++){
 			final byte b=bases[i];
@@ -1224,32 +1249,32 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 					if(r.length()>=minContig){list.add(r);}
 					contignum++;
 					
-					if(sb!=null){
-						sb.append(id).append('\t');
-						sb.append(start+1).append('\t');
-						sb.append(stop).append('\t');
-						sb.append(feature).append('\t');
+					if(bb!=null){
+						bb.append(id).append('\t');
+						bb.append(start+1).append('\t');
+						bb.append(stop).append('\t');
+						bb.append(feature).append('\t');
 						feature++;
-						sb.append('W').append('\t');
-						sb.append(r.id).append('\t');
-						sb.append(1).append('\t');
-						sb.append(r.length()).append('\t');
-						sb.append("+").append('\n');
+						bb.append('W').append('\t');
+						bb.append(r.id).append('\t');
+						bb.append(1).append('\t');
+						bb.append(r.length()).append('\t');
+						bb.append('+').append('\n');
 					}
 				}
 				lastN=i;
 			}else{
-				if(sb!=null && prev=='N' && lastBase>=0){
-					sb.append(id).append('\t');
-					sb.append(lastBase+2).append('\t');
-					sb.append(i).append('\t');
-					sb.append(feature).append('\t');
+				if(bb!=null && prev=='N' && lastBase>=0){
+					bb.append(id).append('\t');
+					bb.append(lastBase+2).append('\t');
+					bb.append(i).append('\t');
+					bb.append(feature).append('\t');
 					feature++;
-					sb.append('N').append('\t');
-					sb.append((i-lastBase-1)).append('\t');
-					sb.append("scaffold").append('\t');
-					sb.append("yes").append('\t');
-					sb.append("paired-ends").append('\n');
+					bb.append('N').append('\t');
+					bb.append((i-lastBase-1)).append('\t');
+					bb.append("scaffold").append('\t');
+					bb.append("yes").append('\t');
+					bb.append("paired-ends").append('\n');
 				}
 				lastBase=i;
 			}
@@ -1263,34 +1288,34 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 			if(r.length()>=minContig){list.add(r);}
 			contignum++;
 			
-			if(sb!=null){
-				sb.append(id).append('\t');
-				sb.append(start+1).append('\t');
-				sb.append(stop).append('\t');
-				sb.append(feature).append('\t');
+			if(bb!=null){
+				bb.append(id).append('\t');
+				bb.append(start+1).append('\t');
+				bb.append(stop).append('\t');
+				bb.append(feature).append('\t');
 				feature++;
-				sb.append('W').append('\t');
-				sb.append(r.id).append('\t');
-				sb.append(1).append('\t');
-				sb.append(r.length()).append('\t');
-				sb.append("+").append('\n');
+				bb.append('W').append('\t');
+				bb.append(r.id).append('\t');
+				bb.append(1).append('\t');
+				bb.append(r.length()).append('\t');
+				bb.append('+').append('\n');
 			}
 		}else{
-			if(sb!=null && prev=='N' && lastBase>=0){
-				sb.append(id).append('\t');
-				sb.append(lastBase+2).append('\t');
-				sb.append(bases.length).append('\t');
-				sb.append(feature).append('\t');
+			if(bb!=null && prev=='N' && lastBase>=0){
+				bb.append(id).append('\t');
+				bb.append(lastBase+2).append('\t');
+				bb.append(bases.length).append('\t');
+				bb.append(feature).append('\t');
 				feature++;
-				sb.append('N').append('\t');
-				sb.append((bases.length-lastBase-1)).append('\t');
-				sb.append("scaffold").append('\t');
-				sb.append("yes").append('\t');
-				sb.append("paired-ends").append('\n');
+				bb.append('N').append('\t');
+				bb.append((bases.length-lastBase-1)).append('\t');
+				bb.append("scaffold").append('\t');
+				bb.append("yes").append('\t');
+				bb.append("paired-ends").append('\n');
 			}
 			lastBase=bases.length;
 		}
-		if(sb!=null){obj=sb.toString();}
+		if(bb!=null){obj=bb.toBytes();}
 		return list;
 	}
 
@@ -1299,6 +1324,11 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 		AminoAcid.reverseComplementBasesInPlace(bases);
 		Tools.reverseInPlace(quality);
 		setStrand(strand()^1);
+	}
+
+	/** Complements the read. */
+	public void complement() {
+		AminoAcid.reverseComplementBasesInPlace(bases);
 	}
 	
 	@Override
@@ -1702,6 +1732,45 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 		return false;
 	}
 	
+	public int mappedNonClippedBases() {
+		if(!mapped() || match==null || bases==null){return 0;}
+		
+		int len=0;
+		byte mode='0', c='0';
+		int current=0;
+		for(int i=0; i<match.length; i++){
+			c=match[i];
+			if(Tools.isDigit(c)){
+				current=(current*10)+(c-'0');
+			}else{
+				if(mode==c){
+					current=Tools.max(current+1, 2);
+				}else{
+					current=Tools.max(current, 1);
+
+					if(mode=='D' || mode=='C' || mode=='X' || mode=='Y' || mode=='d'){
+						
+					}else{
+						len+=current;
+					}
+					mode=c;
+					current=0;
+				}
+			}
+		}
+		if(current>0 || !Tools.isDigit(c)){
+			current=Tools.max(current, 1);
+			if(mode=='D' || mode=='C' || mode=='X' || mode=='Y' || mode=='d'){
+				
+			}else{
+				len+=current;
+			}
+			mode=c;
+			current=0;
+		}
+		return len;
+	}
+	
 	/**
 	 * Handles short or long mode.
 	 * @param match string
@@ -1734,7 +1803,7 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 						//Do nothing
 						//I assume this is clipped because it went off the end of a scaffold, and thus is irrelevant to identity
 					}else if(mode!='0'){
-						assert(mode=='S' || mode=='D' || mode=='I' || mode=='X' || mode=='Y') : (char)mode;
+						assert(mode=='S' || mode=='D' || mode=='I' || mode=='X' || mode=='Y' || mode=='i' || mode=='d') : (char)mode;
 						if(mode!='D' || current<SamLine.INTRON_LIMIT){
 							bad+=current;
 						}
@@ -1819,7 +1888,7 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 						//Do nothing
 						//I assume this is clipped because it went off the end of a scaffold, and thus is irrelevant to identity
 					}else if(mode!='0'){
-						assert(mode=='S' || mode=='I' || mode=='X' || mode=='Y') : (char)mode;
+						assert(mode=='S' || mode=='I' || mode=='X' || mode=='Y' || mode=='i' || mode=='d') : (char)mode;
 						bad+=current;
 //						System.out.println("B: mode="+(char)mode+", c="+(char)c+", current="+current+", good="+good+", bad="+bad);
 					}
@@ -1913,21 +1982,39 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 		}
 	}
 	
+	/** 
+	 * Parse the barcode from an Illumina header.
+	 * @param failIfNoBarcode Terminate the JVM if no barcode is present. 
+	 * @return The barcode
+	 */
 	public String barcode(boolean failIfNoBarcode){
+		
 		if(id==null){
-			assert(!failIfNoBarcode) : "No header.";
+			if(failIfNoBarcode && Shared.EA()){
+				KillSwitch.kill("Encountered a read header without a barcode:\n"+id+"\n");
+			}
 			return null;
 		}
 		
 		final int loc=id.lastIndexOf(':');
 		final int loc2=Tools.max(id.indexOf(' '), id.indexOf('/'));
 		if(loc<0 || loc<=loc2 || loc>=id.length()-1){
-			assert(!failIfNoBarcode) : "No barcode for '"+id+"'";
+			if(failIfNoBarcode && Shared.EA()){
+				KillSwitch.kill("Encountered a read header without a barcode:\n"+id+"\n");
+			}
 			return null;
 		}
 		
 		String code=id.substring(loc+1);
 		return code;
+	}
+	
+	/**
+	 * @return The rname of this Read's SamLine, if present and mapped.
+	 */
+	public String rnameS() {
+		if(samline==null || !samline.mapped()){return null;}
+		return samline.rnameS();
 	}
 
 	/** Average based on summing quality scores */
@@ -2090,7 +2177,7 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 	}
 	
 	public boolean containsVariants(){
-		assert(match!=null && valid()) : (match==null)+", "+(valid())+"\n"+obj+"\n";
+		assert(match!=null && valid()) : (match==null)+", "+(valid())+"\n"+samline+"\n";
 		for(int i=0; i<match.length; i++){
 			byte b=match[i];
 			assert(b!='M');
@@ -2100,7 +2187,7 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 	}
 	
 	public boolean containsClipping(){
-		assert(match!=null && valid()) : (match==null)+", "+(valid())+"\n"+obj+"\n";
+		assert(match!=null && valid()) : (match==null)+", "+(valid())+"\n"+samline+"\n";
 		if(match.length<1){return false;}
 		if(match[0]=='C'){return true;}
 		for(int i=match.length-1; i>0; i--){
@@ -2268,12 +2355,47 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 //		return x;
 	}
 	
+	public static int countVars(byte[] match){
+		return countVars(match, true, true, true);
+	}
+	
+	public static int countVars(byte[] match, boolean sub, boolean ins, boolean del){
+		int S=0, I=0, D=0;
+		int current=0;
+		byte last='?';
+		for(byte b : match){
+			if(Tools.isDigit(b)){
+				current=current*10+b-'0';
+			}else{
+				if(last=='S'){S+=Tools.max(1, current);}
+				else if(last=='I'){I++;}
+				else if(last=='D'){D++;}
+				current=0;
+				last=b;
+			}
+		}
+		if(last=='S'){S+=Tools.max(1, current);}
+		else if(last=='I'){I++;}
+		else if(last=='D'){D++;}
+		return (sub ? S : 0)+(ins ? I : 0)+(del ? D : 0);
+	}
+	
 	public static boolean containsSubs(byte[] match){
 		int x=0;
 		assert(match!=null);
 		for(int i=0; i<match.length; i++){
 			byte b=match[i];
 			if(b=='S'){return true;}
+		}
+		return false;
+	}
+	
+	public static boolean containsVars(byte[] match){
+		int x=0;
+		assert(match!=null);
+		for(int i=0; i<match.length; i++){
+			byte b=match[i];
+			if(b=='S' || b=='I' || b=='D'){return true;}
 		}
 		return false;
 	}
@@ -2659,15 +2781,15 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 			if(m==prev){count++;}
 			else{
 				sb.append(prev);
-				if(count>2){sb.append(count);}
-				else if(count==2){sb.append(prev);}
+				if(count>1){sb.append(count);}
+//				else if(count==2){sb.append(prev);}
 				prev=m;
 				count=1;
 			}
 		}
 		sb.append(prev);
-		if(count>2){sb.append(count);}
-		else if(count==2){sb.append(prev);}
+		if(count>1){sb.append(count);}
+//		else if(count==2){sb.append(prev);}
 		
 		byte[] r=sb.toBytes();
 		return r;
@@ -2750,6 +2872,7 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 	
 	public int[] gaps;
 	
+	public String name() {return id;}
 	public String id;
 	public long numericID;
 	public int chrom;
@@ -2766,7 +2889,8 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 	
 	public ArrayList<SiteScore> sites;
 	public SiteScore originalSite; //Origin site for synthetic reads
-	public Serializable obj=null; //For testing only
+	public Object obj=null;//Don't set this to a SamLine; it's for other things.
+	public SamLine samline=null;
 	public Read mate;
 	
 	public int flags;
@@ -2783,7 +2907,9 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 		assert(obj!=null && obj.getClass()==Long.class) : obj;
 		return ((Long)obj).longValue();
 	}
+	/** Number of bases in this pair, including the mate if present. */
 	public int pairLength(){return length()+mateLength();}
+	/** Number of reads in this pair.  Returns 1 if the read has no mate, and 2 if it does. */
 	public int pairCount(){return 1+mateCount();}
 	public int length(){return bases==null ? 0 : bases.length;}
 	public int qlength(){return quality==null ? 0 : quality.length;}
@@ -2793,25 +2919,29 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 	public boolean mateMapped(){return mate==null ? false : mate.mapped();}
 	public long countMateBytes(){return mate==null ? 0 : mate.countBytes();}
 	public long countMateFastqBytes(){return mate==null ? 0 : mate.countFastqBytes();}
+	/** Number of bytes this read pair uses in memory, approximately */
+	public long countPairBytes(){return countBytes()+(mate==null ? 0 : mate.countBytes());}
 	
-	//In memory
+	/** Number of bytes this read uses in memory, approximately */
 	public long countBytes(){
-		long sum=125; //Approximate per-read overhead
+		long sum=129; //Approximate per-read overhead
 		sum+=(bases==null ? 0 : bases.length+16);
 		sum+=(quality==null ? 0 : quality.length+16);
 		sum+=(id==null ? 0 : id.length()*2+16);
+		sum+=(match==null ? 0 : match.length+16);
+		sum+=(samline==null ? 0 : samline.countBytes());
 		return sum;
 	}
 	
-	//On disk
+	/** Number of bytes this read uses in on disk in Fastq format */
 	public long countFastqBytes(){
-		long sum=6;
+		long sum=6;//4 newlines, +, @
 		sum+=(bases==null ? 0 : bases.length);
 		sum+=(quality==null ? 0 : quality.length);
 		sum+=(id==null ? 0 : id.length());
 		return sum;
 	}
-
+	
 	public int countLeft(final char base){return countLeft((byte)base);}
 	public int countRight(final char base){return countRight((byte)base);}
 	
@@ -2869,12 +2999,15 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 	public boolean swapped(){return (flags&SWAPMASK)==SWAPMASK;}
 	public boolean shortmatch(){return (flags&SHORTMATCHMASK)==SHORTMATCHMASK;}
 	public boolean insertvalid(){return (flags&INSERTMASK)==INSERTMASK;}
-	public boolean hasadapter(){return (flags&ADAPTERMASK)==ADAPTERMASK;}
+	public boolean hasAdapter(){return (flags&ADAPTERMASK)==ADAPTERMASK;}
 	public boolean secondary(){return (flags&SECONDARYMASK)==SECONDARYMASK;}
 	public boolean aminoacid(){return (flags&AAMASK)==AAMASK;}
 	public boolean amino(){return (flags&AAMASK)==AAMASK;}
 	public boolean junk(){return (flags&JUNKMASK)==JUNKMASK;}
 	public boolean validated(){return (flags&VALIDATEDMASK)==VALIDATEDMASK;}
+	public boolean tested(){return (flags&TESTEDMASK)==TESTEDMASK;}
+	public boolean invertedRepeat(){return (flags&IRMASK)==IRMASK;}
+	public boolean trimmed(){return (flags&TRIMMEDMASK)==TRIMMEDMASK;}
 	
 	/** For paired ends: 0 for read1, 1 for read2 */
 	public int pairnum(){return (flags&PAIRNUMMASK)>>PAIRNUMSHIFT;}
@@ -3693,6 +3826,21 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 		if(b){flags|=VALIDATEDMASK;}
 	}
 	
+	public void setTested(boolean b){
+		flags=(flags&~TESTEDMASK);
+		if(b){flags|=TESTEDMASK;}
+	}
+	
+	public void setInvertedRepeat(boolean b){
+		flags=(flags&~IRMASK);
+		if(b){flags|=IRMASK;}
+	}
+	
+	public void setTrimmed(boolean b){
+		flags=(flags&~TRIMMEDMASK);
+		if(b){flags|=TRIMMEDMASK;}
+	}
+	
 	public void setInsert(int x){
 		if(x<1){x=-1;}
 //		assert(x==-1 || x>9 || length()<20) : x+", "+length(); //Invalid assertion for synthetic reads.
@@ -3827,8 +3975,11 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 	public static final int AAMASK=(1<<16);
 	public static final int JUNKMASK=(1<<17);
 	public static final int VALIDATEDMASK=(1<<18);
+	public static final int TESTEDMASK=(1<<19);
+	public static final int IRMASK=(1<<20);
+	public static final int TRIMMEDMASK=(1<<21);
 	
-	private static final int[] maskArray=makeMaskArray(18); //Be sure this is big enough for all flags!
+	private static final int[] maskArray=makeMaskArray(22); //Be sure this is big enough for all flags!
 
 	public static boolean TO_UPPER_CASE=false;
 	public static boolean LOWER_CASE_TO_N=false;
@@ -3843,7 +3994,9 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 	public static final int FLAG_JUNK=1;
 	public static final int FIX_JUNK=2;
 	public static final int CRASH_JUNK=3;
+	public static final int FIX_JUNK_AND_IUPAC=4;
 	public static int JUNK_MODE=CRASH_JUNK;
+	public static boolean IUPAC_TO_N=false;
 	
 	public static boolean U_TO_T=false;
 	public static boolean COMPRESS_MATCH_BEFORE_WRITING=true;
@@ -3860,10 +4013,19 @@ public final class Read implements Comparable<Read>, Cloneable, Serializable{
 
 	/*--------------------------------------------------------------*/
 	
+	/** Offset for quality scores, normally 33, or 64 for some old Illumina data */
 	private static final byte ASCII_OFFSET=33;
+	
+	/** Allow quality scores to be changed, typically for corrupt Illumina data */
 	public static boolean CHANGE_QUALITY=true; //Cap all quality values between MIN_CALLED_QUALITY and MAX_CALLED_QUALITY
+	
+	/** Minimum allowed quality score for called (ACGT) bases */
 	private static byte MIN_CALLED_QUALITY=2;
+	
+	/** Maximum allowed quality score for called (ACGT) bases */
 	private static byte MAX_CALLED_QUALITY=41;
+	
+	/** Maximum allowed quality score for merged reads, which otherwise would normally be very high */
 	public static byte MAX_MERGE_QUALITY=41;
 	public static byte[] qMap=makeQmap(MIN_CALLED_QUALITY, MAX_CALLED_QUALITY);
 

@@ -177,6 +177,10 @@ public class Orf extends Feature {
 		return bb;
 	}
 	
+	public boolean isSSU(){
+		return type==r16S || type==r18S;
+	}
+	
 	/*--------------------------------------------------------------*/
 	/*----------------          Overrides           ----------------*/
 	/*--------------------------------------------------------------*/
@@ -213,9 +217,9 @@ public class Orf extends Feature {
 	public Orf prevMinus;
 	
 	public final int type;
-	public static int CDS=0, tRNA=1, r16S=2, r23S=3, r5S=4, RNA=5;
-	public static String[] typeStrings=new String[] {"CDS", "tRNA", "16S", "23S", "5S", "RNA"};
-	public static String[] typeStrings2=new String[] {"CDS", "tRNA", "rRNA", "rRNA", "rRNA", "RNA"};
+	public static int CDS=0, tRNA=1, r16S=2, r23S=3, r5S=4, RNA=5, r18S=6, r28S=7;
+	public static String[] typeStrings=new String[] {"CDS", "tRNA", "16S", "23S", "5S", "RNA", "18S", "28S"};
+	public static String[] typeStrings2=new String[] {"CDS", "tRNA", "rRNA", "rRNA", "rRNA", "RNA", "rRNA", "rRNA"};
 	
 	/*--------------------------------------------------------------*/
 	/*----------------         Static Fields        ----------------*/

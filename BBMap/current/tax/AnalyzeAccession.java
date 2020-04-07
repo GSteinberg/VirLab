@@ -6,6 +6,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map.Entry;
 
 import fileIO.ByteFile;
 import fileIO.ByteFile1;
@@ -22,7 +24,10 @@ import shared.Tools;
 import stream.ConcurrentGenericReadInputStream;
 import stream.FastaReadInputStream;
 import structures.ByteBuilder;
+import structures.ListNum;
 import structures.StringNum;
+import template.Accumulator;
+import template.ThreadWaiter;
 
 /**
  * Counts patterns in Accessions.
@@ -31,7 +36,7 @@ import structures.StringNum;
  * @date May 9, 2018
  *
  */
-public class AnalyzeAccession {
+public class AnalyzeAccession implements Accumulator<AnalyzeAccession.ProcessThread> {
 	
 	public static void main(String[] args){
 		//Start a timer immediately upon code entrance.
@@ -65,10 +70,7 @@ public class AnalyzeAccession {
 			String a=split[0].toLowerCase();
 			String b=split.length>1 ? split[1] : null;
 
-			if(a.equals("lines")){
-				maxLines=Long.parseLong(b);
-				if(maxLines<0){maxLines=Long.MAX_VALUE;}
-			}else if(a.equals("verbose")){
+			if(a.equals("verbose")){
 				verbose=Tools.parseBoolean(b);
 				ByteFile1.verbose=verbose;
 				ByteFile2.verbose=verbose;
@@ -84,6 +86,8 @@ public class AnalyzeAccession {
 						in.add(s2);
 					}
 				}
+			}else if(a.equals("perfile")){
+				perFile=Tools.parseBoolean(b);
 			}else if(b==null && new File(arg).exists()){
 				in.add(arg);
 			}else if(parser.parse(arg, a, b)){
@@ -106,10 +110,10 @@ public class AnalyzeAccession {
 		
 		if(in==null){throw new RuntimeException("Error - at least one input file is required.");}
 		
-		if(!ByteFile.FORCE_MODE_BF2){
-			ByteFile.FORCE_MODE_BF2=false;
-			ByteFile.FORCE_MODE_BF1=true;
-		}
+//		if(!ByteFile.FORCE_MODE_BF2){
+//			ByteFile.FORCE_MODE_BF2=false;
+//			ByteFile.FORCE_MODE_BF1=true;
+//		}
 
 		if(out!=null && out.equalsIgnoreCase("null")){out=null;}
 		
@@ -127,8 +131,12 @@ public class AnalyzeAccession {
 	
 	void process(Timer t){
 
-		for(FileFormat ffin : ffina){
-			process_inner(ffin);
+		if(perFile) {
+			process_perFile();
+		}else{
+			for(FileFormat ffin : ffina){
+				process_inner(ffin);
+			}
 		}
 		
 		if(ffout!=null){
@@ -146,7 +154,7 @@ public class AnalyzeAccession {
 					else if(c=='L'){combos*=26;}
 				}
 				bsw.print(sn.toString().getBytes());
-				bsw.println("\t"+(long)combos+"\t"+String.format("%.2f", Tools.log2(combos)));
+				bsw.println("\t"+(long)combos+"\t"+String.format(Locale.ROOT, "%.2f", Tools.log2(combos)));
 			}
 			bsw.start();
 			errorState|=bsw.poisonAndWait();
@@ -169,42 +177,109 @@ public class AnalyzeAccession {
 		
 		ByteFile bf=ByteFile.makeByteFile(ffin);
 		
-		byte[] line=bf.nextLine();
-		StringBuilder buffer=new StringBuilder(32);
-		
-		for(int lineNum=0; line!=null; lineNum++){
-			if(line.length>0){
-				if(maxLines>0 && linesProcessed>=maxLines){break;}
-				linesProcessed++;
-				bytesProcessed+=(line.length+1);
-				
-				assert((lineNum==0)==(Tools.startsWith(line, "accession"))) : "Line "+lineNum+": "+new String(line);
-//				final boolean valid=(line[0]!='#');
-				
-				if(true){
-					linesOut++;
-					bytesOut+=(line.length+1);
-					increment(line, buffer);
-				}
-			}
-			line=bf.nextLine();
-		}
-		
-		errorState|=bf.close();
+		final int threads=Tools.min(8, Shared.threads());
+		ArrayList<ProcessThread> alpt=new ArrayList<ProcessThread>(threads);
+		for(int i=0; i<threads; i++){alpt.add(new ProcessThread(bf));}
+		boolean success=ThreadWaiter.startAndWait(alpt, this);
+		errorState|=!success;
 	}
 	
-	void increment(byte[] line, StringBuilder buffer){
-		buffer.setLength(0);
-		for(int i=0; i<line.length; i++){
-			final byte b=line[i];
-			if(b==' ' || b=='\t' || b=='.'){break;}
-			buffer.append((char)remap[b]);
+	
+	void process_perFile(){
+		ArrayList<ArrayList<ProcessThread>> perFileList=new ArrayList<ArrayList<ProcessThread>>(ffina.length);
+		for(FileFormat ffin : ffina) {
+			ByteFile bf=ByteFile.makeByteFile(ffin);
+
+			final int threads=Tools.min(16, Shared.threads());
+			ArrayList<ProcessThread> alpt=new ArrayList<ProcessThread>(threads);
+			for(int i=0; i<threads; i++){alpt.add(new ProcessThread(bf));}
+			perFileList.add(alpt);
+			ThreadWaiter.startThreads(alpt);
 		}
-		String key=buffer.toString();
-		StringNum value=countMap.get(key);
-		if(value!=null){value.increment();}
-		else{countMap.put(key, new StringNum(key, 1));}
+		for(ArrayList<ProcessThread> alpt : perFileList){
+			boolean success=ThreadWaiter.waitForThreads(alpt, this);
+			errorState|=!success;
+		}
 	}
+	
+	/*--------------------------------------------------------------*/
+	
+	static class ProcessThread extends Thread {
+		
+		ProcessThread(ByteFile bf_){
+			bf=bf_;
+		}
+		
+		@Override
+		public void run() {
+			final StringBuilder buffer=new StringBuilder(128);
+			for(ListNum<byte[]> lines=bf.nextList(); lines!=null; lines=bf.nextList()){
+				assert(lines.size()>0);
+				if(lines.id==0){
+					//This one is not really important; the header could be missing.
+					assert(Tools.startsWith(lines.get(0), "accession")) : bf.name()+"[0]: "+new String(lines.get(0));
+				}else{
+					assert(!Tools.startsWith(lines.get(0), "accession")) : bf.name()+"["+lines.id+"]: "+new String(lines.get(0));
+				}
+				for(byte[] line : lines){
+					if(line.length>0){
+						linesProcessedT++;
+						bytesProcessedT+=(line.length+1);
+						
+						final boolean valid=lines.id>0 || !(Tools.startsWith(line, "accession")); //Skips test for most lines
+						
+						if(valid){
+							linesOutT++;
+							increment(line, buffer);
+						}
+					}
+				}
+			}
+		}
+		
+		void increment(byte[] line, StringBuilder buffer){
+			buffer.setLength(0);
+			for(int i=0; i<line.length; i++){
+				final byte b=line[i];
+				if(b==' ' || b=='\t' || b=='.'){break;}
+				buffer.append((char)remap[b]);
+			}
+			String key=buffer.toString();
+			StringNum value=countMapT.get(key);
+			if(value!=null){value.increment();}
+			else{countMapT.put(key, new StringNum(key, 1));}
+		}
+		
+		private HashMap<String, StringNum> countMapT=new HashMap<String, StringNum>();
+		private final ByteFile bf;
+		long linesProcessedT=0;
+		long linesOutT=0;
+		long bytesProcessedT=0;
+		
+	}
+	
+	/*--------------------------------------------------------------*/
+
+	@Override
+	public void accumulate(ProcessThread t) {
+		linesProcessed+=t.linesProcessedT;
+		linesOut+=t.linesOutT;
+		bytesProcessed+=t.bytesProcessedT;
+		for(Entry<String, StringNum> e : t.countMapT.entrySet()){
+			StringNum value=e.getValue();
+			final String key=e.getKey();
+			StringNum old=countMap.get(key);
+			if(old==null){countMap.put(key, value);}
+			else{old.add(value);}
+		}
+	}
+
+	@Override
+	public boolean success() {
+		return !errorState;
+	}
+	
+	/*--------------------------------------------------------------*/
 	
 	public static long combos(String s){
 		double combos=1;
@@ -325,6 +400,7 @@ public class AnalyzeAccession {
 	
 	private ArrayList<String> in=new ArrayList<String>();
 	private String out=null;
+	private boolean perFile=true;
 	
 	/*--------------------------------------------------------------*/
 
@@ -337,8 +413,6 @@ public class AnalyzeAccession {
 	private long linesOut=0;
 	private long bytesProcessed=0;
 	private long bytesOut=0;
-	
-	private long maxLines=Long.MAX_VALUE;
 	
 	/*--------------------------------------------------------------*/
 	

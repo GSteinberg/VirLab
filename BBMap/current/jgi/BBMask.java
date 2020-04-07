@@ -91,7 +91,6 @@ public class BBMask{
 				ByteFile2.verbose=verbose;
 				stream.FastaReadInputStream.verbose=verbose;
 				ConcurrentGenericReadInputStream.verbose=verbose;
-				//			align2.FastaReadInputStream2.verbose=verbose;
 				stream.FastqReadInputStream.verbose=verbose;
 				ReadWrite.verbose=verbose;
 			}else if(a.equals("reads") || a.equals("maxreads")){
@@ -625,7 +624,7 @@ public class BBMask{
 						samBases+=initialLength1;
 						
 						if(r.mapped()){
-							SamLine sl=(SamLine)r.obj;
+							SamLine sl=r.samline;
 							assert(sl!=null) : "No sam line for read "+r;
 							byte[] rname=sl.rname();
 							assert(rname!=null) : "No rname for sam line "+sl;

@@ -3,7 +3,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 
-import dna.Data;
 import shared.KillSwitch;
 import shared.Shared;
 import shared.Timer;
@@ -135,7 +134,7 @@ public final class ByteFile1 extends ByteFile {
 		if(verbose){System.err.println("Reading line "+this.getClass().getName()+" for "+name()+"; open="+open+"; errorState="+errorState);}
 		
 		if(!open || is==null){
-			if(Data.WINDOWS){System.err.println("Attempting to read from a closed file: "+name());}
+			if(Shared.WINDOWS){System.err.println("Attempting to read from a closed file: "+name());}
 			return null;
 		}
 

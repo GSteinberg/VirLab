@@ -145,7 +145,7 @@ public class ScafMap {
 			add(scaf);
 		}
 		scaf.bases=r.bases;
-		assert(scaf.bases.length==scaf.length);
+		assert(scaf.bases.length==scaf.length) : "Incorrect reference length: "+scaf.bases.length+", "+scaf.length+", "+scaf.name;
 		return scaf;
 	}
 	

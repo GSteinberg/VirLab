@@ -19,7 +19,7 @@ import shared.Tools;
 public final class IntLongHashMap{
 	
 	public static void main(String[] args){
-		Random randy2=new Random();
+		Random randy2=Shared.threadLocalRandom();
 		IntLongHashMap map=new IntLongHashMap(20, 0.7f);
 		HashMap<Integer, Long> map2=new HashMap<Integer, Long>(20, 0.7f);
 		ArrayList<Integer> list=new ArrayList<Integer>();

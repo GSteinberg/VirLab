@@ -33,13 +33,19 @@ public class SketchMakerMini extends SketchObject {
 	/*----------------        Initialization        ----------------*/
 	/*--------------------------------------------------------------*/
 	
+	public SketchMakerMini(SketchTool tool_, int mode_, DisplayParams params){
+		this(tool_, mode_, params.minEntropy, params.minProb, params.minQual);
+	}
+	
 	/**
 	 * Constructor.
 	 */
-	public SketchMakerMini(SketchTool tool_, int mode_, float minEntropy_){
+	public SketchMakerMini(SketchTool tool_, int mode_, float minEntropy_, float minProb_, byte minQual_){
 		
 		tool=tool_;
 		mode=mode_;
+		minProb=minProb_;
+		minQual=minQual_;
 		
 		aminoShift=AminoAcid.AMINO_SHIFT;
 		if(!aminoOrTranslate()){
@@ -54,6 +60,9 @@ public class SketchMakerMini extends SketchObject {
 		
 		if(AUTOSIZE && (mode==ONE_SKETCH || mode==PER_FILE)){
 			heap=new SketchHeap(Tools.max(tool.stTargetSketchSize, (int)(80000*Tools.mid(1, AUTOSIZE_FACTOR, 32))), tool.minKeyOccuranceCount, tool.trackCounts);
+		}else if(AUTOSIZE_LINEAR && (mode==ONE_SKETCH || mode==PER_FILE)){
+			heap=new SketchHeap(Tools.max(tool.stTargetSketchSize, (int)(10000000*Tools.mid(0.1, 2*AUTOSIZE_LINEAR_DENSITY, 0.00001))), 
+					tool.minKeyOccuranceCount, tool.trackCounts);
 		}else{
 			heap=new SketchHeap(tool.stTargetSketchSize, tool.minKeyOccuranceCount, tool.trackCounts);
 		}
@@ -64,7 +73,7 @@ public class SketchMakerMini extends SketchObject {
 			eTracker=null;
 		}
 		
-		if(translate){
+		if(translate || processSSU){
 			gCaller=CallGenes.makeGeneCaller(pgm);
 		}else{
 			gCaller=null;
@@ -137,7 +146,7 @@ public class SketchMakerMini extends SketchObject {
 					if(heap!=null && heap.size()>0 && heap.maxLen()>=Tools.max(1, minSketchSize)){
 						int size=heap.size();
 						Sketch sketch=new Sketch(heap, false, tool.trackCounts, null);
-						assert(sketch.array.length>0) : sketch.array.length+", "+size;
+						assert(sketch.keys.length>0) : sketch.keys.length+", "+size;
 						sketches.add(sketch);
 						sketchesMade++;
 					}
@@ -227,12 +236,28 @@ public class SketchMakerMini extends SketchObject {
 	public void processReadTranslated(final Read r){
 		assert(!r.aminoacid());
 		final ArrayList<Read> prots;
-		if(sixframes) {
+		if(sixframes){
+			if(processSSU && heap.ssu()==null && r.length()>=min_SSU_len){
+				Orf orf=gCaller.makeRna(r.id, r.bases, Orf.r16S);
+				if(orf!=null && orf.length()>=min_SSU_len){
+					assert(orf.isSSU());
+					if(orf.isSSU() && orf.length()>=heap.ssuLen()){heap.setSSU(CallGenes.fetch(orf, r).bases);}
+				}
+				//TODO: Add 18S.
+			}
 			prots=TranslateSixFrames.toFrames(r, true, false, 6);
 		}else{
 			ArrayList<Orf> list;
 			list=gCaller.callGenes(r);
 			prots=CallGenes.translate(r, list);
+			if(processSSU && heap.ssu()==null){
+				for(Orf orf : list){
+					if(orf.isSSU() && orf.length()>=min_SSU_len){
+						heap.setSSU(CallGenes.fetch(orf, r).bases);
+						break;
+					}
+				}
+			}
 		}
 		if(prots!=null){
 			for(Read p : prots){
@@ -242,8 +267,18 @@ public class SketchMakerMini extends SketchObject {
 	}
 	
 	void processReadNucleotide(final Read r){
+		if(processSSU && heap.ssu()==null && r.length()>=min_SSU_len){
+			Orf orf=gCaller.makeRna(r.id, r.bases, Orf.r16S);
+			if(orf!=null && orf.length()>=min_SSU_len){
+				assert(orf.isSSU());
+				if(orf.isSSU()){heap.setSSU(CallGenes.fetch(orf, r).bases);}
+			}
+			//TODO: Add 18S.
+		}
+		
 		final byte[] bases=r.bases;
 		final byte[] quals=r.quality;
+		final long[] baseCounts=heap.baseCounts(true);
 		long kmer=0;
 		long rkmer=0;
 		int len=0;
@@ -268,7 +303,13 @@ public class SketchMakerMini extends SketchObject {
 				kmer=((kmer<<2)|x)&mask;
 				rkmer=(rkmer>>>2)|(x2<<shift2);
 				if(eTracker!=null){eTracker.add(b);}
-				if(x<0){len=0; rkmer=0;}else{len++;}
+				if(x<0){
+					len=0;
+					rkmer=0;
+				}else{
+					len++;
+					baseCounts[(int)x]++;
+				}
 				
 //				System.err.println("\n"+AminoAcid.kmerToString(kmer, k)+"\n"+AminoAcid.kmerToString(rkmer, k)+"\n"
 //				+AminoAcid.kmerToString(AminoAcid.reverseComplementBinaryFast(rkmer, k), k)+"\n"
@@ -302,6 +343,9 @@ public class SketchMakerMini extends SketchObject {
 				}
 			}
 		}else{
+			int zeroQualityKmers=0;
+			int positiveQualityKmers=0;
+			
 			float prob=1;
 			for(int i=0; i<bases.length; i++){
 				final byte b=bases[i];
@@ -311,10 +355,17 @@ public class SketchMakerMini extends SketchObject {
 				kmer=((kmer<<2)|x)&mask;
 				rkmer=(rkmer>>>2)|(x2<<shift2);
 				if(eTracker!=null){eTracker.add(b);}
-				
+
+				final byte q=quals[i];
 				{//Quality-related stuff
-					final byte q=quals[i];
 					assert(q>=0) : Arrays.toString(quals)+"\n"+minProb+", "+minQual;
+//					if(x>=0){
+//						if(q>0){
+//							positiveQualityBases++;
+//						}else{
+//							zeroQualityBases++;
+//						}
+//					}
 					prob=prob*align2.QualityTools.PROB_CORRECT[q];
 					if(len>k){
 						byte oldq=quals[i-k];
@@ -326,25 +377,31 @@ public class SketchMakerMini extends SketchObject {
 						prob=1;
 					}else{
 						len++;
+						baseCounts[(int)x]++;
 					}
 				}
 				
-				if(len>=k && prob>=minProb){
+				if(len>=k){
 					kmersProcessed++;
-					heap.genomeSizeKmers++;
-					heap.probSum+=prob;
-					if(eTracker==null || eTracker.passes()){
-						final long hashcode=hash(kmer, rkmer);
-						//				System.err.println(kmer+"\t"+rkmer+"\t"+z+"\t"+hash);
-						if(hashcode>min){
-							if(noBlacklist){
-								heap.add(hashcode);
-							}else{
-								heap.checkAndAdd(hashcode);
+					if(prob>=minProb){
+						heap.genomeSizeKmers++;
+						heap.probSum+=prob;
+						if(eTracker==null || eTracker.passes()){
+							final long hashcode=hash(kmer, rkmer);
+//							System.err.println(kmer+"\t"+rkmer+"\t"+z+"\t"+hash);
+							if(hashcode>min){
+								if(noBlacklist){
+									heap.add(hashcode);
+								}else{
+									heap.checkAndAdd(hashcode);
+								}
 							}
+						}else{
+//							System.err.println("Fail.\t"+eTracker.calcEntropy()+"\t"+eTracker.basesToString());
 						}
-					}else{
-//						System.err.println("Fail.\t"+eTracker.calcEntropy()+"\t"+eTracker.basesToString());
+						positiveQualityKmers++;
+					}else if(q<=2){
+						zeroQualityKmers++;
 					}
 				}
 				
@@ -365,8 +422,38 @@ public class SketchMakerMini extends SketchObject {
 //					}
 //				}
 			}
+			if(minProb>0 && zeroQualityKmers>100 && positiveQualityKmers==0){
+				if(looksLikePacBio(r)){
+					synchronized(this){
+						minProb=0;
+					}
+					processReadNucleotide(r);
+				}
+			}
 		}
 //		assert(false);
+	}
+	
+	boolean looksLikePacBio(Read r){
+		if(r.length()<302 || r.mate!=null){return false;}
+		if(r.quality==null){
+			int x=Tools.parseZmw(r.id);
+			return x>=0;
+		}
+		int positive=0;
+		int zero=0;
+		int ns=0;
+		for(int i=0; i<r.bases.length; i++){
+			byte b=r.bases[i];
+			byte q=r.quality[i];
+			if(b=='N'){ns++;}
+			else if(q==0 || q==2){
+				zero++;
+			}else{
+				positive++;
+			}
+		}
+		return zero>=r.length()/2 && positive==0;
 	}
 
 	void processReadAmino(final Read r){
@@ -436,11 +523,11 @@ public class SketchMakerMini extends SketchObject {
 		}
 	}
 	
-	public Sketch toSketch(){
+	public Sketch toSketch(int minCount){
 		Sketch sketch=null;
 		if(heap!=null && heap.size()>0){
 			try {
-				sketch=new Sketch(heap, false, tool.trackCounts, null);
+				sketch=new Sketch(heap, false, tool.trackCounts, null, minCount);
 			} catch (Throwable e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
@@ -456,6 +543,7 @@ public class SketchMakerMini extends SketchObject {
 		basesProcessed+=smm.basesProcessed;
 		kmersProcessed+=smm.kmersProcessed;
 		sketchesMade+=smm.sketchesMade;
+		pacBioDetected|=smm.pacBioDetected;
 	}
 
 	/** True only if this thread has completed successfully */
@@ -487,6 +575,12 @@ public class SketchMakerMini extends SketchObject {
 	protected long kmersProcessed=0;
 	/** Number of sketches started */
 	protected long sketchesMade=0;
+
+	float minProb() {return minProb;}
+	byte minQual() {return minQual;}
+	public boolean pacBioDetected=false;
+	private float minProb;
+	private byte minQual;
 	
 	/*--------------------------------------------------------------*/
 	/*----------------         Final Fields         ----------------*/

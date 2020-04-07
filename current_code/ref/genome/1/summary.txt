@@ -1,0 +1,13 @@
+#Summary
+#Generated on	Thu Nov 21 18:00:24 EST 2019
+#Version	5
+chroms	1
+bases	300864
+defined	243364
+undefined	57500
+contigs	84
+scaffolds	84
+interpad	500
+source	/mnt/c/VirLab/results/test_genomes_2.fasta
+bytes	249267
+last modified	1574377218369

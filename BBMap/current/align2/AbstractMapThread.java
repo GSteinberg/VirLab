@@ -504,6 +504,10 @@ public abstract class AbstractMapThread extends Thread {
 					if(MAKE_LHIST){readstats.addToLengthHistogram(r);}
 					if(MAKE_GCHIST){readstats.addToGCHistogram(r);}
 
+//					if(ecco){
+//						//Do overlap detection.
+//					}
+					
 					if(TRIM_LEFT || TRIM_RIGHT){
 						TrimRead.trim(r, TRIM_LEFT, TRIM_RIGHT, TRIM_QUAL, TRIM_ERROR_RATE, TRIM_MIN_LENGTH);
 						TrimRead.trim(r2, TRIM_LEFT, TRIM_RIGHT, TRIM_QUAL, TRIM_ERROR_RATE, TRIM_MIN_LENGTH);

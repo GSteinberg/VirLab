@@ -136,12 +136,14 @@ public class Shred {
 			outstream.println((out1==null)+", "+out1);
 			throw new RuntimeException("\n\noverwrite="+overwrite+"; Can't write to output file "+out1+"\n");
 		}
-		
+		if(!Tools.testForDuplicateFiles(true, in1, out1)){
+			throw new RuntimeException("\nSome file names were specified multiple times.\n");
+		}
 		ffout1=FileFormat.testOutput(out1, FileFormat.FASTQ, extout, true, overwrite, append, false);
 
 		ffin1=FileFormat.testInput(in1, FileFormat.FASTQ, extin, true, true);
 		
-		randy=(seed>=0 ? new Random(seed) : new Random());
+		randy=Shared.threadLocalRandom(seed);
 		if(median>0 && variance<0){variance=median;}
 	}
 	

@@ -4,8 +4,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 
-import dna.Data;
 import shared.KillSwitch;
+import shared.Shared;
 import shared.Timer;
 import shared.Tools;
 import structures.ListNum;
@@ -124,7 +124,7 @@ public class QuickFile {
 		if(verbose){System.err.println("Reading line "+this.getClass().getName()+" for "+name()+"; open="+open+"; errorState="+errorState);}
 		
 		if(!open || is==null){
-			if(Data.WINDOWS){System.err.println("Attempting to read from a closed file: "+name());}
+			if(Shared.WINDOWS){System.err.println("Attempting to read from a closed file: "+name());}
 			return null;
 		}
 
@@ -300,7 +300,7 @@ public class QuickFile {
 	
 	public final FileFormat ff;
 
-	public static boolean FORCE_MODE_BF1=!(Data.GENEPOOL || Data.DENOVO || Data.CORI || Data.WINDOWS);
+	public static boolean FORCE_MODE_BF1=!(Shared.GENEPOOL || Shared.DENOVO || Shared.CORI || Shared.WINDOWS);
 	public static boolean FORCE_MODE_BF2=false;
 	public static boolean FORCE_MODE_BF3=false;
 	

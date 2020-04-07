@@ -76,7 +76,6 @@ public class SynthMDA {
 				ByteFile2.verbose=verbose;
 				stream.FastaReadInputStream.verbose=verbose;
 				ConcurrentGenericReadInputStream.verbose=verbose;
-//				align2.FastaReadInputStream2.verbose=verbose;
 				stream.FastqReadInputStream.verbose=verbose;
 				ReadWrite.verbose=verbose;
 			}else if(a.equals("minlen") || a.equals("ml")){
@@ -398,7 +397,7 @@ public class SynthMDA {
 	private String readsOut=null;
 	private float perfectrate=0;
 	
-	private final Random randy=new Random();
+	private final Random randy=Shared.threadLocalRandom();
 	
 	/*--------------------------------------------------------------*/
 	/*----------------        Common Fields         ----------------*/

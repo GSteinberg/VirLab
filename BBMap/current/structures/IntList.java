@@ -258,9 +258,10 @@ public final class IntList{
 		size=size2;
 	}
 	
-	public final void shrink(){
-		if(size==array.length){return;}
+	public final IntList shrink(){
+		if(size==array.length){return this;}
 		array=KillSwitch.copyOf(array, size);
+		return this;
 	}
 	
 	public final void shrinkToUnique(){

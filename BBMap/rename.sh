@@ -3,9 +3,13 @@
 usage(){
 echo "
 Written by Brian Bushnell
-Last modified May 1, 2017
+Last modified July 31, 2019
 
-Description:  Renames reads to <prefix>_<number> where you specify the prefix and the numbers are ordered.
+Description:  Renames reads to <prefix>_<number> where you specify the prefix
+and the numbers are ordered.  There are other renaming modes too.
+If reads are paired, pairs should be processed together; if reads are 
+interleaved, the interleaved flag should be set.  This ensures that if a
+read number (such as 1: or 2:) is added, it will be added correctly.
 
 Usage:  rename.sh in=<file> in2=<file2> out=<outfile> out2=<outfile2> prefix=<>
 
@@ -30,6 +34,12 @@ renamebytrim=f      Rename the read to indicate its correct post-trimming length
 addprefix=f         Rename the read by prepending the prefix to the existing name.
 prefixonly=f        Only use the prefix; don't add _<number>
 addunderscore=t     Add an underscore after the prefix (if there is a prefix).
+addpairnum=t        Add a pairnum (e.g. ' 1:') to paired reads in some modes.
+fixsra=f            Fixes headers of SRA reads renamed from Illumina.
+                    Specifically, it converts something like this:
+                    SRR17611.11 HWI-ST79:17:D091UACXX:4:1101:210:824 length=75
+                    ...into this:
+                    HWI-ST79:17:D091UACXX:4:1101:210:824 1:
 
 Sampling parameters:
 reads=-1            Set to a positive number to only process this many INPUT reads (or pairs), then quit.
@@ -61,8 +71,6 @@ popd > /dev/null
 CP="$DIR""current/"
 
 z="-Xmx1g"
-EA="-ea"
-EOOM=""
 set=0
 
 if [ -z "$1" ] || [[ $1 == -h ]] || [[ $1 == --help ]]; then
@@ -72,29 +80,12 @@ fi
 
 calcXmx () {
 	source "$DIR""/calcmem.sh"
+	setEnvironment
 	parseXmx "$@"
 }
 calcXmx "$@"
 
 function rename() {
-	if [[ $SHIFTER_RUNTIME == 1 ]]; then
-		#Ignore NERSC_HOST
-		shifter=1
-	elif [[ $NERSC_HOST == genepool ]]; then
-		module unload oracle-jdk
-		module load oracle-jdk/1.8_144_64bit
-		module load pigz
-	elif [[ $NERSC_HOST == denovo ]]; then
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	elif [[ $NERSC_HOST == cori ]]; then
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/jgi
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/usg
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	fi
 	local CMD="java $EA $EOOM $z -cp $CP jgi.RenameReads $@"
 	echo $CMD >&2
 	eval $CMD

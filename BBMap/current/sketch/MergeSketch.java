@@ -76,7 +76,7 @@ public class MergeSketch extends SketchObject {
 		Parser parser=new Parser();
 		parser.out1="stdout.txt";
 		
-		defaultParams.printFileName=true;
+		defaultParams.printRefFileName=true;
 		
 		//Parse each argument
 		for(int i=0; i<args.length; i++){
@@ -171,7 +171,7 @@ public class MergeSketch extends SketchObject {
 			throw new RuntimeException("\nSome file names were specified multiple times.\n");
 		}
 		
-		tool=new SketchTool(targetSketchSize, defaultParams.minKeyOccuranceCount, defaultParams.trackCounts(), defaultParams.mergePairs);
+		tool=new SketchTool(targetSketchSize, defaultParams);
 		
 //		assert(false) : defaultParams.toString()+"\n"+k+", "+amino+", "+HASH_VERSION;
 		if(verbose){
@@ -179,7 +179,7 @@ public class MergeSketch extends SketchObject {
 			if(blacklist!=null){outstream.println("Using a blacklist.");}
 		}
 		
-		defaultParams.postParse(false);
+		defaultParams.postParse(false, false);
 		allowMultithreadedFastq=(in.size()==1 && Shared.threads()>2);
 		if(!allowMultithreadedFastq){Shared.capBufferLen(40);}
 	}
@@ -192,7 +192,7 @@ public class MergeSketch extends SketchObject {
 		Timer ttotal=new Timer();
 		
 		t.start();
-		inSketches=tool.loadSketches_MT(defaultParams.mode, defaultParams.samplerate, defaultParams.reads, defaultParams.minEntropy, in);
+		inSketches=tool.loadSketches_MT(defaultParams, in);
 		final int numLoaded=(inSketches.size());
 		long sum=0;
 		for(Sketch sk : inSketches){

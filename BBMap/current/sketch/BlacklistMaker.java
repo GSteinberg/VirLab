@@ -29,7 +29,7 @@ import structures.IntList;
 import structures.ListNum;
 import structures.LongList;
 import tax.AccessionToTaxid;
-import tax.GiToNcbi;
+import tax.GiToTaxid;
 import tax.TaxNode;
 import tax.TaxTree;
 
@@ -266,7 +266,7 @@ public class BlacklistMaker extends SketchObject {
 		if(taxTreeFile!=null){setTaxtree(taxTreeFile);}
 		
 		if(giTableFile!=null){
-			loadGiToNcbi();
+			loadGiToTaxid();
 		}
 		if(accessionFile!=null){
 			AccessionToTaxid.tree=taxtree;
@@ -435,7 +435,7 @@ public class BlacklistMaker extends SketchObject {
 		ArrayList<String> meta=new ArrayList<String>();
 		meta.add("minTaxCount:"+minTaxCount);
 		meta.add("taxLevel:"+taxLevel);
-		Sketch sk=new Sketch(array, null, outTaxid, -1, -1, -1, -1, -1, "blacklist", sketchName, ffin1.simpleName(), meta);
+		Sketch sk=new Sketch(array, null, null, null, outTaxid, -1, -1, -1, -1, -1, "blacklist", sketchName, ffin1.simpleName(), meta);
 		return sk;
 	}
 	
@@ -577,10 +577,10 @@ public class BlacklistMaker extends SketchObject {
 	/*----------------          Tax Methods         ----------------*/
 	/*--------------------------------------------------------------*/
 	
-	private void loadGiToNcbi(){
+	private void loadGiToTaxid(){
 		Timer t=new Timer();
 		outstream.println("Loading gi to taxa translation table.");
-		GiToNcbi.initialize(giTableFile);
+		GiToTaxid.initialize(giTableFile);
 		t.stop();
 		if(true){
 			outstream.println("Time: \t"+t);

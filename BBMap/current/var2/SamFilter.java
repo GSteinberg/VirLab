@@ -36,6 +36,14 @@ public class SamFilter {
 			includeLengthZero=Tools.parseBoolean(b);
 		}else if(a.equals("invert")){
 			invert=Tools.parseBoolean(b);
+		}else if(a.equals("minid")){
+			minId=Float.parseFloat(b);
+			if(minId>1f){minId/=100;}
+			assert(minId<=1f) : "minid should be between 0 and 1.";
+		}else if(a.equals("maxid")){
+			maxId=Float.parseFloat(b);
+			if(maxId>1f){maxId/=100;}
+			assert(maxId<=1f) : "maxid should be between 0 and 1.";
 		}else if(a.equals("contigs")){
 			addContig(b);
 		}else{
@@ -86,6 +94,11 @@ public class SamFilter {
 
 		if(minMapq>Integer.MIN_VALUE || maxMapq<Integer.MAX_VALUE){
 			if(sl.mapq>maxMapq || sl.mapq<minMapq){return false;}
+		}
+		
+		if(sl.cigar!=null && (minId>0 || maxId<1)){
+			float identity=sl.calcIdentity();
+			if(identity<minId || identity>maxId){return false;}
 		}
 		
 		if(contigs!=null){
@@ -165,6 +178,8 @@ public class SamFilter {
 	public int maxPos=Integer.MAX_VALUE;
 	public int minMapq=Integer.MIN_VALUE;
 	public int maxMapq=Integer.MAX_VALUE;
+	public float minId=Integer.MIN_VALUE;
+	public float maxId=Integer.MAX_VALUE;
 	public boolean includeUnmapped=true;
 	public boolean includeMapped=true;
 	public boolean includeSupplimentary=true;

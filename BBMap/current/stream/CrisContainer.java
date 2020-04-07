@@ -8,11 +8,9 @@ import structures.ListNum;
 
 public class CrisContainer implements Comparable<CrisContainer> {
 	
-	public CrisContainer(String fname, Comparator<Read> comparator_){
+	public CrisContainer(String fname, Comparator<Read> comparator_, boolean allowSubprocess){
 		comparator=comparator_;
-//		remainingReads=count=count_;
-//		randy=(count>0) ? new Random() : null;
-		FileFormat ff=FileFormat.testInput(fname, FileFormat.FASTQ, null, false, true);
+		FileFormat ff=FileFormat.testInput(fname, FileFormat.FASTQ, null, allowSubprocess, true);
 		cris=ConcurrentReadInputStream.getReadInputStream(-1, true, ff, null, null, null);
 		cris.start();
 		fetch();
@@ -20,8 +18,6 @@ public class CrisContainer implements Comparable<CrisContainer> {
 	
 	public CrisContainer(ConcurrentReadInputStream cris_, Comparator<Read> comparator_){
 		comparator=comparator_;
-//		remainingReads=count=count_;
-//		randy=(count>0) ? new Random() : null;
 		cris=cris_;
 		fetch();
 	}

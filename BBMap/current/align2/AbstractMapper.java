@@ -675,10 +675,10 @@ public abstract class AbstractMapper {
 
 			samplerate=parser.samplerate;
 			sampleseed=parser.sampleseed;
-			IDFILTER=parser.idFilter;
+			MIN_IDFILTER=parser.minIdFilter;
 			build=parser.build;
-			if(IDFILTER>0){
-				if(IDFILTER==1f){PERFECTMODE=true;}
+			if(MIN_IDFILTER>0){
+				if(MIN_IDFILTER==1f){PERFECTMODE=true;}
 				MAKE_MATCH_STRING=true;
 			}
 			
@@ -2832,7 +2832,7 @@ public abstract class AbstractMapper {
 	/** Only allow sites with at least this many contiguous matches */
 	static int KFILTER=-1;
 	/** Only allow sites with identity of at least this */
-	static float IDFILTER=0f;
+	static float MIN_IDFILTER=0f;
 	
 	/** Rename reads to indicate their mapped insert size */
 	static boolean RenameByInsert=false;

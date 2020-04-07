@@ -18,7 +18,7 @@ import shared.Timer;
 public class IntHashSetList extends IntHashSet{
 	
 	public static void main(String[] args){
-		Random randy2=new Random();
+		Random randy2=Shared.threadLocalRandom();
 		IntHashSetList set=new IntHashSetList(20, 0.7f);
 		HashSet<Integer> set2=new HashSet<Integer>(20, 0.7f);
 		ArrayList<Integer> list=new ArrayList<Integer>();

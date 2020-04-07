@@ -16,20 +16,30 @@ public class VcfLoader {
 		fname=fname_;
 		scafMap=scafMap_;
 		varMap=new VarMap(scafMap);
-		threads=Tools.max(2, Shared.threads());
+		threads=Tools.max(1, Shared.threads());
 		inq=new ArrayBlockingQueue<ListNum<byte[]>>(threads);
 		vcfMode=vcfMode_;
 		ffin=FileFormat.testInput(fname, FileFormat.TXT, null, true, false);
 	}
 	
-	public static VarMap loadVars(String fname, ScafMap scafMap){
+	public static VarMap loadFile(FileFormat ff, ScafMap scafMap, boolean loadCoverage, boolean extendedInfo){
+		final VarMap varMap;
+		if(ff.var()){
+			varMap=VcfLoader.loadVarFile(ff.name(), scafMap);
+		}else{
+			varMap=VcfLoader.loadVcfFile(ff.name(), scafMap, loadCoverage, extendedInfo);
+		}
+		return varMap;
+	}
+	
+	public static VarMap loadVarFile(String fname, ScafMap scafMap){
 		VcfLoader loader=new VcfLoader(fname, scafMap, false);
 		ArrayList<ProcessThread> alpt=loader.spawnThreads(false, false);
 		loader.waitForFinish(alpt);
 		return loader.varMap;
 	}
 	
-	public static VarMap loadVcf(String fname, ScafMap scafMap, boolean loadCoverage, boolean extendedInfo){
+	public static VarMap loadVcfFile(String fname, ScafMap scafMap, boolean loadCoverage, boolean extendedInfo){
 		VcfLoader loader=new VcfLoader(fname, scafMap, true);
 		ArrayList<ProcessThread> alpt=loader.spawnThreads(loadCoverage, extendedInfo);
 		loader.waitForFinish(alpt);
@@ -42,7 +52,8 @@ public class VcfLoader {
 		//Do anything necessary prior to processing
 		
 		//Determine how many threads may be used
-		final int threads=this.threads+1;
+		final int threads=this.threads+1;//1 extra for thread 0, which is different than the others.
+		assert(threads>=2);
 		
 		//Fill a list with ProcessThreads
 		ArrayList<ProcessThread> alpt=new ArrayList<ProcessThread>(threads);
@@ -244,12 +255,14 @@ public class VcfLoader {
 				if(vcfMode){
 					for(byte[] line : list){
 						assert(line[0]!='#') : new String(line);
-						vars.add(loadVcfLine(line, loadCoverage, extendedInfo));
+						Var v=loadVcfLine(line, loadCoverage, extendedInfo);
+						vars.add(v);
 					}
 				}else{
 					for(byte[] line : list){
 						assert(line[0]!='#') : new String(line);
-						vars.add(loadVarLine(line));
+						Var v=loadVarLine(line);
+						vars.add(v);
 					}
 				}
 				synchronized(varMap){

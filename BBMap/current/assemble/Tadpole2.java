@@ -471,7 +471,7 @@ public class Tadpole2 extends Tadpole {
 			
 			if(trimEnds>0){bb.trimByAmount(trimEnds, trimEnds);}
 			else if(trimCircular && leftStatus==LOOP && rightStatus==LOOP){bb.trimByAmount(0, kbig-1);}
-			if(bb.length()>=initialLength+minExtension && bb.length()>=minContigLen){
+			if(bb.length()>=initialLength+minExtension && (bb.length()>=minContigLen || popBubbles)){
 				if(success){
 					bb.reverseComplementInPlace();
 					byte[] bases=bb.toBytes();
@@ -566,7 +566,7 @@ public class Tadpole2 extends Tadpole {
 			//				if(useOwnership && THREADS==1){assert(claim(bases, bases.length, id, rid));}
 			success=(useOwnership ? doubleClaim(bb, id, kmer) : true);
 			if(verbose  /*|| true*/){outstream.println("Success for thread "+id+": "+success);}
-			if(bb.length()>=bases.length+minExtension && bb.length()>=minContigLen){
+			if(bb.length()>=bases.length+minExtension && (bb.length()>=minContigLen || popBubbles)){
 				if(success){
 					bb.reverseComplementInPlace();
 					return bb.toBytes();
@@ -606,11 +606,13 @@ public class Tadpole2 extends Tadpole {
 			int cnum=0;
 			for(Contig c : contigs){
 				c.id=cnum;
-				if(c.leftBranch()){
+//				if(c.leftBranch()){
+				if(true){
 					c.leftKmer(kmer);
 					tables.claim(kmer, cnum);
 				}
-				if(c.rightBranch()){
+//				if(c.rightBranch()){
+				if(true){
 					c.rightKmer(kmer);
 					tables.claim(kmer, cnum);
 				}
@@ -630,11 +632,13 @@ public class Tadpole2 extends Tadpole {
 		}
 
 		@Override
-		public void processContigLeft(Contig c, int[] leftCounts, int[] rightCounts, int[] extraCounts){
-			if(c.leftCode!=F_BRANCH){return;}
-
+		public void processContigLeft(Contig c, int[] leftCounts, int[] rightCounts, int[] extraCounts, ByteBuilder bb){
+//			System.err.println("processContigLeft: "+c.id+", "+c.leftCode+", "+c.leftEdges);
+			if(c.leftCode==DEAD_END){return;}
+			
 			final Kmer kmer0=c.leftKmer(kmerA);
 			final Kmer kmer=kmerB;
+			
 			assert(tables.getCount(kmer0)>0);
 			assert(tables.findOwner(kmer0)==c.id) : tables.findOwner(kmer0)+", "+c.id;
 
@@ -644,29 +648,33 @@ public class Tadpole2 extends Tadpole {
 			int leftSecond=leftCounts[leftSecondPos];
 			
 			for(int x=0; x<leftCounts.length; x++){
-				int count=leftCounts[x];
+				bb.clear();
+				final int count=leftCounts[x];
 				int target=-1;
 				if(count>0 && isJunction(leftMax, count)){
 					kmer.setFrom(kmer0);
 					kmer.addLeftNumeric(x);
 					assert(tables.getCount(kmer)==count) : count+", "+tables.getCount(kmer);
-					target=exploreRight(kmer, extraCounts, rightCounts);
+					bb.append(AminoAcid.numberToBase[x]);
+					target=exploreRight(kmer, extraCounts, rightCounts, bb);
 					if(verbose){
 						outstream.println(c.id+"L_F: x="+x+", cnt="+count+", dest="+target
 								+", "+codeStrings[lastExitCondition]+", len="+lastLength+", orient="+lastOrientation);
 					}
 				}
 				if(target>=0){
-					if(c.leftEdges==null){c.leftEdges=new Edge[4];}
-					c.leftEdges[x]=new Edge(c.id, target, lastLength, lastOrientation);
+					Edge se=new Edge(c.id, target, lastLength, lastOrientation, count, bb.toBytes());
+//					System.err.println("Adding "+se+"; x="+x+"; bb="+bb);
+					c.addLeftEdge(se);
 					edgesMadeT++;
 				}
 			}
 		}
 
 		@Override
-		public void processContigRight(Contig c, int[] leftCounts, int[] rightCounts, int[] extraCounts){
-			if(c.rightCode!=F_BRANCH){return;}//TODO: D_BRANCH is unhandled
+		public void processContigRight(Contig c, int[] leftCounts, int[] rightCounts, int[] extraCounts, ByteBuilder bb){
+//			System.err.println("processContigRight: "+c.id+", "+c.rightCode);
+			if(c.rightCode==DEAD_END){return;}
 
 			final Kmer kmer0=c.rightKmer(kmerA);
 			final Kmer kmer=kmerB;
@@ -677,25 +685,29 @@ public class Tadpole2 extends Tadpole {
 			int rightSecond=rightCounts[rightSecondPos];
 
 			for(int x=0; x<rightCounts.length; x++){
-				int count=rightCounts[x];
+				bb.clear();
+				final int count=rightCounts[x];
 				int target=-1;
 				if(count>0 && isJunction(rightMax, count)){
 					kmer.setFrom(kmer0);
 					kmer.addRightNumeric(x);
 					assert(tables.getCount(kmer)==count) : count+", "+tables.getCount(kmer);
-					target=exploreRight(kmer, leftCounts, extraCounts);
+					bb.append(AminoAcid.numberToBase[x]);
+					target=exploreRight(kmer, leftCounts, extraCounts, bb);
 					if(verbose){
 						outstream.println(c.id+"R_F: x="+x+", cnt="+count+", dest="+target+", "+codeStrings[lastExitCondition]+", len="+lastLength+", orient="+lastOrientation);
 					}
 				}
 				if(target>=0){
-					if(c.rightEdges==null){c.rightEdges=new Edge[4];}
-					c.rightEdges[x]=new Edge(c.id, target, lastLength, lastOrientation);
+					lastOrientation|=1;
+					Edge se=new Edge(c.id, target, lastLength, lastOrientation, count, bb.toBytes());
+					c.addRightEdge(se);
+					edgesMadeT++;
 				}
 			}
 		}
 
-		private int exploreRight(Kmer kmer, int[] leftCounts, int[] rightCounts){
+		private int exploreRight(Kmer kmer, int[] leftCounts, int[] rightCounts, ByteBuilder bb){
 			final Kmer temp=kmerC;
 			int length=1;
 			int owner=-1;
@@ -731,6 +743,7 @@ public class Tadpole2 extends Tadpole {
 					lastLength=length;
 					return -1;
 				}
+				bb.append(AminoAcid.numberToBase[rightMaxPos]);
 				long x=rightMaxPos;
 				kmer.addRightNumeric(x);
 			}
@@ -740,12 +753,24 @@ public class Tadpole2 extends Tadpole {
 				lastExitCondition=SUCCESS;
 				Contig dest=contigs.get(owner);
 				dest.leftKmer(temp);
+				
+//				if(temp.equals(kmer)){
+//					lastOrientation=temp.sameOrientation(kmer) ? 0 : 1;
+//				}else{
+//					dest.rightKmer(temp);
+//					if(temp.equals(kmer)){
+//						lastOrientation=temp.sameOrientation(kmer) ? 2 : 3;
+//					}
+//				}
+				
 				if(temp.equals(kmer)){
-					lastOrientation=temp.sameOrientation(kmer) ? 0 : 1;
+					lastOrientation=0;
 				}else{
 					dest.rightKmer(temp);
 					if(temp.equals(kmer)){
-						lastOrientation=temp.sameOrientation(kmer) ? 2 : 3;
+						lastOrientation=2;
+					}else{
+						assert(false);
 					}
 				}
 			}else{
@@ -960,7 +985,7 @@ public class Tadpole2 extends Tadpole {
 			
 			table=tables.getTable(kmer);
 			
-			assert(table.getValue(kmer)==rightMax);
+			assert(table.getValue(kmer)==rightMax || rightMax==0);
 			count=rightMax;
 			
 			assert(count>=minCountExtend) : count;
@@ -1124,7 +1149,7 @@ public class Tadpole2 extends Tadpole {
 			
 			table=tables.getTable(kmer);
 			
-			assert(table.getValue(kmer)==rightMax);
+			assert(table.getValue(kmer)==rightMax || rightMax==0);
 			count=rightMax;
 			
 			assert(count>=minCountExtend) : count;

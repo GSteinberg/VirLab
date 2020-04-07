@@ -25,6 +25,7 @@ import stream.FastaReadInputStream;
 import structures.StringNum;
 
 /**
+ * New version loads with multiple threads per input file.
  * @author Brian Bushnell
  * @date December 16, 2016
  *
@@ -198,12 +199,17 @@ public class AccessionToTaxid {
 		}
 		
 		if(ffin.length>4){//Addresses a multithreaded read bug in Java
+//			FileFormat[] ffa1=Arrays.copyOf(ffin, 2);
+//			FileFormat[] ffa2=Arrays.copyOfRange(ffin, 2, ffin.length);
+//			spawnThreads(ffa1);
+//			spawnThreads(ffa2);
+
 			FileFormat[] ffa1=Arrays.copyOf(ffin, 2);
 			FileFormat[] ffa2=Arrays.copyOfRange(ffin, 2, ffin.length);
-			spawnThreads(ffa1);
-			spawnThreads(ffa2);
+			spawnThreads(ffa1, 2);
+			spawnThreads(ffa2, 200);
 		}else{
-			spawnThreads(ffin);
+			spawnThreads(ffin, 200);
 		}
 		
 		//Do anything necessary after processing
@@ -270,17 +276,26 @@ public class AccessionToTaxid {
 	}
 	
 	/** Spawn process threads */
-	private void spawnThreads(FileFormat[] ffa){
+	private void spawnThreads(FileFormat[] ffa, int threadLimit){
 		
 		//Do anything necessary prior to processing
+		Tools.reverseInPlace(ffa, 0, ffa.length);
 		
 		//Fill a list with ProcessThreads
-		ArrayList<HashThread> alht=new ArrayList<HashThread>(ffa.length);
+		ArrayList<ByteFile> albf=new ArrayList<ByteFile>(ffa.length);
 		for(FileFormat ff : ffa){
 			if(ff!=null){
 				System.err.println("Loading "+ff.name());
-				alht.add(new HashThread(ff));
+				ByteFile bf=ByteFile.makeByteFile(ff, 1);
+				albf.add(bf);
 			}
+		}
+		final int threads=Tools.min(threadLimit, Tools.max(albf.size(), Shared.threads()));
+		ArrayList<HashThread> alht=new ArrayList<HashThread>(threads);
+		
+		for(int i=0; i<threads; i++){
+			ByteFile bf=albf.get(i%albf.size());
+			alht.add(new HashThread(bf));
 		}
 		
 		//Start the threads
@@ -313,6 +328,11 @@ public class AccessionToTaxid {
 			accumulate(counts_underscore2, pt.counts_underscore2T);
 			
 			success&=pt.success;
+		}
+		
+		//Close the byte files
+		for(ByteFile bf : albf){
+			errorState=bf.close()|errorState;
 		}
 		
 		//Track whether any threads failed
@@ -440,7 +460,7 @@ public class AccessionToTaxid {
 	public static class HashThread extends Thread {
 		
 		@SuppressWarnings("unchecked")
-		public HashThread(FileFormat ff_){
+		public HashThread(ByteFile bf_){
 //			if(USE_MAPS){
 				mapsT=new HashMap[128];
 				for(int i=0; i<mapsT.length; i++){
@@ -450,39 +470,50 @@ public class AccessionToTaxid {
 			if(USE_TABLES){
 				table=new HashBuffer(tables.tables(), 1000, 31, true, true);
 			}
-			ff=ff_;
+			bf=bf_;
+		}
+		
+		ArrayList<byte[]> fetch(int limit){
+			ArrayList<byte[]> list=new ArrayList<byte[]>(limit);
+			synchronized(bf){
+				byte[] line=bf.nextLine();
+//				while(line!=null && Tools.startsWith(line, "accession")){line=bf.nextLine();}
+				if(line==null){return null;}
+				for(int i=0; line!=null;){
+					list.add(line);
+					i++;
+					if(i>=limit){break;}
+					line=bf.nextLine();
+				}
+			}
+			return list.size()>0 ? list : null;
 		}
 		
 		@Override
 		public void run(){
-			
-			ByteFile bf=ByteFile.makeByteFile(ff);
-			
-			byte[] line=bf.nextLine();
-			while(line!=null && Tools.startsWith(line, "accession")){line=bf.nextLine();}
-			
-			while(line!=null){
-				if(line.length>0){
-					linesProcessedT++;
-					bytesProcessedT+=line.length;
-					
-					final boolean valid=(!Tools.startsWith(line, "accession\t")) & !skipParse;
-//					assert(valid); //Not true if concatenated
-					
-//					if(Tools.startsWith(line, "NZ_LM994619")){
-//						boolean b=parseLine2(line, (byte)'\t');
-//						assert(false) : b+", "+new String(line);
-//					}
-					
-					if(valid){
-						boolean b=parseLine2(line, (byte)'\t');
-						if(b){linesValidT++;}
+//			System.err.println("Processing "+bf.name());
+			final int fetchSize=1000;
+			for(ArrayList<byte[]> list=fetch(fetchSize); list!=null; list=fetch(fetchSize)){
+				for(byte[] line : list){
+					if(line.length>0){
+						linesProcessedT++;
+						bytesProcessedT+=line.length;
+
+						final boolean valid=(!Tools.startsWith(line, "accession\t")) & !skipParse;
+						//					assert(valid); //Not true if concatenated
+
+						//					if(Tools.startsWith(line, "NZ_LM994619")){
+						//						boolean b=parseLine2(line, (byte)'\t');
+						//						assert(false) : b+", "+new String(line);
+						//					}
+
+						if(valid){
+							boolean b=parseLine2(line, (byte)'\t');
+							if(b){linesValidT++;}
+						}
 					}
 				}
-				line=bf.nextLine();
 			}
-			
-			boolean closedError=bf.close();
 			
 //			if(USE_MAPS){
 				for(int i=0; i<mapsT.length; i++){
@@ -498,7 +529,7 @@ public class AccessionToTaxid {
 				long temp=table.flush();
 			}
 			
-			success=!closedError;
+			success=true;
 		}
 		
 //		public boolean parseLineNumeric(final byte[] line, final byte delimiter){
@@ -740,7 +771,7 @@ public class AccessionToTaxid {
 		private long linesValidT=0;
 		private long bytesProcessedT=0;
 		
-		final FileFormat ff;
+		final ByteFile bf;
 		HashMap<String, Integer>[] mapsT;
 		HashBuffer table;
 		boolean success=false;

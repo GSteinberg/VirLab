@@ -28,10 +28,11 @@ endif()
 set(NAME1 "BandedAlignerJNI")
 set(NAME2 "MultiStateAligner11tsJNI")
 set(NAME3 "BBMergeOverlapper")
+set(NAME4 "IceCreamAlignerJNI")
 
 #Set names of source and header files
-set(SOURCES "${NAME1}.c" "${NAME2}.c" "${NAME3}")
-set(HEADERS "align2_${NAME1}.h" "align2_${NAME2}.h" "jgi_${NAME3}.h")
+set(SOURCES "${NAME1}.c" "${NAME2}.c" "${NAME3}.c" "${NAME4}.c")
+set(HEADERS "align2_${NAME1}.h" "align2_${NAME2}.h" "jgi_${NAME3}.h" "jgi_${NAME4}.h")
 
 #Generate header files
 set(_stubDir "${CMAKE_CURRENT_BINARY_DIR}")
@@ -47,6 +48,10 @@ add_custom_command(
 add_custom_command(
     OUTPUT jgi_${NAME3}.h
     COMMAND ${Java_JAVAH_EXECUTABLE} -verbose -classpath ${_classDir} -d ${_stubDir} -jni jgi.${NAME3}
+    )
+add_custom_command(
+    OUTPUT jgi_${NAME3}.h
+    COMMAND ${Java_JAVAH_EXECUTABLE} -verbose -classpath ${_classDir} -d ${_stubDir} -jni jgi.${NAME4}
     )
 
 #Generate bbtoolsjni.jnilib

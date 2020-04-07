@@ -17,9 +17,11 @@ import ukmer.Kmer;
 
 public class BloomFilterCorrector {
 	
-	public BloomFilterCorrector(BloomFilter filter_, int k_) {
+	public BloomFilterCorrector(BloomFilter filter_, int k_, int ksmall_) {
 		filter=filter_;
 		k=k_;
+		ksmall=ksmall_;
+		assert(ksmall<=k);
 	}
 
 	public int errorCorrect(Read r){
@@ -69,13 +71,14 @@ public class BloomFilterCorrector {
 		if(valid<2){return 0;}
 		if(!r.containsUndefined() && !hasErrorsFast(kmers)){return 0;}
 		
-		fillCounts(kmers, counts);
+
+		fillCounts(bases, kmers, counts);
 		final int possibleErrors=tracker.suspected=countErrors(counts, quals);
 		if(possibleErrors<0){return 0;}
 		final float expectedErrors=r.expectedErrors(true, r.length());
 		final Rollback roll=ECC_ROLLBACK ? new Rollback(r, counts) : null;
 		
-		assert(counts.size>0);
+		assert(counts.size>0) : counts.size;
 		
 		int correctedPincer=0;
 		int correctedTail=0;
@@ -206,8 +209,23 @@ public class BloomFilterCorrector {
 		return marked;
 	}
 	
-	public void fillCounts(LongList kmers, IntList counts){
+	public void fillCounts(byte[] bases, LongList kmers, IntList counts){
 		counts.clear();
+		
+		if(k==ksmall){
+			fillCountsFromKmers(kmers, counts);
+		}else{
+			filter.fillCountsBig(bases, counts);
+//			filter.fillCountsBig(kmers, counts);
+		}
+		
+//		assert(counts.size==kmers.size) : counts.size+", "+kmers.size;
+		if(smooth){
+			smooth(kmers, counts, smoothWidth);
+		}
+	}
+	
+	private void fillCountsFromKmers(LongList kmers, IntList counts){
 		for(int i=0; i<kmers.size; i++){
 			long kmer=kmers.get(i);
 			if(kmer>=0){
@@ -218,54 +236,6 @@ public class BloomFilterCorrector {
 				counts.add(0);
 			}
 		}
-//		assert(counts.size==kmers.size) : counts.size+", "+kmers.size;
-		if(smooth){
-			smooth(kmers, counts, smoothWidth);
-		}
-	}
-	
-
-	
-	/** Returns counts */
-	public int fillCounts(byte[] bases, IntList counts){
-		final int blen=bases.length;
-		if(blen<k){return 0;}
-		final int min=k-1;
-		final int shift=2*k;
-		final int shift2=shift-2;
-		final long mask=(shift>63 ? -1L : ~((-1L)<<shift));
-		long kmer=0, rkmer=0;
-		int len=0;
-		int valid=0;
-
-		counts.clear();
-
-		/* Loop through the bases, maintaining a forward kmer via bitshifts */
-		for(int i=0; i<blen; i++){
-			final byte base=bases[i];
-			final long x=AminoAcid.baseToNumber[base];
-			final long x2=AminoAcid.baseToComplementNumber[base];
-			kmer=((kmer<<2)|x)&mask;
-			rkmer=(rkmer>>>2)|(x2<<shift2);
-			
-			if(x<0){
-				len=0;
-				kmer=rkmer=0;
-			}else{
-				len++;
-			}
-			
-			if(i>=min){
-				if(len>=k){
-					int count=getCount(kmer, rkmer);
-					counts.add(count);
-					valid++;
-				}else{
-					counts.add(0);
-				}
-			}
-		}
-		return valid;
 	}
 	
 	public void smooth(LongList kmerList, IntList countList, int width){
@@ -1063,7 +1033,7 @@ public class BloomFilterCorrector {
 			
 			key=toValue(kmer, rkmer);
 			
-			assert(getCount(key)==rightMax);
+			assert(getCount(key)==rightMax || rightMax==0);
 			count=rightMax;
 			
 			assert(count>=minCountExtend) : count;
@@ -1418,9 +1388,15 @@ public class BloomFilterCorrector {
 
 	private final StringBuilder toText(long kmer){return AbstractKmerTable.toText(kmer, k);}
 	private final long rcomp(long kmer){return AminoAcid.reverseComplementBinaryFast(kmer, k);}
-	public final int getCount(long kmer, long rkmer){return filter.getCount(kmer, rkmer);}
-	public final int getCount(long key){return filter.getCount(key);}
-	public final int getCount2(long kmer){return kmer<0 ? 0 : filter.getCount(toValue(kmer, rcomp(kmer)));}
+	public final int getCount(long kmer, long rkmer){
+		return (k==ksmall ? filter.getCount(kmer, rkmer) : filter.getCountBig(kmer));
+	}
+	public final int getCount(long key){
+		return (k==ksmall ? filter.getCount(key) : filter.getCountBig(key));
+	}
+	public final int getCount2(long kmer){
+		return kmer<0 ? 0 : (k==ksmall ? filter.getCount(toValue(kmer, rcomp(kmer))) : filter.getCountBig(kmer));
+	}
 	public final long toValue(long kmer, long rkmer){
 		long value=(rcomp ? Tools.max(kmer, rkmer) : kmer);
 		return value;
@@ -1484,6 +1460,7 @@ public class BloomFilterCorrector {
 	BloomFilter filter;
 	
 	int k=31;
+	int ksmall=31;
 	final boolean rcomp=true;
 
 	int minCountExtend=2;

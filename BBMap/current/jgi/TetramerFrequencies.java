@@ -246,7 +246,7 @@ public class TetramerFrequencies {
 		float mult=1f/(line.length()-k+1);
 		for (int cnt: counts){
 			sb.append('\t');
-			sb.append(String.format("%.4f", cnt*mult));
+			sb.append(String.format(Locale.ROOT, "%.4f", cnt*mult));
 		}
 		sb.append('\n');
 	}

@@ -80,6 +80,7 @@ public class BBDuk {
 		
 		//Close the print stream if it was redirected
 		Shared.closeStream(outstream);
+		assert(WAYS==7 && !verbose) : "Undo WAYS and verbose";
 	}
 	
 	/**
@@ -713,6 +714,7 @@ public class BBDuk {
 		MAKE_LHIST=ReadStats.COLLECT_LENGTH_STATS;
 		MAKE_GCHIST=ReadStats.COLLECT_GC_STATS;
 		MAKE_IDHIST=ReadStats.COLLECT_IDENTITY_STATS;
+		MAKE_IHIST=ReadStats.COLLECT_INSERT_STATS;
 		
 		{
 			long usableMemory;
@@ -1007,10 +1009,20 @@ public class BBDuk {
 			if(scafMap==null){scafMap=ScafMap.loadSamHeader(in1);}
 			assert(scafMap!=null && scafMap.size()>0) : "No scaffold names were loaded.";
 			if(varFile!=null){
-				varMap=VcfLoader.loadVars(varFile, scafMap);
+				outstream.println("Loading variants.");
+				varMap=VcfLoader.loadVarFile(varFile, scafMap);
 			}else if(vcfFile!=null){
-				varMap=VcfLoader.loadVcf(vcfFile, scafMap, false, false);
+				outstream.println("Loading variants.");
+				varMap=VcfLoader.loadVcfFile(vcfFile, scafMap, false, false);
 			}
+//			if(varMap!=null && varMap.size()>0){
+//				varKeySet=new HashSet<VarKey>();
+//				for(Var v : varMap.toArray(false)){
+//					if(v.type==Var.INS || v.type==Var.DEL){
+//						varKeySet.add(VarKey.toVarKey(v));
+//					}
+//				}
+//			}
 			fixVariants=(makeReadStats && varMap!=null && varMap.size()>0 && scafMap!=null && scafMap.size()>0);
 		}
 		
@@ -2085,7 +2097,26 @@ public class BBDuk {
 					//10000, 1111111111, 16, 16, 2, 10, 8
 					rkmer=(rkmer>>>bitsPerBase)|(x2<<shift2);
 					if(isFullyDefined(b)){len++;}else{len=0; rkmer=0;}
-					if(verbose){outstream.println("Scanning2 i="+i+", kmer="+kmer+", rkmer="+rkmer+", bases="+new String(bases, Tools.max(0, i-k2), Tools.min(i+1, k)));}
+					if(verbose){
+						if(verbose){
+							String fwd=new String(bases, Tools.max(0, i-k2), Tools.min(i+1, k));
+							String rev=AminoAcid.reverseComplementBases(fwd);
+							String fwd2=kmerToString(kmer, Tools.min(len, k));
+							outstream.println("fwd="+fwd+", fwd2="+fwd2+", rev="+rev+", kmer="+kmer+", rkmer="+rkmer);
+							outstream.println("b="+(char)b+", x="+x+", x2="+x2+", bitsPerBase="+bitsPerBase+", shift2="+shift2);
+							if(!amino){
+								assert(AminoAcid.stringToKmer(fwd)==kmer) : fwd+", "+AminoAcid.stringToKmer(fwd)+", "+kmer+", "+len;
+								if(len>=k){
+									assert(AminoAcid.reverseComplementBinaryFast(kmer, Tools.min(len, k))==rkmer);
+									assert(AminoAcid.reverseComplementBinaryFast(rkmer, Tools.min(len, k))==kmer);
+									assert(AminoAcid.kmerToString(kmer, Tools.min(len, k)).equals(fwd));
+									assert(AminoAcid.kmerToString(rkmer, Tools.min(len, k)).equals(rev)) : AminoAcid.kmerToString(rkmer, Tools.min(len, k))+" != "+rev+" (rkmer)";
+								}
+								assert(fwd.equalsIgnoreCase(fwd2)) : fwd+", "+fwd2; //may be unsafe
+							}
+							outstream.println("Scanning6 i="+i+", len="+len+", kmer="+kmer+", rkmer="+rkmer+", bases="+fwd+", rbases="+rev);
+						}
+					}
 					if(len>=k){
 //						assert(kmer==AminoAcid.reverseComplementBinaryFast(rkmer, k)) : Long.toBinaryString(kmer)+", "+Long.toBinaryString(rkmer)+", "+Long.toBinaryString(mask)+", x="+x+", x2="+x2+", bits="+bitsPerBase+", s="+shift+", s2="+shift2+", b="+Character.toString((char)b);
 						refKmersT++;
@@ -2183,9 +2214,10 @@ public class BBDuk {
 			final long added;
 			if(hdist==0){
 				final long key=toValue(kmer, rkmer, kmask0);
+				if(verbose){outstream.println("toValue ("+kmerToString(kmer, len)+", "+kmerToString(rkmer, len)+") = "+kmerToString(key, len)+" = "+key);}
 				if(speed>0 && ((key/WAYS)&15)<speed){return 0;}
 				if(key%WAYS!=tnum){return 0;}
-				if(verbose){outstream.println("addToMap_B: "+kmerToString(kmer&~lengthMasks[len], len)+" = "+key);}
+				if(verbose){outstream.println("addToMap_B: "+kmerToString(key, len)+" ("+key+")");}
 				added=map.setIfNotPresent(key, id);
 			}else if(edist>0){
 //				long extraBase=(i>=bases.length-1 ? -1 : symbolToNumber2bases[i+1]]);
@@ -3081,12 +3113,19 @@ public class BBDuk {
 				if(MAKE_BASE_HISTOGRAM){readstats.addToBaseHistogram(r1);}
 				if(MAKE_MATCH_HISTOGRAM){readstats.addToMatchHistogram(r1);}
 				if(MAKE_QUALITY_ACCURACY){readstats.addToQualityAccuracy(r1);}
-
+				
 				if(MAKE_EHIST){readstats.addToErrorHistogram(r1);}
 				if(MAKE_INDELHIST){readstats.addToIndelHistogram(r1);}
 				if(MAKE_LHIST){readstats.addToLengthHistogram(r1);}
 				if(MAKE_GCHIST){readstats.addToGCHistogram(r1);}
 				if(MAKE_IDHIST){readstats.addToIdentityHistogram(r1);}
+				
+				if(MAKE_IHIST){
+					SamLine sl1=r1.samline;
+					if(sl1!=null && !r1.secondary() && sl1.pairnum()==0){
+						readstats.addToInsertHistogram(sl1);
+					}
+				}
 			}
 
 			if(fixVariants && unfixVariants){
@@ -3109,7 +3148,8 @@ public class BBDuk {
 		 */
 		private final int getValue(final long kmer, final long rkmer, final long lengthMask, final int qPos, final int len, final int qHDist, final AbstractKmerTable[] sets){
 			assert(lengthMask==0 || (kmer<lengthMask && rkmer<lengthMask)) : lengthMask+", "+kmer+", "+rkmer;
-			int id=getValue(kmer, rkmer, lengthMask, qPos, sets);
+			if(verbose){outstream.println("getValue()");}
+			int id=getValueInner(kmer, rkmer, lengthMask, len, qPos, sets);
 			if(id<1 && qHDist>0){
 				final int qHDist2=qHDist-1;
 				
@@ -3142,18 +3182,26 @@ public class BBDuk {
 		 * @param sets Kmer hash tables
 		 * @return Value stored in table
 		 */
-		private final int getValue(final long kmer, final long rkmer, final long lengthMask, final int qPos, final AbstractKmerTable[] sets){
+		private final int getValueInner(final long kmer, final long rkmer, final long lengthMask, final int len, final int qPos, final AbstractKmerTable[] sets){
 			assert(lengthMask==0 || (kmer<lengthMask && rkmer<lengthMask)) : lengthMask+", "+kmer+", "+rkmer;
 			if(qSkip>1 && (qPos%qSkip!=0)){return -1;}
-			
+
+			if(verbose){
+				outstream.println("getValueInner(kmer="+AminoAcid.kmerToString(kmer, len)+", rkmer="+AminoAcid.kmerToString(rkmer, len)+", len="+len+", mask="+lengthMask+")");
+				outstream.println("getValueInner(kmer="+kmer+", rkmer="+rkmer+", len="+len+", mask="+lengthMask+")");
+			}
 			final long max=(rcomp ? Tools.max(kmer, rkmer) : kmer);
+			if(verbose){outstream.println("max="+AminoAcid.kmerToString(max, len)+" ("+max+")");}
 			final long key=(max&middleMask)|lengthMask;
+			if(verbose){outstream.println("key="+AminoAcid.kmerToString(key, len)+" ("+key+")");}
 			if(noAccel || ((key/WAYS)&15)>=speed){
-				if(verbose){outstream.println("Testing key "+key);}
+				if(verbose){outstream.println("Testing key "+kmerToString(key, len)+" ("+key+")");}
 				AbstractKmerTable set=sets[(int)(key%WAYS)];
 				final int id=set.getValue(key);
+				if(verbose){outstream.println("getValueInner("+kmerToString(kmer, len)+", "+kmerToString(rkmer, len)+") > "+kmerToString(key, len)+" ("+key+") = "+id);}
 				return id;
 			}
+			if(verbose){outstream.println("Invalid key.");}
 			return -1;
 		}
 		
@@ -3184,7 +3232,24 @@ public class BBDuk {
 				kmer=((kmer<<bitsPerBase)|x)&mask;
 				rkmer=(rkmer>>>bitsPerBase)|(x2<<shift2);
 				if(forbidNs && !isFullyDefined(b)){len=0; rkmer=0;}else{len++;}
-				if(verbose){outstream.println("Scanning6 i="+i+", kmer="+kmer+", rkmer="+rkmer+", bases="+new String(bases, Tools.max(0, i-k2), Tools.min(i+1, k)));}
+				if(verbose){
+					String fwd=new String(bases, Tools.max(0, i-k2), Tools.min(i+1, k));
+					String rev=AminoAcid.reverseComplementBases(fwd);
+					String fwd2=kmerToString(kmer, Tools.min(len, k));
+					outstream.println("fwd="+fwd+", fwd2="+fwd2+", rev="+rev+", kmer="+kmer+", rkmer="+rkmer);
+					outstream.println("b="+(char)b+", x="+x+", x2="+x2+", bitsPerBase="+bitsPerBase+", shift2="+shift2);
+					if(!amino){
+						assert(AminoAcid.stringToKmer(fwd)==kmer) : fwd+", "+AminoAcid.stringToKmer(fwd)+", "+kmer+", "+len;
+						if(len>=k){
+							assert(AminoAcid.reverseComplementBinaryFast(kmer, Tools.min(len, k))==rkmer);
+							assert(AminoAcid.reverseComplementBinaryFast(rkmer, Tools.min(len, k))==kmer);
+							assert(AminoAcid.kmerToString(kmer, Tools.min(len, k)).equals(fwd));
+							assert(AminoAcid.kmerToString(rkmer, Tools.min(len, k)).equals(rev)) : AminoAcid.kmerToString(rkmer, Tools.min(len, k))+" != "+rev+" (rkmer)";
+						}
+						assert(fwd.equalsIgnoreCase(fwd2)) : fwd+", "+fwd2; //may be unsafe
+					}
+					outstream.println("Scanning6 i="+i+", len="+len+", kmer="+kmer+", rkmer="+rkmer+", bases="+fwd+", rbases="+rev);
+				}
 				if(len>=minlen2 && i>=minlen){
 					final int id=getValue(kmer, rkmer, kmask, i, k, qHammingDistance, sets);
 					if(verbose){outstream.println("Testing kmer "+kmer+"; id="+id);}
@@ -3240,7 +3305,7 @@ public class BBDuk {
 				kmer=((kmer<<bitsPerBase)|x)&mask;
 				rkmer=(rkmer>>>bitsPerBase)|(x2<<shift2);
 				if(forbidNs && !isFullyDefined(b)){len=0; rkmer=0;}else{len++;}
-				if(verbose){outstream.println("Scanning6 i="+i+", kmer="+kmer+", rkmer="+rkmer+", bases="+new String(bases, Tools.max(0, i-k2), Tools.min(i+1, k)));}
+				if(verbose){outstream.println("Scanning6b i="+i+", kmer="+kmer+", rkmer="+rkmer+", bases="+new String(bases, Tools.max(0, i-k2), Tools.min(i+1, k)));}
 				if(len>=minlen2 && i>=minlen){
 					final int id=getValue(kmer, rkmer, kmask, i, k, qHammingDistance, sets);
 					if(verbose){outstream.println("Testing kmer "+kmer+"; id="+id);}
@@ -3302,6 +3367,7 @@ public class BBDuk {
 				if(forbidNs && !isFullyDefined(b)){len=0; rkmer=0;}else{len++;}
 				if(verbose){outstream.println("Scanning6 i="+i+", kmer="+kmer+", rkmer="+rkmer+", bases="+new String(bases, Tools.max(0, i-k2), Tools.min(i+1, k)));}
 				if(len>=minlen2 && i>=minlen){
+					if(verbose){outstream.println("Lookup kmer="+AminoAcid.kmerToString(kmer, k)+", rkmer="+AminoAcid.kmerToString(rkmer, k));}
 					final int id=getValue(kmer, rkmer, kmask, i, k, qHammingDistance, sets);
 					if(id>0){
 						countArray[id]++;
@@ -4075,9 +4141,10 @@ public class BBDuk {
 		}
 		
 		public final boolean passesVariantFilter(Read r){
-			if(!r.mapped() || r.bases==null || r.obj==null || r.match==null){return true;}
+			if(!r.mapped() || r.bases==null || r.samline==null || r.match==null){return true;}
+			//TODO: Add Vars as well, like in FilterSam
 			if(Read.countSubs(r.match)<=maxBadSubs){return true;}
-			ArrayList<Var> list=CallVariants.findUniqueSubs(r, (SamLine)r.obj, varMap, scafMap, maxBadSubAlleleDepth, minBadSubReadDepth);
+			ArrayList<Var> list=CallVariants.findUniqueSubs(r, r.samline, varMap, scafMap, maxBadSubAlleleDepth, maxBadAlleleFraction, minBadSubReadDepth, minBadSubEDist);
 			return list==null || list.size()<=maxBadSubs;
 		}
 		
@@ -4175,8 +4242,12 @@ public class BBDuk {
 			"\n"+Long.toBinaryString(kmer)+
 			"\n"+Long.toBinaryString(rkmer)+
 			"\n"+Long.toBinaryString(AminoAcid.reverseComplementBinaryFast(kmer, k));
-		long value=(rcomp ? Tools.max(kmer, rkmer) : kmer);
-		return (value&middleMask)|lengthMask;
+		if(verbose){outstream.println("toValue("+AminoAcid.kmerToString(kmer, k)+", "+AminoAcid.kmerToString(rkmer, k)+", "+lengthMask+")");}
+		final long value=(rcomp ? Tools.max(kmer, rkmer) : kmer);
+		if(verbose){outstream.println("value="+AminoAcid.kmerToString(value, k)+" = "+value);}
+		final long ret=(value&middleMask)|lengthMask;
+		if(verbose){outstream.println("ret="+AminoAcid.kmerToString(ret, k)+" = "+ret);}
+		return ret;
 	}
 
 	public static int trimPolyA(final Read r, final int minPoly){
@@ -4365,6 +4436,7 @@ public class BBDuk {
 	private String varFile=null;
 	private String vcfFile=null;
 	private VarMap varMap=null;
+//	private HashSet<VarKey> varKeySet=null;
 	private ScafMap scafMap=null;
 	private boolean fixVariants=false;
 	private boolean unfixVariants=true;
@@ -4380,6 +4452,10 @@ public class BBDuk {
 	private int maxBadSubAlleleDepth=1;
 	/** Minimum read depth for a variant to be considered unsupported */
 	private int minBadSubReadDepth=2;
+	//TODO
+	private int minBadSubEDist=0;
+	//TODO
+	private float maxBadAlleleFraction=0;
 	
 	/*--------------------------------------------------------------*/
 	/*----------------        Entropy Fields        ----------------*/
@@ -4726,6 +4802,8 @@ public class BBDuk {
 	final boolean MAKE_LHIST;
 	final boolean MAKE_GCHIST;
 	final boolean MAKE_IDHIST;
+	
+	final boolean MAKE_IHIST;
 	
 	/*--------------------------------------------------------------*/
 	/*----------------         Static Fields        ----------------*/

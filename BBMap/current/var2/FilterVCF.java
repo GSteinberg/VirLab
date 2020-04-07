@@ -89,9 +89,17 @@ public class FilterVCF {
 				Var.CALL_JUNCTION=Tools.parseBoolean(b);
 			}else if(a.equals("minscore")){
 				minScore=Double.parseDouble(b);
-			}
-			
-			else if(a.equals("clearfilters")){
+			}else if(a.equals("splitalleles")) {
+				splitAlleles=Tools.parseBoolean(b);
+			}else if(a.equals("splitsubs") || a.equals("splitsnps")) {
+				splitSubs=Tools.parseBoolean(b);
+			}else if(a.equals("splitcomplex")) {
+				splitComplex=Tools.parseBoolean(b);
+			}else if(a.equals("sass") || a.equals("split")) {
+				splitAlleles=splitSubs=Tools.parseBoolean(b);
+			}else if(a.equals("splitall") || a.equals("sascsss")) {
+				splitAlleles=splitComplex=splitSubs=Tools.parseBoolean(b);
+			}else if(a.equals("clearfilters")){
 				if(Tools.parseBoolean(b)){
 					varFilter.clear();
 					samFilter.clear();
@@ -100,6 +108,10 @@ public class FilterVCF {
 				setSamFilter=true;
 			}else if(varFilter.parse(a, b, arg)){
 				setVarFilter=true;
+			}else if(a.equals("scorehist") || a.equals("qualhist") || a.equals("qhist") || a.equals("shist")){
+				scoreHistFile=b;
+			}else if(a.equals("trimtocanonical") || a.equals("canonicalize") || a.equals("canonicize") || a.equals("canonize")){
+				VCFLine.TRIM_TO_CANONICAL=Tools.parseBoolean(b);
 			}
 			
 			else if(parser.parse(arg, a, b)){
@@ -218,6 +230,7 @@ public class FilterVCF {
 			variantLinesProcessed+=pt.variantLinesProcessedT;
 			variantLinesOut+=pt.variantLinesOutT;
 			bytesProcessed+=pt.bytesProcessedT;
+			Tools.add(scoreHist, pt.scoreHistT);
 
 			allSuccess&=pt.success;
 		}
@@ -229,6 +242,9 @@ public class FilterVCF {
 	private void processVcfHeader(ByteFile bf, ByteStreamWriter bsw){
 		byte[] line=bf.nextLine();
 
+		if(ScafMap.defaultScafMap()==null){
+			ScafMap.setDefaultScafMap(new ScafMap(), bf.name());
+		}
 		ByteBuilder bb=new ByteBuilder();
 		while(line!=null && (line.length==0 || line[0]=='#')){
 			if(line.length>0){
@@ -244,6 +260,8 @@ public class FilterVCF {
 					for(int i=9; i<split.length; i++){
 						samples.add(split[i]);
 					}
+				}else if(Tools.startsWith(line, "##contig=<ID=")){
+					ScafMap.defaultScafMap().addFromVcf(line);
 				}else{
 					String[] split=new String(line).split("=");
 					if(split.length==2){
@@ -297,6 +315,12 @@ public class FilterVCF {
 					variantLinesProcessed++;
 					VCFLine vline=new VCFLine(line);
 					boolean pass=true;
+					
+					if(!Var.CALL_DEL && vline.type()==Var.DEL){pass=false;}
+					else if(!Var.CALL_INS && vline.type()==Var.INS){pass=false;}
+					else if(!Var.CALL_SUB && vline.type()==Var.SUB){pass=false;}
+					else if(!Var.CALL_JUNCTION && vline.isJunction()){pass=false;}
+					
 					if(pass && samFilter!=null){pass&=samFilter.passesFilter(vline);}
 					if(pass && varFilter!=null){
 						Var v=null;
@@ -310,11 +334,6 @@ public class FilterVCF {
 								varFormatOK=false;
 							}
 						}
-
-						if(!Var.CALL_DEL && vline.type()==Var.DEL){pass=false;}
-						else if(!Var.CALL_INS && vline.type()==Var.INS){pass=false;}
-						else if(!Var.CALL_SUB && vline.type()==Var.SUB){pass=false;}
-						else if(!Var.CALL_JUNCTION && vline.isJunction()){pass=false;}
 						
 						if(v!=null){
 							pass&=varFilter.passesFilter(v, properPairRate,
@@ -324,8 +343,45 @@ public class FilterVCF {
 						}
 					}
 					if(pass){
-						if(bsw!=null){bsw.println(line);}
-						variantLinesOut++;
+						
+						ArrayList<VCFLine> split=(splitAlleles || splitComplex || splitSubs) ? vline.split(splitAlleles, splitComplex, splitSubs) : null;
+						
+						if(split==null){
+							if(bsw!=null){bsw.println(line);}
+							variantLinesOut++;
+							int q=(int)(vline.qual);
+							scoreHist[Tools.min(scoreHist.length-1, q)]++;
+						}else{
+							for(VCFLine vline2 : split){
+								if(bsw!=null){bsw.print(vline2.toText(new ByteBuilder(64)).nl());}
+								variantLinesOut++;
+								int q=(int)(vline2.qual);
+								scoreHist[Tools.min(scoreHist.length-1, q)]++;
+							}
+						}
+						
+//						if(splitAlleles && vline.alt!=null && Tools.indexOf(vline.alt, ',')>0){//This may not split correctly, since the auxiliary data is replicated
+//							String alleles=new String(vline.alt);
+//							String[] split=alleles.split(",");
+//							for(String allele : split){
+//								vline.alt=allele.getBytes();
+//								if(bsw!=null){bsw.print(vline.toText(new ByteBuilder(64)).nl());}
+//								variantLinesOut++;
+//								int q=(int)(vline.qual);
+//								scoreHist[Tools.min(scoreHist.length-1, q)]++;
+//							}
+//						}else{
+//							if(bsw!=null){bsw.println(line);}
+//							variantLinesOut++;
+//							int q=(int)(vline.qual);
+//							scoreHist[Tools.min(scoreHist.length-1, q)]++;
+//						}
+						
+						
+//						if(bsw!=null){bsw.println(line);}
+//						variantLinesOut++;
+//						int q=(int)(vline.qual);
+//						scoreHist[Tools.min(scoreHist.length-1, q)]++;
 					}
 				}
 			}
@@ -361,6 +417,10 @@ public class FilterVCF {
 			processVcfVarsMT(bf, bsw);
 		}else{
 			processVcfVarsST(bf, bsw);
+		}
+		
+		if(scoreHistFile!=null){
+			CallVariants.writeScoreHist(scoreHistFile, scoreHist);
 		}
 		
 		errorState|=bf.close();
@@ -544,8 +604,24 @@ public class FilterVCF {
 				}
 				
 				if(pass){
-					bb.append(line).append('\n');
-					variantLinesOutT++;
+//					assert(Tools.indexOf(vline.alt, ',')<0) : vline;
+//					assert(false) : vline;
+					if(splitAlleles && vline.alt!=null && Tools.indexOf(vline.alt, ',')>0){//This may not split correctly, since the auxiliary data is replicated
+						String alleles=new String(vline.alt);
+						String[] split=alleles.split(",");
+						for(String allele : split){
+							vline.alt=allele.getBytes();
+							vline.toText(bb).nl();
+							variantLinesOutT++;
+							int q=(int)(vline.qual);
+							scoreHistT[Tools.min(scoreHistT.length-1, q)]++;
+						}
+					}else{
+						bb.append(line).append('\n');
+						variantLinesOutT++;
+						int q=(int)(vline.qual);
+						scoreHistT[Tools.min(scoreHistT.length-1, q)]++;
+					}
 				}
 			}
 		}
@@ -560,6 +636,7 @@ public class FilterVCF {
 		long variantLinesProcessedT=0;
 		long variantLinesOutT=0;
 		long bytesProcessedT=0;
+		private long[] scoreHistT=new long[scoreHist.length];
 
 		boolean success=false;
 	}
@@ -572,6 +649,7 @@ public class FilterVCF {
 	private long headerLinesOut=0;
 	private long variantLinesOut=0;
 	private long bytesProcessed=0;
+	private long[] scoreHist=new long[1000];
 	
 	private long maxLines=Long.MAX_VALUE;
 
@@ -594,6 +672,9 @@ public class FilterVCF {
 	final int threads;
 	public boolean multithreaded=false;
 	private long jobIDOffset=0;
+	boolean splitAlleles=false;
+	boolean splitSubs=false;
+	boolean splitComplex=false;
 	
 //	private final ArrayBlockingQueue<ListNum<byte[]>> inq;
 	
@@ -602,6 +683,7 @@ public class FilterVCF {
 	private String in1=null;
 	private String out1=null;
 	private String ref=null;
+	private String scoreHistFile=null;
 
 	private final FileFormat ffin1;
 	private final FileFormat ffout1;

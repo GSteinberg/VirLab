@@ -27,6 +27,7 @@ import stream.SamLine;
 import stream.SiteScore;
 import structures.ByteBuilder;
 import structures.CoverageArray;
+import structures.LongList;
 
 public final class Tools {
 	
@@ -47,6 +48,112 @@ public final class Tools {
 			System.err.println("\n");
 		}
 		
+	}
+
+	//Note: clen is optional, but allows poorly-formatted input like trailing whitespace
+	//Without clen ",,," would become {0,0,0,0} 
+	public static long[] parseLongArray(String sub) {
+		if(sub==null || sub.length()<1){return null;}
+		long current=0;
+//		int clen=0;
+		LongList list=new LongList(min(8, 1+sub.length()/2));
+		for(int i=0, len=sub.length(); i<len; i++){
+//			System.err.println();
+			int c=sub.charAt(i)-'0';
+			if(c<0 || c>9){
+//				System.err.println('A');
+				//assert(clen>0);
+				list.add(current);
+				current=0;
+//				clen=0;
+			}else{
+//				System.err.println('B');
+				current=(current*10)+c;
+//				clen++;
+			}
+//			System.err.println("i="+i+", c="+c+", current="+current+", list="+list);
+		}
+//		if(clen>0){
+			list.add(current);
+//		}
+//		assert(false) : "\n'"+sub+"'\n"+Arrays.toString(list.toArray());
+		return list.toArray();
+	}
+	
+	public static int parseZmw(String id){
+		//Example: m54283_190403_183820/4194374/919_2614
+		//Run ID is m54283_190403_183820
+		//zmw ID is 4194374.
+		//Read start/stop coordinates are 919_2614
+		int under=id.indexOf('_');
+		int slash=id.indexOf('/');
+		if(under<0 || slash<0){return -1;}
+		String[] split=id.split("/");
+		String z=split[1];
+		return Integer.parseInt(z);
+	}
+	
+	public static String parseSymbol(String b){
+		if(b==null || b.length()<2){return b;}
+		
+		//Convenience characters
+		if(b.equalsIgnoreCase("space")){
+			return " ";
+		}else if(b.equalsIgnoreCase("tab")){
+			return "\t";
+		}else if(b.equalsIgnoreCase("whitespace")){
+			return "\\s+";
+		}else if(b.equalsIgnoreCase("pound")){
+			return "#";
+		}else if(b.equalsIgnoreCase("greaterthan")){
+			return ">";
+		}else if(b.equalsIgnoreCase("lessthan")){
+			return "<";
+		}else if(b.equalsIgnoreCase("equals")){
+			return "=";
+		}else if(b.equalsIgnoreCase("colon")){
+			return ":";
+		}else if(b.equalsIgnoreCase("semicolon")){
+			return ";";
+		}else if(b.equalsIgnoreCase("bang")){
+			return "!";
+		}else if(b.equalsIgnoreCase("and") || b.equalsIgnoreCase("ampersand")){
+			return "&";
+		}else if(b.equalsIgnoreCase("quote") || b.equalsIgnoreCase("doublequote")){
+			return "\"";
+		}else if(b.equalsIgnoreCase("singlequote") || b.equalsIgnoreCase("apostrophe")){
+			return "'";
+		}
+		
+		//Java meta characters
+		if(b.equalsIgnoreCase("backslash")){
+			return "\\\\";
+		}else if(b.equalsIgnoreCase("hat") || b.equalsIgnoreCase("caret")){
+			return "\\^";
+		}else if(b.equalsIgnoreCase("dollar")){
+			return "\\$";
+		}else if(b.equalsIgnoreCase("dot")){
+			return "\\.";
+		}else if(b.equalsIgnoreCase("pipe") || b.equalsIgnoreCase("or")){
+			return "\\|";
+		}else if(b.equalsIgnoreCase("questionmark")){
+			return "\\?";
+		}else if(b.equalsIgnoreCase("star") || b.equalsIgnoreCase("asterisk")){
+			return "\\*";
+		}else if(b.equalsIgnoreCase("plus")){
+			return "\\+";
+		}else if(b.equalsIgnoreCase("openparen")){
+			return "\\(";
+		}else if(b.equalsIgnoreCase("closeparen")){
+			return "\\)";
+		}else if(b.equalsIgnoreCase("opensquare")){
+			return "\\[";
+		}else if(b.equalsIgnoreCase("opencurly")){
+			return "\\{";
+		}
+		
+		//No matches, return the literal
+		return b;
 	}
 
 	public static void addFiles(String b, ArrayList<String> list){
@@ -132,13 +239,22 @@ public final class Tools {
 	}
 
 	public static String padKM(long number, int pad) {
-		String s=(number<100000 ? ""+number : number<100000000 ? (number/1000)+"k" : (number/1000000)+"m");
+		String s;
+		if(Shared.OUTPUT_KMG){
+			s=(number<100000 ? ""+number : number<100000000 ? (number/1000)+"k" : (number/1000000)+"m");
+		}else{
+			s=""+number;
+		}
 		while(s.length()<pad){s=" "+s;}
 		return s;
 	}
 	
 	public static String timeReadsBasesProcessed(Timer t, long readsProcessed, long basesProcessed, int pad){
-		return ("Time:                         \t"+t+"\n"+readsBasesProcessed(t.elapsed, readsProcessed, basesProcessed, pad));
+		return time(t, pad)+"\n"+readsBasesProcessed(t.elapsed, readsProcessed, basesProcessed, pad);
+	}
+	
+	public static String time(Timer t, int pad){
+		return ("Time:                         \t"+t);
 	}
 	
 	public static String readsBasesProcessed(long elapsed, long reads, long bases, int pad){
@@ -161,6 +277,30 @@ public final class Tools {
 		StringBuilder sb=new StringBuilder();
 		sb.append("Reads Out:          ").append(rstring).append(percent ? String.format(Locale.ROOT, " \t%.2f%%", rpct) : "").append('\n');
 		sb.append("Bases Out:          ").append(bstring).append(percent ? String.format(Locale.ROOT, " \t%.2f%%", bpct) : "");
+		return sb.toString();
+	}
+	
+	public static String numberPercent(String text, long number, double percent, int decimals, int pad){
+		String rstring=padLeft(number, pad);
+		StringBuilder sb=new StringBuilder();
+		while(text.length()<20){text+=" ";}
+		sb.append(text).append(rstring).append(String.format(Locale.ROOT, " \t%."+decimals+"f%%", percent));
+		return sb.toString();
+	}
+	
+	public static String number(String text, double number, int decimals, int pad){
+		String rstring=padLeft(String.format(Locale.ROOT, "%."+decimals+"f", number), pad);
+		StringBuilder sb=new StringBuilder();
+		while(text.length()<20){text+=" ";}
+		sb.append(text).append(rstring);
+		return sb.toString();
+	}
+	
+	public static String number(String text, long number, int pad){
+		String rstring=padLeft(""+number, pad);
+		StringBuilder sb=new StringBuilder();
+		while(text.length()<20){text+=" ";}
+		sb.append(text).append(rstring);
 		return sb.toString();
 	}
 	
@@ -350,7 +490,7 @@ public final class Tools {
 	 * Yields actual kmer coverage from observed kmer coverage.
 	 * Not perfectly accurate but the deviation is typically under 5%. */
 	public static double observedToActualCoverage(double y){
-		return y-Math.exp(-0.885*(y-1));
+		return Tools.max(0, y-Math.exp(-0.885*(y-1)));
 	}
 	
 	/** Derived from curve-fitting simulated data.
@@ -390,6 +530,7 @@ public final class Tools {
 	public static boolean isNumeric(int c) {return c<0 ? false : numericMap[c];}
 	public static boolean isDigit(int c) {return c>='0' && c<='9';}
 	public static boolean isLetter(int c) {return c<0 ? false : letterMap[c];}
+	public static boolean isLetterOrDigit(int c) {return c<0 ? false : isDigit(c) || letterMap[c];}
 	public static boolean isUpperCase(int c) {return c>='A' && c<='Z';}
 	public static boolean isLowerCase(int c) {return c>='a' && c<='z';}
 	public static int toUpperCase(int c) {return c<'a' || c>'z' ? c : c-32;}
@@ -399,6 +540,7 @@ public final class Tools {
 	public static boolean isNumeric(byte c) {return c<0 ? false : numericMap[c];}
 	public static boolean isDigit(byte c) {return c>='0' && c<='9';}
 	public static boolean isLetter(byte c) {return c<0 ? false : letterMap[c];}
+	public static boolean isLetterOrDigit(byte c) {return c<0 ? false : isDigit(c) || letterMap[c];}
 	public static boolean isUpperCase(byte c) {return c>='A' && c<='Z';}
 	public static boolean isLowerCase(byte c) {return c>='a' && c<='z';}
 	public static byte toUpperCase(byte c) {return c<'a' || c>'z' ? c : (byte)(c-32);}
@@ -408,6 +550,7 @@ public final class Tools {
 	public static boolean isNumeric(char c) {return c>127 ? false : numericMap[c];}
 	public static boolean isDigit(char c) {return c>='0' && c<='9';}
 	public static boolean isLetter(char c) {return c>127 ? false : letterMap[c];}
+	public static boolean isLetterOrDigit(char c) {return c<0 ? false : isDigit(c) || letterMap[c];}
 	public static boolean isUpperCase(char c) {return c>='A' && c<='Z';}
 	public static boolean isLowerCase(char c) {return c>='a' && c<='z';}
 	public static char toUpperCase(char c) {return c<'a' || c>'z' ? c : (char)(c-32);}
@@ -1882,6 +2025,10 @@ public final class Tools {
 	public static boolean startsWith(byte[] array, String s) {
 		return startsWith(array, s, 0);
 	}
+
+	public static boolean equals(byte[] array, String s) {
+		return array.length==s.length() && startsWith(array, s, 0);
+	}
 	
 	/**
 	 * @param array
@@ -1971,6 +2118,12 @@ public final class Tools {
 	public static void add(long[][][] array, long[][][] incr) {
 		for(int i=0; i<array.length; i++){
 			add(array[i], incr[i]);
+		}
+	}
+
+	public static void add(double[] array, double[] incr) {
+		for(int i=0; i<array.length; i++){
+			array[i]+=incr[i];
 		}
 	}
 
@@ -2168,6 +2321,27 @@ public final class Tools {
 		reverseInPlace(array, 0, array.length);
 	}
 	
+	public static void reverseInPlace(final AtomicIntegerArray array){
+		if(array==null){return;}
+		reverseInPlace(array, 0, array.length());
+	}
+	
+	public static <X> void reverseInPlace(final X[] array){
+		if(array==null){return;}
+		reverseInPlace(array, 0, array.length);
+	}
+	
+	public static <X> void reverseInPlace(final X[] array, final int from, final int to){
+		if(array==null){return;}
+		final int len=to-from;
+		final int max=from+len/2, last=to-1;
+		for(int i=from; i<max; i++){
+			X temp=array[i];
+			array[i]=array[last-i];
+			array[last-i]=temp;
+		}
+	}
+	
 	public static void reverseInPlace(final byte[] array, final int from, final int to){
 		if(array==null){return;}
 		final int len=to-from;
@@ -2198,6 +2372,17 @@ public final class Tools {
 			long temp=array[i];
 			array[i]=array[last-i];
 			array[last-i]=temp;
+		}
+	}
+	
+	public static void reverseInPlace(final AtomicIntegerArray array, final int from, final int to){
+		if(array==null){return;}
+		final int len=to-from;
+		final int max=from+len/2, last=to-1;
+		for(int i=from; i<max; i++){
+			int temp=array.get(i);
+			array.set(i, array.get(last-i));
+			array.set(last-i, temp);
 		}
 	}
 	
@@ -2443,6 +2628,30 @@ public final class Tools {
 		return remap;
 	}
 	
+	/** Replace characters in the array with different characters according to the map */
+	public static int remapAndCount(byte[] remap, byte[] array) {
+		if(array==null){return 0;}
+		assert(remap!=null);
+		int swaps=0;
+		for(int i=0; i<array.length; i++){
+			byte a=array[i];
+			byte b=remap[a];
+			if(a!=b){
+				array[i]=b;
+				swaps++;
+			}
+		}
+		return swaps;
+	}
+	
+	/** Replace characters in a string with different characters according to the map */
+	public static String remap(byte[] remap, String in) {
+		if(in==null){return in;}
+		byte[] array=in.getBytes();
+		int x=remapAndCount(remap, array);
+		return (x>0 ? new String(array) : in);
+	}
+	
 	public static int parseIntKMG(String b){
 		long x=parseKMG(b);
 		assert(x<=Integer.MAX_VALUE && x>Integer.MIN_VALUE) : "Value "+x+" is out of range for integers: "+b;
@@ -2451,11 +2660,13 @@ public final class Tools {
 	
 	public static long parseKMG(String b){
 		if(b==null){return 0;}
-		char c=Tools.toLowerCase(b.charAt(b.length()-1));
-		boolean dot=b.indexOf('.')>=0;
-		if(!Tools.isLetter(c) && !dot){return Long.parseLong(b);}
+		assert(b.length()>0);
+		final char c=Tools.toLowerCase(b.charAt(b.length()-1));
+		final boolean dot=b.indexOf('.')>=0;
+		if(!dot && !Tools.isLetter(c)){return Long.parseLong(b);}
+//		if(!Tools.isLetter(c) && !dot){return Long.parseLong(b);}
 		
-		if(b.equalsIgnoreCase("big") || b.equalsIgnoreCase("inf") || b.equalsIgnoreCase("infinity") || b.equalsIgnoreCase("max")){
+		if(b.equalsIgnoreCase("big") || b.equalsIgnoreCase("inf") || b.equalsIgnoreCase("infinity") || b.equalsIgnoreCase("max") || b.equalsIgnoreCase("huge")){
 			return Long.MAX_VALUE;
 		}
 		
@@ -2465,13 +2676,27 @@ public final class Tools {
 			else if(c=='m'){mult=1000000;}
 			else if(c=='g' || c=='b'){mult=1000000000;}
 			else if(c=='t'){mult=1000000000000L;}
+			else if(c=='p' || c=='q'){mult=1000000000000000L;}
+			else if(c=='e'){mult=1000000000000000000L;}
+//			else if(c=='z'){mult=1000000000000000000000L;}//Out of range
+			else if(c=='c' || c=='h'){mult=100;}
+			else if(c=='d'){mult=10;}
 			else{throw new RuntimeException(b);}
 			b=b.substring(0, b.length()-1);
 		}
 		
-		if(!dot){return Long.parseLong(b)*mult;}
-		
-		return (long)(Double.parseDouble(b)*mult);
+		//Calculate product, check for overflow, and return
+		if(!dot){
+			long m=Long.parseLong(b);
+			long p=m*mult;
+			assert(p>=m) : p+", "+m+", "+b;
+			return p;
+		}else{
+			double m=Double.parseDouble(b);
+			long p=(long)(m*mult);
+			assert(p>=m) : p+", "+m+", "+b;
+			return p;
+		}
 	}
 	
 	public static long parseKMGBinary(String b){
@@ -2501,6 +2726,13 @@ public final class Tools {
 		return Tools.isDigit(c) || c=='.' || c=='-';
 	}
 	
+	/**
+	 * Parse this argument.  More liberal than Boolean.parseBoolean.
+	 * Null, t, true, or 1 all yield true.
+	 * Everything else, including the String "null", is false.
+	 * @param s Argument to parse
+	 * @return boolean form
+	 */
 	public static boolean parseBoolean(String s){
 		if(s==null || s.length()<1){return true;}
 		if(s.length()==1){
@@ -2587,6 +2819,9 @@ public final class Tools {
 	 * @return Parsed number
 	 */
 	public static double parseDouble(final byte[] array, final int a0, final int b){//TODO: This is slow
+		if(FORCE_JAVA_PARSE_DOUBLE){
+			return Double.parseDouble(new String(array, a0, b-a0));
+		}
 		int a=a0;
 		assert(b>a);
 		long upper=0;
@@ -2607,7 +2842,8 @@ public final class Tools {
 		for(a++; a<b; a++){
 			final byte c=array[a];
 			final int x=(c-z);
-			assert(x<10 && x>=0) : x+" = "+(char)c+"\narray="+new String(array)+", start="+a+", stop="+b;
+			assert(x<10 && x>=0) : x+" = "+(char)c+"\narray="+new String(array)+", start="+a+", stop="+b+
+				"\nThis function does not support exponents; if the input has an exponent, add the flag 'forceJavaParseDouble'.";
 			lower=(lower*10)+x;
 			places++;
 		}
@@ -2657,6 +2893,26 @@ public final class Tools {
 			r=(r*10)+x;
 		}
 		return r*mult;
+	}
+	
+	public static int[] makeHistogram(AtomicLongArray data, int buckets) {
+		long total=sum(data);
+		long increment=total/(buckets+1);
+		
+		int[] hist=new int[buckets+1];
+		
+		long sum=0;
+		long target=increment/2;
+		int ptr=0;
+		for(int i=0; i<hist.length; i++){
+			while(ptr<data.length() && sum<target){
+				sum+=data.get(ptr);
+				ptr++;
+			}
+			hist[i]=ptr;
+			target+=increment;
+		}
+		return hist;
 	}
 	
 	/** TODO:  This (temporarily) uses a lot of memory.  Could be reduced by making an array of length max(x) and counting occurrences. */
@@ -2870,10 +3126,32 @@ public final class Tools {
 		return indexOf(array, b, 0);
 	}
 	
+	public static final int indexOfNth(byte[] array, byte b, int n){
+		return indexOfNth(array, b, n, 0);
+	}
+	
+	public static final int indexOfNth(byte[] array, char b, int n){
+		return indexOfNth(array, (byte)b, n, 0);
+	}
+
+	public static final int indexOf(final byte[] array, final char b, final int start){return indexOf(array, (byte)b, start);}
 	public static final int indexOf(final byte[] array, final byte b, final int start){
 		int i=start;
 		while(i<array.length && array[i]!=b){i++;}
 		return (i==array.length ? -1 : i);
+	}
+	
+	public static final int indexOfNth(final byte[] array, final char b, final int n, final int start){
+		return indexOfNth(array, (byte)b, n, start);
+	}
+	
+	public static final int indexOfNth(final byte[] array, final byte b, final int n, final int start){
+		int i=start, seen=0;
+		while(i<array.length && seen<n){
+			if(array[i]==b){seen++;}
+			i++;
+		}
+		return (i==array.length ? -1 : i-1);
 	}
 	
 	public static final int indexOf(final byte[] ref, final String query, final int start){
@@ -3352,6 +3630,20 @@ public final class Tools {
 	public static final Pattern whitespace = Pattern.compile("\\s");
 	/** Multiple whitespace */
 	public static final Pattern whitespacePlus = Pattern.compile("\\s+");
+	/** Comma */
+	public static final Pattern commaPattern = Pattern.compile(",");
+	/** Tab */
+	public static final Pattern tabPattern = Pattern.compile("\t");
+	/** Colon */
+	public static final Pattern colonPattern = Pattern.compile(":");
+	/** Space */
+	public static final Pattern spacePattern = Pattern.compile(" ");
+	/** Equals */
+	public static final Pattern equalsPattern = Pattern.compile("=");
+	/** Equals */
+	public static final Pattern underscorePattern = Pattern.compile("_");
+	
+	public static boolean FORCE_JAVA_PARSE_DOUBLE=false;
 	
 	static{
 		digitMap=new boolean[128];

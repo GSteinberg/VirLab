@@ -46,7 +46,9 @@ public abstract class CoverageArray implements Serializable {
 	 */
 	public abstract void increment(int loc);
 
+	public final void incrementRange(int min, int max){incrementRange(min, max, 1);}
 	public abstract void incrementRange(int min, int max, int amt);
+	public abstract void incrementRangeSynchronized(int min, int max, int amt);
 	
 	public void incrementRanges(IntList ranges, int amt){
 		for(int i=0; i<ranges.size; i+=2){

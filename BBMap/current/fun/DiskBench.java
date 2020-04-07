@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Locale;
 import java.util.Random;
 
 import fileIO.ByteFile;
@@ -490,7 +491,7 @@ public class DiskBench {
 		
 		final long initialWriteElapsed=t.elapsed;
 		
-		System.err.println("Initial write:   \t"+t.toString()+"  \t"+String.format("%.3f MB/s", (1000.0*data)/t.elapsed));
+		System.err.println("Initial write:   \t"+t.toString()+"  \t"+String.format(Locale.ROOT, "%.3f MB/s", (1000.0*data)/t.elapsed));
 		
 		for(int pass=0; pass<passes; pass++){
 			if(mode==READWRITE){
@@ -508,12 +509,12 @@ public class DiskBench {
 				fnamesR=fnamesW;
 				fnamesW=null;
 			}
-			System.err.println("Pass        "+pass+":   \t"+t.toString()+"  \t"+String.format("%.3f MB/s", (1000.0*data)/t.elapsed));
+			System.err.println("Pass        "+pass+":   \t"+t.toString()+"  \t"+String.format(Locale.ROOT, "%.3f MB/s", (1000.0*data)/t.elapsed));
 		}
 		delete(fnamesR);
 		
 		t0.stop();
-		System.err.println("Overall:         \t"+t0.toString()+"  \t"+String.format("%.3f MB/s", (1000.0*(data*passes))/(t0.elapsed-initialWriteElapsed)));
+		System.err.println("Overall:         \t"+t0.toString()+"  \t"+String.format(Locale.ROOT, "%.3f MB/s", (1000.0*(data*passes))/(t0.elapsed-initialWriteElapsed)));
 		
 		if(errorState){
 			throw new RuntimeException(getClass().getName()+" terminated in an error state; the output may be corrupt.");

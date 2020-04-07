@@ -23,22 +23,15 @@ public class SamLineStreamer extends SamStreamer {
 	/**
 	 * Constructor.
 	 */
-	public SamLineStreamer(String fname_, int threads_, boolean saveHeader_){
-		this(FileFormat.testInput(fname_, FileFormat.SAM, null, true, false), threads_, saveHeader_);
+	public SamLineStreamer(String fname_, int threads_, boolean saveHeader_, long maxReads_){
+		this(FileFormat.testInput(fname_, FileFormat.SAM, null, true, false), threads_, saveHeader_, maxReads_);
 	}
 	
 	/**
 	 * Constructor.
 	 */
-	public SamLineStreamer(FileFormat ffin_, boolean saveHeader_){
-		this(ffin_, DEFAULT_THREADS, saveHeader_);
-	}
-	
-	/**
-	 * Constructor.
-	 */
-	public SamLineStreamer(FileFormat ffin_, int threads_, boolean saveHeader_){
-		super(ffin_, threads_, saveHeader_);
+	public SamLineStreamer(FileFormat ffin_, int threads_, boolean saveHeader_, long maxReads_){
+		super(ffin_, threads_, saveHeader_, maxReads_);
 		outq=new ArrayBlockingQueue<ListNum<SamLine>>(threads+1);
 	}
 	

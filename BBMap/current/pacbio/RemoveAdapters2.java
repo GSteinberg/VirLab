@@ -3,8 +3,6 @@ package pacbio;
 import java.util.ArrayList;
 import java.util.Locale;
 
-import align2.MultiStateAligner9PacBioAdapter;
-import align2.MultiStateAligner9PacBioAdapter2;
 import dna.AminoAcid;
 import dna.Data;
 import fileIO.FileFormat;
@@ -67,6 +65,8 @@ public class RemoveAdapters2 {
 				//do nothing
 			}else if(a.equals("path") || a.equals("root") || a.equals("tempdir")){
 				Data.setPath(b);
+			}else if(a.equals("usealtmsa")){
+				USE_ALT_MSA=Tools.parseBoolean(b);
 			}else if(a.equals("fasta") || a.equals("in") || a.equals("input") || a.equals("in1") || a.equals("input1")){
 				in1=b;
 				if(b.indexOf('#')>-1){
@@ -319,7 +319,7 @@ public class RemoveAdapters2 {
 					if(DONT_OUTPUT_BROKEN_READS){removeDiscarded(readlist);}
 					for(Read r : readlist){
 						if(r!=null){
-							r.obj=null;
+							r.obj=null;//Not sure what r.obj is here
 							assert(r.bases!=null);
 							if(r.sites!=null && r.sites.isEmpty()){r.sites=null;}
 						}
@@ -362,11 +362,11 @@ public class RemoveAdapters2 {
 			for(Read r : in){
 				if(r!=null){
 //					assert(r.mate==null);
-					if(!r.hasadapter()){out.add(r);}
+					if(!r.hasAdapter()){out.add(r);}
 					else{out.addAll(split(r));}
 					Read r2=r.mate;
 					if(r2!=null){
-						if(!r2.hasadapter()){out.add(r2);}
+						if(!r2.hasAdapter()){out.add(r2);}
 						else{out.addAll(split(r2));}
 					}
 				}

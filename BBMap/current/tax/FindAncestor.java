@@ -112,7 +112,7 @@ public class FindAncestor {
 		
 		if(giTableFile!=null){
 			outstream.println("Loading gi table.");
-			GiToNcbi.initialize(giTableFile);
+			GiToTaxid.initialize(giTableFile);
 		}
 		if(taxTreeFile!=null){
 			tree=TaxTree.loadTaxTree(taxTreeFile, outstream, true, true);
@@ -140,7 +140,7 @@ public class FindAncestor {
 		
 //		final HashArray1D counts=countTable ? new HashArray1D(256000, true) : null;
 		final IntList giList=new IntList();
-		final IntList ncbiList=new IntList();
+		final IntList tidList=new IntList();
 		final IntList traversal=new IntList();
 		
 		byte[] line=bf.nextLine();
@@ -153,11 +153,11 @@ public class FindAncestor {
 				bytesProcessed+=line.length;
 				
 				giList.clear();
-				ncbiList.clear();
+				tidList.clear();
 				traversal.clear();
 				
 				final int giCount=getGiNumbers(line, giList, ',');
-				final int ncbiCount=getNcbiNumbers(giList, ncbiList);
+				final int ncbiCount=getTaxidNumbers(giList, tidList);
 				
 				taxaCounted+=giCount;
 				taxaValid+=ncbiCount;
@@ -165,8 +165,8 @@ public class FindAncestor {
 				
 				if(valid){
 					linesValid++;
-					int ancestor=findAncestor(ncbiList);
-					int majority=findMajority(ncbiList);
+					int ancestor=findAncestor(tidList);
+					int majority=findMajority(tidList);
 					
 					for(int i=0; i<line.length && line[i]!='\t'; i++){
 						bb.append(line[i]);
@@ -181,8 +181,8 @@ public class FindAncestor {
 					writeTraversal(traversal, bb);
 					bb.nl();
 					
-					for(int i=0; i<ncbiList.size; i++){
-						final int id=ncbiList.get(i);
+					for(int i=0; i<tidList.size; i++){
+						final int id=tidList.get(i);
 						fillTraversal(id, traversal, true);
 						writeTraversal(traversal, bb);
 						bb.nl();
@@ -263,11 +263,11 @@ public class FindAncestor {
 		return list.size;
 	}
 	
-	private static int getNcbiNumbers(final IntList giList, final IntList ncbiList){
+	private static int getTaxidNumbers(final IntList giList, final IntList ncbiList){
 		final int size=giList.size;
 		for(int i=0; i<size; i++){
 			final int gi=giList.get(i);
-			final int ncbi=GiToNcbi.getID(gi);
+			final int ncbi=GiToTaxid.getID(gi);
 //			System.err.println(gi+" -> "+ncbi);
 			if(ncbi>=0){ncbiList.add(ncbi);}
 		}

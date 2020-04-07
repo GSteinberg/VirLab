@@ -115,8 +115,6 @@ public class GetReads {
 				verbose=Tools.parseBoolean(b);
 				ByteFile1.verbose=verbose;
 				stream.FastaReadInputStream.verbose=verbose;
-//				align2.FastaReadInputStream2.verbose=verbose;
-//				align2.FastqReadInputStream.verbose=verbose;
 			}else if(a.equals("reads") || a.startsWith("maxreads")){
 				maxReads=Tools.parseKMG(b);
 			}else if(a.equals("build") || a.equals("genome")){
@@ -178,7 +176,6 @@ public class GetReads {
 		}
 		
 		assert(FastaReadInputStream.settingsOK());
-//		if(maxReads!=-1){ReadWrite.USE_GUNZIP=ReadWrite.USE_UNPIGZ=false;}
 		
 		if(in1==null){throw new RuntimeException("Error - at least one input file is required.");}
 		

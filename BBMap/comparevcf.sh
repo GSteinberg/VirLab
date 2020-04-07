@@ -3,7 +3,7 @@
 usage(){
 echo "
 Written by Brian Bushnell
-Last modified January 20, 2017
+Last modified April 30, 2019
 
 Description:  Performs set operations on VCF files:
 Union, intersection, and subtraction.
@@ -13,15 +13,21 @@ Usage:  comparevcf.sh in=<file,file,...> out=<file>
 I/O parameters:
 in=<file>       Input; must be at least 2 files.
 out=<file>      Output file.
+ref=<file>      Reference file; optional.  Usually not needed.
 shist=<file>    (scorehist) Output for variant score histogram.
 overwrite=f     (ow) Set to false to force the program to abort rather than
 bgzip=f         Use bgzip for gzip compression.
 
-Processing Parameters (choose one only):
+Processing Mode (choose one only):
 subtract=t      Subtract all other files from the first file.
 union=f         Make a union of all files.
 intersection=f  Make an intersection of all files.
+
+Processing Parameters:
 addsamples=t    Include all samples in the output lines. (TODO)
+splitalleles=f  Split multi-allelic lines into multiple lines.
+splitsubs=f     Split multi-base substitutions into SNPs.
+canonize=t      Trim variations down to a canonical representation.
 
 Java Parameters:
 -Xmx            This will set Java's memory usage, overriding autodetection.
@@ -51,8 +57,6 @@ CP="$DIR""current/"
 
 z="-Xmx4g"
 z2="-Xms4g"
-EA="-ea"
-EOOM=""
 set=0
 
 if [ -z "$1" ] || [[ $1 == -h ]] || [[ $1 == --help ]]; then
@@ -62,6 +66,7 @@ fi
 
 calcXmx () {
 	source "$DIR""/calcmem.sh"
+	setEnvironment
 	parseXmx "$@"
 	if [[ $set == 1 ]]; then
 		return
@@ -73,24 +78,6 @@ calcXmx () {
 calcXmx "$@"
 
 comparevcf() {
-	if [[ $SHIFTER_RUNTIME == 1 ]]; then
-		#Ignore NERSC_HOST
-		shifter=1
-	elif [[ $NERSC_HOST == genepool ]]; then
-		module unload oracle-jdk
-		module load oracle-jdk/1.8_144_64bit
-		module load pigz
-	elif [[ $NERSC_HOST == denovo ]]; then
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	elif [[ $NERSC_HOST == cori ]]; then
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/jgi
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/usg
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	fi
 	local CMD="java $EA $EOOM $z $z2 -cp $CP var2.CompareVCF $@"
 	echo $CMD >&2
 	eval $CMD

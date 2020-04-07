@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.net.URL;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -1322,33 +1321,6 @@ public class Data {
 	
 	
 	public static final int NEAR=200;
-
-	public static boolean ENV=(System.getenv()!=null);
-	public static boolean WINDOWS=(System.getenv().containsKey("OS") && System.getenv().get("OS").equalsIgnoreCase("Windows_NT"));
-	public static boolean GENEPOOL=(System.getenv().containsKey("NERSC_HOST") && System.getenv().get("NERSC_HOST").equalsIgnoreCase("genepool"));
-	public static boolean DENOVO=(System.getenv().containsKey("NERSC_HOST") && System.getenv().get("NERSC_HOST").equalsIgnoreCase("denovo"));
-	public static boolean CORI=(System.getenv().containsKey("NERSC_HOST") && System.getenv().get("NERSC_HOST").equalsIgnoreCase("cori"));
-	private static String HOSTNAME;
-	
-	public static String HOSTNAME(){
-		if(HOSTNAME==null){
-			try {
-				java.net.InetAddress localMachine = java.net.InetAddress.getLocalHost();
-				HOSTNAME=localMachine.getHostName();
-			} catch (UnknownHostException e) {
-				// TODO Auto-generated catch block
-//				e.printStackTrace();
-				HOSTNAME="unknown";
-			} catch (NullPointerException e) {
-				// TODO Auto-generated catch block
-//				e.printStackTrace();
-				HOSTNAME="unknown";
-			} catch (Throwable e) {
-				HOSTNAME="unknown";
-			}
-		}
-		return HOSTNAME;
-	}
 	
 	public static String ROOT(){return ROOT;}
 	
@@ -1371,8 +1343,8 @@ public class Data {
 				Data.class.getName().replace('.', '/') + ".class").getFile()).getAbsolutePath();
 		s=PercentEncoding.codeToSymbol(s);
 		ROOT=s.replace('\\', '/').replace("dna/Data.class", "");
-		setPath(WINDOWS ? "?windows" : "?unix");
-		if(!WINDOWS || true){setPath("?local");}
+		setPath(Shared.WINDOWS ? "?Shared.WINDOWS" : "?unix");
+		if(!Shared.WINDOWS || true){setPath("?local");}
 	}
 	
 	public static void setPath(String path){
@@ -1380,7 +1352,7 @@ public class Data {
 		if(path.indexOf('\\')>=0){path=path.replace('\\', '/');}
 		String mode=(path==null ? "null" : path.toLowerCase());
 		boolean local=mode.equals("?local") || mode.equals(".") || mode.equals("/.") || mode.equals("./");
-		boolean win=mode.equals("?windows");
+		boolean win=mode.equals("?Shared.WINDOWS");
 		boolean unix=mode.equals("?unix");
 		
 		ROOT_CURRENT=System.getProperty("user.dir");
@@ -1516,22 +1488,78 @@ public class Data {
 
 	public static boolean GUNZIP(){return GUNZIP==0 ? GZIP() : GUNZIP>0;}
 //	public static boolean UNPIGZ(){return UNPIGZ==0 ? PIGZ() : UNPIGZ>0;}
+	
+	/** 
+	 * Note:
+	 * Magic number of bgzip files is (first 4 bytes):
+	 * 1f 8b 08 04
+	 * 31 139 8 4
+	 *  = 529205252
+	 * 
+	 * gzip/pigz:
+	 * 1f 8b 08 00 (actually I've seen it as 1f 8b 08 08 also)
+	 * 31 139 8 0
+	 *  = 529205248
+	 * 
+	 * od --format=x1 --read-bytes=16 names.txt_gzip.gz
+	 */
 	public static boolean BGZIP(){
 //		System.err.println("Looking for bgzip.");
-		if(BGZIP==0 && !WINDOWS){
+		if(BGZIP==0 && !Shared.WINDOWS){
 			synchronized(SUBPROCSYNC){
 				if(BGZIP==0){
 					ByteBuilder bb=new ByteBuilder();
 					BGZIP=testExecute("bgzip -h", bb);
+					
+					try {
+						if(BGZIP>0){
+							String[] lines=bb.toString().split("\n");
+							for(String line : lines){
+								if(line.startsWith("Version:")){
+									String[] split=line.split("\\s+");
+									if(split.length>1){
+										BGZIP_VERSION=split[1];
+										
+										BGZIP_VERSION_threadsFlag=false;
+										BGZIP_VERSION_levelFlag=false;
+										
+										String[] ss=BGZIP_VERSION.split("\\.");
+										int[] is=new int[3];
+										for(int i=0; i<3 && i<ss.length; i++){
+											String s=ss[i];
+											int x=Integer.parseInt(s);
+											is[i]=x;
+										}
+										
+										if(is[0]<1){
+											//do nothing
+										}else if(is[1]>=9){
+											BGZIP_VERSION_threadsFlag=BGZIP_VERSION_levelFlag=true;
+										}else if(is[1]>=4){
+											BGZIP_VERSION_threadsFlag=true;
+										}else if(is[1]>=3 && is[2]>=1){
+											BGZIP_VERSION_threadsFlag=true;
+										}
+									}
+								}
+							}
+//							System.err.println("Found BGZIP"+(BGZIP_VERSION==null ? "." : " "+BGZIP_VERSION));
+						}else{
+//							System.err.println("Could not find BGZIP.");
+						}
+					} catch (NumberFormatException e) {
+						System.err.println("Warning - trouble parsing BGZIP version:\n"+BGZIP_VERSION);
+					}
+					
 				}
 			}
 		}
 //		System.err.println("BGZIP="+BGZIP);
-		assert(BGZIP>0) : "bgzip not found.";
+//		assert(BGZIP>0) : "bgzip not found.";
 		return BGZIP>0;
 	}
 	public static boolean GZIP(){
-		if(GZIP==0 && !WINDOWS){
+		if(GZIP==0 && !Shared.WINDOWS){
 			synchronized(SUBPROCSYNC){
 				if(GZIP==0){
 					ByteBuilder bb=new ByteBuilder();
@@ -1606,7 +1634,7 @@ public class Data {
 		return DSRC>0;
 	}
 	public static boolean BZIP2(){
-		if(BZIP2==0 && !WINDOWS){
+		if(BZIP2==0 && !Shared.WINDOWS){
 			synchronized(SUBPROCSYNC){
 				if(BZIP2==0){
 					ByteBuilder bb=new ByteBuilder();
@@ -1617,7 +1645,7 @@ public class Data {
 		return BZIP2>0;
 	}
 	public static boolean PBZIP2(){
-		if(PBZIP2==0 && !WINDOWS){
+		if(PBZIP2==0 && !Shared.WINDOWS){
 			synchronized(SUBPROCSYNC){
 				if(PBZIP2==0){
 					ByteBuilder bb=new ByteBuilder();
@@ -1628,7 +1656,7 @@ public class Data {
 		return PBZIP2>0;
 	}
 	public static boolean LBZIP2(){
-		if(LBZIP2==0 && !WINDOWS){
+		if(LBZIP2==0 && !Shared.WINDOWS){
 			synchronized(SUBPROCSYNC){
 				if(LBZIP2==0){
 					ByteBuilder bb=new ByteBuilder();
@@ -1639,8 +1667,9 @@ public class Data {
 		return LBZIP2>0;
 	}
 	public static boolean SAMTOOLS(){
-		if(SAMTOOLS==0 && !WINDOWS){
+		if(SAMTOOLS==0 && !Shared.WINDOWS){
 			synchronized(SUBPROCSYNC){
+				if(!USE_SAMTOOLS){SAMTOOLS=-1;}
 				if(SAMTOOLS==0){
 					ByteBuilder bb=new ByteBuilder();
 					SAMTOOLS=testExecute("samtools", bb);
@@ -1666,11 +1695,12 @@ public class Data {
 		return SAMTOOLS>0;
 	}
 	public static boolean SAMBAMBA(){
-		if(SAMBAMBA==0 && !WINDOWS){
+		if(SAMBAMBA==0 && !Shared.WINDOWS){
 			synchronized(SUBPROCSYNC){
+				if(!USE_SAMBAMBA){SAMBAMBA=-1;}
 				if(SAMBAMBA==0){
 					ByteBuilder bb=new ByteBuilder();
-					SAMBAMBA=testExecute("sambamba", bb);
+					SAMBAMBA=testExecute("sambamba -q", bb);
 					if(SAMBAMBA>0){System.err.println("Found sambamba.");}else{System.err.println("Could not find sambamba.");}
 				}
 			}
@@ -1678,7 +1708,7 @@ public class Data {
 		return SAMBAMBA>0;
 	}
 	public static boolean SH(){
-		if(SH==0 && !WINDOWS){
+		if(SH==0 && !Shared.WINDOWS){
 			synchronized(SUBPROCSYNC){
 				if(SH==0){
 					ByteBuilder bb=new ByteBuilder();
@@ -1705,18 +1735,22 @@ public class Data {
 	private static int LBZIP2=0;
 	private static int SAMTOOLS=0;
 	private static int SAMBAMBA=0;
+	public static boolean USE_SAMTOOLS=true;
+	public static boolean USE_SAMBAMBA=true;
 	public static String SAMTOOLS_VERSION=null;
 	public static boolean SAMTOOLS_VERSION_1x=true;
 	public static String PIGZ_VERSION=null;
 	public static boolean PIGZ_VERSION_231plus=false; //Allows -I flag
 	public static boolean PIGZ_VERSION_23plus=false; //Allows -11 flag
+	public static String BGZIP_VERSION=null;
+	public static boolean BGZIP_VERSION_threadsFlag=false; //Allows -@ flag; not sure about the minimum version, but 1.4 is capable
+	public static boolean BGZIP_VERSION_levelFlag=false; //Allows -l flag; not sure about the minimum version, but 1.9 is capable
 	private static int SH=0;
 	
 	private static int testExecute(String s, ByteBuilder bb){
 //		System.err.println("Testing "+s);
 		try {
-			Process p;
-			p = Runtime.getRuntime().exec(s);
+			Process p=Runtime.getRuntime().exec(s);
 //			System.err.println("Got process.");
 
 			InputStream stream=p.getErrorStream();
@@ -1730,6 +1764,17 @@ public class Data {
 //					System.err.print(""+(int)b);
 				}
 			}
+			
+			int exitValue=0;
+			while(p.isAlive()){
+				try {
+					exitValue=p.waitFor();
+				} catch (InterruptedException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+			if(exitValue>=126){return -1;}
 			
 //			return p.exitValue()==0;
 //			System.err.println("This system does has "+s+" installed.");

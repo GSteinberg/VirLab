@@ -4,8 +4,6 @@ import java.io.File;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Random;
-
 import fileIO.ReadWrite;
 import fileIO.TextFile;
 import fileIO.TextStreamWriter;
@@ -153,7 +151,7 @@ public class CorrelateIdentity {
 	/** Output file */
 	public String out;
 	
-	private Random randy=new Random();
+//	private Random randy=new Random();
 
 	private float samplerate=1;
 	private float sampleseed=-1;

@@ -6,6 +6,7 @@ import java.util.Random;
 
 import shared.Shared;
 import shared.Timer;
+import shared.Tools;
 
 /**
  * @author Brian Bushnell
@@ -15,7 +16,7 @@ import shared.Timer;
 public abstract class AbstractIntHashMap{
 	
 	public static final void test(AbstractIntHashMap set){
-		Random randy2=new Random();
+		Random randy2=Shared.threadLocalRandom();
 		HashMap<Integer, Integer> set2=new HashMap<Integer, Integer>(20, 0.7f);
 		ArrayList<Integer> klist=new ArrayList<Integer>();
 		ArrayList<Integer> klist2=new ArrayList<Integer>();
@@ -213,6 +214,18 @@ public abstract class AbstractIntHashMap{
 	 * @return New value.
 	 */
 	public abstract int increment(int key, int incr);
+
+	public final void incrementAll(AbstractIntHashMap map) {
+		final int[] keys=map.keys();
+		final int[] values=map.values();
+		final int invalid=map.invalid();
+		for(int i=0; i<keys.length; i++){
+			int a=keys[i], b=values[i];
+			if(a!=invalid){
+				increment(a, b);
+			}
+		}
+	}
 	
 	/**
 	 * Remove this key.
@@ -221,6 +234,7 @@ public abstract class AbstractIntHashMap{
 	 */
 	public abstract boolean remove(int key);
 	
+	public final int cardinality(){return size();}
 	public abstract int size();
 	public abstract boolean isEmpty();
 	
@@ -282,6 +296,21 @@ public abstract class AbstractIntHashMap{
 			}
 		}
 		return x;
+	}
+
+	public final IntHashMapBinary toCountHistogram() {
+		IntHashMapBinary counts=new IntHashMapBinary(Tools.mid(1, size(), 64));
+		final int[] keys=keys();
+		final int[] values=values();
+		final int invalid=invalid();
+		for(int i=0; i<keys.length; i++) {
+			int a=keys[i];
+			int b=values[i];
+			if(a!=invalid){
+				counts.increment(b);
+			}
+		}
+		return counts;
 	}
 	
 	public final boolean verify(){

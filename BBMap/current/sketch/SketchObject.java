@@ -75,8 +75,13 @@ public class SketchObject {
 		else if(a.equalsIgnoreCase("size") || a.equalsIgnoreCase("sketchsize")){
 			if("auto".equalsIgnoreCase(b)){
 				AUTOSIZE=true;
+				AUTOSIZE_LINEAR=false;
+			}else if("linear".equalsIgnoreCase(b)){
+				AUTOSIZE=false;
+				AUTOSIZE_LINEAR=true;
 			}else{
 				AUTOSIZE=false;
+				AUTOSIZE_LINEAR=false;
 				targetSketchSize=Tools.parseIntKMG(b);
 			}
 		}else if(a.equalsIgnoreCase("maxfraction") || a.equalsIgnoreCase("maxgenomefraction") || a.equalsIgnoreCase("mgf")){
@@ -87,9 +92,20 @@ public class SketchObject {
 			minSketchSize=Tools.max(1, Integer.parseInt(b));
 		}else if(a.equalsIgnoreCase("autosize")){
 			AUTOSIZE=Tools.parseBoolean(b);
+			if(AUTOSIZE){AUTOSIZE_LINEAR=false;}
 		}else if(a.equalsIgnoreCase("autosizefactor") || a.equalsIgnoreCase("autosizefraction") || a.equalsIgnoreCase("autosizemult") || a.equalsIgnoreCase("sizemult")){
 			AUTOSIZE_FACTOR=Float.parseFloat(b);
 			SET_AUTOSIZE_FACTOR=true;
+			AUTOSIZE_LINEAR=false;
+		}else if(a.equalsIgnoreCase("linear") || a.equalsIgnoreCase("lineardensity") || a.equalsIgnoreCase("density")){
+			if(Tools.isNumeric(b)){
+				AUTOSIZE_LINEAR_DENSITY=Double.parseDouble(b);
+				AUTOSIZE_LINEAR=true;
+				AUTOSIZE=false;
+			}else{
+				AUTOSIZE_LINEAR=Tools.parseBoolean(b);
+				if(AUTOSIZE_LINEAR){AUTOSIZE=false;}
+			}
 		}else if(a.equalsIgnoreCase("maxGenomeFractionSmall")){
 			maxGenomeFractionSmall=Float.parseFloat(b);
 		}else if(a.equalsIgnoreCase("keyFraction")){
@@ -120,7 +136,7 @@ public class SketchObject {
 //			minKeyOccuranceCount=Integer.parseInt(b);
 //		}
 		else if(a.equalsIgnoreCase("sketchHeapFactor")){
-			sketchHeapFactor=Integer.parseInt(b);
+			sketchHeapFactor=Tools.max(1.0, Double.parseDouble(b));
 		}
 		
 		else if(a.equalsIgnoreCase("killok")){
@@ -136,15 +152,11 @@ public class SketchObject {
 			if(sixframes){
 				translate=defaultParams.translate=true;
 			}
+		}else if(a.equalsIgnoreCase("processSSU") || a.equalsIgnoreCase("process16S") || a.equalsIgnoreCase("16S") || a.equalsIgnoreCase("SSU")){
+			processSSU=Tools.parseBoolean(b);
 		}else if(a.equalsIgnoreCase("hashSeed")){
 			hashSeed=Long.parseLong(b);
 			remakeCodes(hashSeed);
-		}
-		
-		else if(a.equalsIgnoreCase("minprob") || a.equalsIgnoreCase("pfilter")){
-			minProb=(float)Double.parseDouble(b);
-		}else if(a.equalsIgnoreCase("minQual") || a.equalsIgnoreCase("minq")){
-			minQual=Byte.parseByte(b);
 		}
 		
 		else if(a.equalsIgnoreCase("forceDisableMultithreadedFastq")){
@@ -282,7 +294,7 @@ public class SketchObject {
 		if(postparsed){return;}
 		postparsed=true;
 		IntList3.defaultMode=IntList3.UNIQUE; //Not really safe, if Seal uses Sketch...
-
+		
 		if(defaultParams.amino()){amino=true;}
 		if(amino){Shared.AMINO_IN=true;}
 		
@@ -340,18 +352,18 @@ public class SketchObject {
 		
 //		hasher=k2<1 ? new Hasher1() : k2submask==0 ? new Hasher2() : new Hasher3();
 		
-		if(translate){
+		if(translate || processSSU){
 			if(pgmFile==null){
 				pgmFile=Data.findPath("?model.pgm");
 			}
 			pgm=GeneModelParser.loadModel(pgmFile);
-			GeneCaller.call16S=false;
+			GeneCaller.call16S=processSSU;
 			GeneCaller.call23S=false;
 			GeneCaller.call5S=false;
 			GeneCaller.calltRNA=false;
-			GeneCaller.callCDS=true;
+			GeneCaller.callCDS=translate;
 			
-			if(GeneCaller.call16S || GeneCaller.call23S){//Which, currently, is always false.
+			if(GeneCaller.call16S || GeneCaller.call23S){
 				pgm.loadLongKmers();
 			}
 		}
@@ -365,6 +377,8 @@ public class SketchObject {
 //				", basesPerCycle="+basesPerCycle+", hashCycles="+hashCycles+", k2mask="+k2mask+", k2submask="+k2submask+", hashCycles2="+hashCycles2+
 //				", codeMax="+codeMax+", codeMax2="+codeMax2);
 //		structures.IntList3.ascending=false;//123 for testing
+		
+		alignerPool=new AlignmentThreadPool(Shared.threads());
 	}
 	
 	/*--------------------------------------------------------------*/
@@ -385,7 +399,7 @@ public class SketchObject {
 	}
 	
 	public static long[][] makeCodes(int symbols, int modes, long seed, boolean positive){
-		Random randy=(seed>=0 ? new Random(seed) : new Random());
+		Random randy=new Random(seed);
 		long mask=positive ? Long.MAX_VALUE : -1L;
 		long[][] r=new long[symbols][modes];
 		for(int i=0; i<symbols; i++){
@@ -456,7 +470,7 @@ public class SketchObject {
 	}
 	
 //	public static long[] makeCodes1D(int symbols, int modes, long seed, boolean positive){
-//		Random randy=(seed>=0 ? new Random(seed) : new Random());
+//		Random randy=Shared.threadLocalRandom(seed);
 //		long mask=positive ? Long.MAX_VALUE : -1L;
 //		long[] r=new long[symbols*modes];
 //		for(int i=0; i<r.length; i++){
@@ -799,8 +813,8 @@ public class SketchObject {
 		if(AUTOSIZE){
 			if(aminoOrTranslate()){
 				float linear1=Tools.min(60+0.5f*(float)Math.sqrt(genomeSizeKmers),
-						maxGenomeFractionSmall*genomeSizeKmers);
-				float linear2=genomeSizeKmers*maxGenomeFraction;
+						maxGenomeFractionSmall*genomeSizeKmers*2);
+				float linear2=genomeSizeKmers*maxGenomeFraction*2;
 				float poly=0+1f*(float)Math.sqrt(genomeSizeKmers)+90f*(float)Math.pow(genomeSizeKmers, 0.3);
 				float log=Tools.max(1000, -4000+3500*(float)Math.log(Tools.max(1, genomeSizeKmers)));
 				float min=Tools.min(Tools.max(linear1, linear2), poly, log);
@@ -825,6 +839,12 @@ public class SketchObject {
 //				System.err.println(result);
 				return result;
 				//			return (int)Tools.max(1, min*AUTOSIZE_FACTOR);
+			}
+		}else if(AUTOSIZE_LINEAR){
+			if(aminoOrTranslate()){
+				return (int)(Tools.min(10000000, Tools.min(maxGenomeFractionSmall, AUTOSIZE_LINEAR_DENSITY)*genomeSizeKmers));
+			}else{
+				return (int)(Tools.min(10000000, Tools.min(maxGenomeFractionSmall, AUTOSIZE_LINEAR_DENSITY)*genomeSizeKmers));
 			}
 		}else{
 			return Tools.min((int)(2+maxGenomeFraction*genomeSizeKmers), maxSketchSize);
@@ -959,20 +979,13 @@ public class SketchObject {
 	public static boolean amino8=false;
 	public static boolean translate=false;
 	public static boolean sixframes=false;
+	public static boolean processSSU=true;
+	public static int min_SSU_len=1000;
 	public static int HASH_VERSION=2;
 	public static String pgmFile=null;
 	public static GeneModel pgm=null;
 	
 	static boolean aminoOrTranslate(){return amino | translate;}
-	
-	public static byte minQual=0;
-	
-	//For k=32:
-	//0.000095f is >=Q6 (75%); 0.0008 is >=Q7 (80%); 0.0039 is >=Q8 (84%).
-	//0.002f is >=Q7.53 (82.3%)
-	//0.0017f is >=Q7.44 (82.0%)
-	//0.6f works better for Illumina reads but this is more robust for PacBio. 
-	public static float minProb=0.0008f;
 	
 	private static int bitsPerCycle=8; //Optimal speed for K=31 is 9bpc (15% faster than 8). 9, 10, and 11 are similar.
 	private static long cycleMask=~((-1L)<<bitsPerCycle);
@@ -999,7 +1012,11 @@ public class SketchObject {
 	private static int k2shift;
 	private static long k2midmask;
 	
-	public static int sketchHeapFactor=4;
+	/** 
+	 * Make the SketchHeap size this factor bigger,
+	 * when minKeyOccuranceCount is used  
+	 */
+	public static double sketchHeapFactor=8;
 //	static int minKeyOccuranceCount=1;
 	
 	public static int minSketchSize=3;
@@ -1007,6 +1024,8 @@ public class SketchObject {
 	public static boolean AUTOSIZE=true;
 	public static float AUTOSIZE_FACTOR=1;
 	public static boolean SET_AUTOSIZE_FACTOR=false;
+	public static boolean AUTOSIZE_LINEAR=false;
+	public static double AUTOSIZE_LINEAR_DENSITY=0.001;
 	public static float maxGenomeFraction=0.01f;
 	public static float maxGenomeFractionSmall=0.10f;
 	public static int smallSketchSize=150;
@@ -1052,6 +1071,8 @@ public class SketchObject {
 	
 	//Needs to be last due to dependencies.
 	public static DisplayParams defaultParams=new DisplayParams();
+	
+	static AlignmentThreadPool alignerPool=null;
 	
 	public static boolean verbose2=false;
 	public static boolean LOADER2=true;

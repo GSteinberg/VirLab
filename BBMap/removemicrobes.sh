@@ -53,12 +53,11 @@ popd > /dev/null
 
 #DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/"
 CP="$DIR""current/"
-NATIVELIBDIR="$DIR""jni/"
+JNI="-Djava.library.path=""$DIR""jni/"
+JNI=""
 
 z="-Xmx6000m"
 z2="-Xms6000m"
-EA="-ea"
-EOOM=""
 set=0
 
 if [ -z "$1" ] || [[ $1 == -h ]] || [[ $1 == --help ]]; then
@@ -68,30 +67,13 @@ fi
 
 calcXmx () {
 	source "$DIR""/calcmem.sh"
+	setEnvironment
 	parseXmx "$@"
 }
 calcXmx "$@"
 
 function removemicrobes() {
-	if [[ $SHIFTER_RUNTIME == 1 ]]; then
-		#Ignore NERSC_HOST
-		shifter=1
-	elif [[ $NERSC_HOST == genepool ]]; then
-		module unload oracle-jdk
-		module load oracle-jdk/1.8_144_64bit
-		module load pigz
-	elif [[ $NERSC_HOST == denovo ]]; then
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	elif [[ $NERSC_HOST == cori ]]; then
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/jgi
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/usg
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	fi
-	local CMD="java $EA $z $z2 -cp $CP align2.BBMap strictmaxindel=4 bwr=0.16 bw=12 ef=0.001 minhits=2 path=/global/projectb/sandbox/gaag/bbtools/commonMicrobes pigz unpigz zl=6 qtrim=r trimq=10 untrim idtag printunmappedcount ztd=2 kfilter=25 maxsites=1 k=13 minid=0.95 idfilter=0.95 minhits=2 build=1 bloomfilter $@"
+	local CMD="java $EA $EOOM $z $z2 $JNI -cp $CP align2.BBMap strictmaxindel=4 bwr=0.16 bw=12 ef=0.001 minhits=2 path=/global/projectb/sandbox/gaag/bbtools/commonMicrobes pigz unpigz zl=6 qtrim=r trimq=10 untrim idtag printunmappedcount ztd=2 kfilter=25 maxsites=1 k=13 minid=0.95 idfilter=0.95 minhits=2 build=1 bloomfilter $@"
 	echo $CMD >&2
 	eval $CMD
 }

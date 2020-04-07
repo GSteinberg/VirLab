@@ -3,7 +3,7 @@
 usage(){
 echo "
 Written by Brian Bushnell
-Last modified January 28, 2019
+Last modified August 21, 2019
 
 Description:  Creates one or more sketches from a fasta file,
 optionally annotated with taxonomic information.
@@ -25,13 +25,6 @@ blacklist=<file>    Ignore keys in this sketch file.  Additionaly, there are
 files=1             Number of parallel files, for faster loading.  This is
                     independent of the number of sketches produced; sketches
                     will be randomly distributed between files.
-size=10000          Desired size of sketches (if not using autosize).
-maxfraction=0.01    (mgf) Max fraction of genomic kmers to use.
-minsize=100         Do not generate sketches for genomes smaller than this.
-autosize=t          Use flexible sizing instead of fixed-length.
-sizemult=1          Multiply the default size of sketches by this factor.
-                    Normally a bacterial-size genome will get a sketch size
-                    of around 10000; if autosizefactor=2, it would be ~20000.
 k=31                Kmer length, 1-32.  To maximize sensitivity and 
                     specificity, dual kmer lengths may be used:  k=31,24
                     Dual kmers are fastest if the shorter is a multiple 
@@ -51,6 +44,21 @@ a48=t               Encode sketches as ASCII-48 rather than hex.
 depth=f             Track the number of times kmers appear.
                     Required for the depth2 field in comparisons.
 entropy=0.66        Ignore sequence with entropy below this value.
+ssu=t               Scan for and retain full-length SSU sequence.
+
+Size parameters:
+size=10000          Desired size of sketches (if not using autosize).
+maxfraction=0.01    (mgf) Max fraction of genomic kmers to use.
+minsize=100         Do not generate sketches for genomes smaller than this.
+autosize=t          Use flexible sizing instead of fixed-length.  This is
+                    nonlinear; a human sketch is only ~6x a bacterial sketch.
+sizemult=1          Multiply the autosized size of sketches by this factor.
+                    Normally a bacterial-size genome will get a sketch size
+                    of around 10000; if autosizefactor=2, it would be ~20000.
+density=            If this flag is set (to a number between 0 and 1),
+                    autosize and sizemult are ignored, and this fraction of
+                    genomic kmers are used.  For example, at density=0.001,
+                    a 4.5Mbp bacteria will get a 4500-kmer sketch.
 
 Metadata flags (optional; intended for single-sketch mode):
 taxid=-1            Set the NCBI taxid.
@@ -109,8 +117,6 @@ CP="$DIR""current/"
 
 z="-Xmx4g"
 z2="-Xms4g"
-EA="-ea"
-EOOM=""
 set=0
 
 if [ -z "$1" ] || [[ $1 == -h ]] || [[ $1 == --help ]]; then
@@ -120,6 +126,7 @@ fi
 
 calcXmx () {
 	source "$DIR""/calcmem.sh"
+	setEnvironment
 	parseXmx "$@"
 	if [[ $set == 1 ]]; then
 		return
@@ -131,24 +138,6 @@ calcXmx () {
 calcXmx "$@"
 
 sketch() {
-	if [[ $SHIFTER_RUNTIME == 1 ]]; then
-		#Ignore NERSC_HOST
-		shifter=1
-	elif [[ $NERSC_HOST == genepool ]]; then
-		module unload oracle-jdk
-		module load oracle-jdk/1.8_144_64bit
-		module load pigz
-	elif [[ $NERSC_HOST == denovo ]]; then
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	elif [[ $NERSC_HOST == cori ]]; then
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/jgi
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/usg
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	fi
 	local CMD="java $EA $EOOM $z $z2 -cp $CP sketch.SketchMaker $@"
 	echo $CMD >&2
 	eval $CMD

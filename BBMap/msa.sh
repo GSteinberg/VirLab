@@ -3,7 +3,7 @@
 usage(){
 echo "
 Written by Brian Bushnell
-Last modified May 15, 2018
+Last modified September 19, 2019
 
 Description:  Aligns a query sequence to reference sequences.
 Outputs the best matching position per reference sequence.
@@ -22,10 +22,13 @@ literal=        A sequence of bases to match, or a comma-delimited list.
 ref=<file>      A fasta file of bases to match.  Please set either ref
                 or literal, not both.
 rcomp=t         Also look for reverse-complements of the sequences.
+addr=f          Add r_ prefix to reverse-complemented alignments.
 replicate=t     Make copies of sequences with undefined bases for every
                 possible combination.  For example, ATN would expand to
                 ATA, ATC, ATG, and ATT.
 cutoff=0        Ignore alignments with identity below this (range 0-1).
+swap=f          Swap the reference and query; e.g., report read alignments
+                to the reference instead of reference alignments to the reads.
 
 Java Parameters:
 -Xmx            This will set Java's memory usage, overriding automatic
@@ -56,8 +59,6 @@ CP="$DIR""current/"
 
 z="-Xmx1g"
 z2="-Xms1g"
-EA="-ea"
-EOOM=""
 set=0
 
 if [ -z "$1" ] || [[ $1 == -h ]] || [[ $1 == --help ]]; then
@@ -67,6 +68,7 @@ fi
 
 calcXmx () {
 	source "$DIR""/calcmem.sh"
+	setEnvironment
 	parseXmx "$@"
 	if [[ $set == 1 ]]; then
 		return
@@ -78,24 +80,6 @@ calcXmx () {
 calcXmx "$@"
 
 msa() {
-	if [[ $SHIFTER_RUNTIME == 1 ]]; then
-		#Ignore NERSC_HOST
-		shifter=1
-	elif [[ $NERSC_HOST == genepool ]]; then
-		module unload oracle-jdk
-		module load oracle-jdk/1.8_144_64bit
-		module load pigz
-	elif [[ $NERSC_HOST == denovo ]]; then
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	elif [[ $NERSC_HOST == cori ]]; then
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/jgi
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/usg
-		module unload java
-		module load java/1.8.0_144
-		module load pigz
-	fi
 	local CMD="java $EA $EOOM $z -cp $CP jgi.FindPrimers $@"
 	echo $CMD >&2
 	eval $CMD

@@ -23,22 +23,15 @@ public class SamReadStreamer extends SamStreamer {
 	/**
 	 * Constructor.
 	 */
-	public SamReadStreamer(String fname_, int threads_, boolean saveHeader_){
-		this(FileFormat.testInput(fname_, FileFormat.SAM, null, true, false), threads_, saveHeader_);
+	public SamReadStreamer(String fname_, int threads_, boolean saveHeader_, long maxReads_){
+		this(FileFormat.testInput(fname_, FileFormat.SAM, null, true, false), threads_, saveHeader_, maxReads_);
 	}
 	
 	/**
 	 * Constructor.
 	 */
-	public SamReadStreamer(FileFormat ffin_, boolean saveHeader_){
-		this(ffin_, DEFAULT_THREADS, saveHeader_);
-	}
-	
-	/**
-	 * Constructor.
-	 */
-	public SamReadStreamer(FileFormat ffin_, int threads_, boolean saveHeader_){
-		super(ffin_, threads_, saveHeader_);
+	public SamReadStreamer(FileFormat ffin_, int threads_, boolean saveHeader_, long maxReads_){
+		super(ffin_, threads_, saveHeader_, maxReads_);
 		outq=new ArrayBlockingQueue<ListNum<Read>>(threads+1);
 	}
 	
@@ -199,14 +192,14 @@ public class SamReadStreamer extends SamStreamer {
 			while(list!=POISON_BYTES){
 				ListNum<Read> reads=new ListNum<Read>(new ArrayList<Read>(list.size()), list.id);
 				for(byte[] line : list){
-					if(line[0]=='@'){
+					if(line.length==0 || line[0]=='@'){
 						//ignore;
 					}else{
 						SamLine sl=new SamLine(line);
 						Read r=sl.toRead(false);
 //						assert(!r.mapped()) : sl+"\n"+r;
 						if(!r.validated()){r.validate(true);}
-						r.obj=sl;
+						r.samline=sl;
 						
 						reads.add(r);
 						

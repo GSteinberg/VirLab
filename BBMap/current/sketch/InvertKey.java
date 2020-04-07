@@ -69,7 +69,6 @@ public class InvertKey extends SketchObject {
 				ByteFile2.verbose=verbose;
 				stream.FastaReadInputStream.verbose=verbose;
 				ConcurrentGenericReadInputStream.verbose=verbose;
-//				align2.FastaReadInputStream2.verbose=verbose;
 				stream.FastqReadInputStream.verbose=verbose;
 				ReadWrite.verbose=verbose;
 			}else if(a.equals("key")){
@@ -105,8 +104,8 @@ public class InvertKey extends SketchObject {
 			}
 		}
 		
-		SketchObject.k=k=k_;
-		SketchObject.k2=k2=k2_;
+		k=k_;
+		k2=k2_;
 		shift=2*k;
 		shift2=shift-2;
 		mask=(shift>63 ? -1L : ~((-1L)<<shift)); //Conditional allows K=32
@@ -156,9 +155,9 @@ public class InvertKey extends SketchObject {
 			assert(!set.isEmpty());
 		}else if(keyString.endsWith(".sketch")){
 			SketchTool tool=new SketchTool(10000, 0, false, false);
-			Sketch sk=tool.loadSketchesFromFile(keyString, null, SketchObject.ONE_SKETCH, 0, 1, 1000000, 0, false).get(0);
+			Sketch sk=tool.loadSketchesFromFile(keyString, null, 0, 1000000, SketchObject.ONE_SKETCH, 1f, 0f, 0f, (byte)0, false).get(0);
 			set=new LongHashSet(sk.length()*2);
-			for(long x : sk.array){set.add(Long.MAX_VALUE-x);}
+			for(long x : sk.keys){set.add(Long.MAX_VALUE-x);}
 			key0=-1;
 //			System.err.println(set.toStringListView()+", "+set.size());
 			assert(!set.isEmpty());
@@ -282,8 +281,6 @@ public class InvertKey extends SketchObject {
 	
 	final int shift;
 	final int shift2;
-	final int k;
-	final int k2;
 	final long mask;
 	
 	boolean printOnce=true;

@@ -195,7 +195,7 @@ public class FindHiCJunctions {
 					final Read r1=reads.get(idx);
 					
 					final int initialLength1=r1.length();
-					final boolean keep=process(r1, (SamLine)r1.obj);
+					final boolean keep=process(r1, r1.samline);
 					if(keep || true){
 						listOut.add(r1);
 						readsOut++;

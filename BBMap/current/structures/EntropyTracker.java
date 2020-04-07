@@ -1,6 +1,7 @@
 package structures;
 
 import java.util.Arrays;
+import java.util.Locale;
 
 import dna.AminoAcid;
 import shared.Tools;
@@ -198,8 +199,8 @@ public class EntropyTracker {
 		if(e<=0){e=0;}
 		
 		if(verbose){
-			System.err.println(String.format("%.3f", eSum)+"\t"+String.format("%.3f", entropyMult)+"\t"
-					+String.format("%.3f", e)+"\t"+len+"\t"+unique+"\t"+basesToString());
+			System.err.println(String.format(Locale.ROOT, "%.3f", eSum)+"\t"+String.format(Locale.ROOT, "%.3f", entropyMult)+"\t"
+					+String.format(Locale.ROOT, "%.3f", e)+"\t"+len+"\t"+unique+"\t"+basesToString());
 		}
 		
 		return e;
@@ -228,8 +229,8 @@ public class EntropyTracker {
 		if(e<=0){e=0;}
 		
 		if(verbose){
-			System.err.println(String.format("%.3f", eSum)+"\t"+String.format("%.3f", entropyMult)+"\t"
-					+String.format("%.3f", e)+"\t"+len+"\t"+unique+"\t"+basesToString());
+			System.err.println(String.format(Locale.ROOT, "%.3f", eSum)+"\t"+String.format(Locale.ROOT, "%.3f", entropyMult)+"\t"
+					+String.format(Locale.ROOT, "%.3f", e)+"\t"+len+"\t"+unique+"\t"+basesToString());
 		}
 		
 		return e;
@@ -277,8 +278,8 @@ public class EntropyTracker {
 		if(e<=0){e=0;}
 		
 		if(verbose){
-			System.err.println(String.format("%.3f", eSum)+"\t"+String.format("%.3f", entropyMult)+"\t"
-					+String.format("%.3f", e)+"\t"+len+"\t"+unique+"\t"+basesToString());
+			System.err.println(String.format(Locale.ROOT, "%.3f", eSum)+"\t"+String.format(Locale.ROOT, "%.3f", entropyMult)+"\t"
+					+String.format(Locale.ROOT, "%.3f", e)+"\t"+len+"\t"+unique+"\t"+basesToString());
 		}
 		
 		return e;

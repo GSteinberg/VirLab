@@ -5,6 +5,7 @@ import java.io.File;
 import dna.Data;
 import fileIO.ReadWrite;
 import fileIO.TextFile;
+import shared.Shared;
 import shared.Tools;
 
 /**
@@ -39,16 +40,16 @@ public class MakePacBioScript {
 		
 		if(args==null || args.length<1){
 			System.out.println("\nThis program generates a script for error-correcting PacBio reads using Illumina reads.\nSample command line:\n");
-//			System.out.println("java -ea -Xmx64m"+(Data.WINDOWS ? "" : " -cp "+Data.ROOT)+" jgi.MakePacBioScript " +
+//			System.out.println("java -ea -Xmx64m"+(Shared.WINDOWS ? "" : " -cp "+Data.ROOT)+" jgi.MakePacBioScript " +
 //					"dirty=subreads.fa clean=illumina.fq ref=ecoliRef.fa name=ecoli " +
-//					"out=run.sh template="+(Data.WINDOWS ? "" : "/house/homedirs/b/bushnell/template/")+"cleanPacbioTemplate.sh " +
+//					"out=run.sh template="+(Shared.WINDOWS ? "" : "/house/homedirs/b/bushnell/template/")+"cleanPacbioTemplate.sh " +
 //					"targetsize=5.4m threads=24 ram=31 maxram=100 noderam=256 build=-1 refbuild=-1 maxreads=-1");
-//			System.out.println("java -ea -Xmx64m"+(Data.WINDOWS ? "" : " -cp "+Data.ROOT)+" jgi.MakePacBioScript " +
+//			System.out.println("java -ea -Xmx64m"+(Shared.WINDOWS ? "" : " -cp "+Data.ROOT)+" jgi.MakePacBioScript " +
 //					"dirty=subreads.fa clean=illumina.fq ref=ecoliRef.fa name=ecoli " +
-//					"out=run.sh template="+(Data.WINDOWS ? "" : "/house/homedirs/b/bushnell/template/")+"cleanPacbioTemplate.sh " +
+//					"out=run.sh template="+(Shared.WINDOWS ? "" : "/house/homedirs/b/bushnell/template/")+"cleanPacbioTemplate.sh " +
 //					"targetsize=5.4m threads=24 noderam=256");
 //			System.out.println("\n\nOr to be concise:");
-			System.out.println("java -ea -Xmx64m"+(Data.WINDOWS ? "" : " -cp "+Data.ROOT())+" jgi.MakePacBioScript " +
+			System.out.println("java -ea -Xmx64m"+(Shared.WINDOWS ? "" : " -cp "+Data.ROOT())+" jgi.MakePacBioScript " +
 					"d=subreads.fa c=illumina.fq tpl=template.sh ts=5.4m t=24 nm=256");
 			System.out.println("\n\nInput files can optionally be comma-separated lists of files, and absolute pathing can be used.");
 			System.out.println("All input files may be raw, gzipped, or bzipped as long as they have the correct file extension.");
@@ -72,7 +73,7 @@ public class MakePacBioScript {
 			System.out.println("b=,build=        \tPrefix for index build number.  Default is 2, yielding successively improved builds 2, 200, 201, 202, ... 208");
 			System.out.println("rb=,refbuild=    \tReference build number.  Default is 1.");
 			System.out.println("cp=,classpath=   \tClasspath to the program.  If unspecified, will be autodetected as "+
-					(Data.WINDOWS ? "/house/homedirs/b/bushnell/beta19/" : Data.ROOT()));
+					(Shared.WINDOWS ? "/house/homedirs/b/bushnell/beta19/" : Data.ROOT()));
 //			r=ref.fa o=run.sh
 			System.exit(0);
 		}
@@ -85,7 +86,7 @@ public class MakePacBioScript {
 		String template=null;
 		String output="run.sh";
 		String extra="";
-		String classpath=(Data.WINDOWS ? "/house/homedirs/b/bushnell/beta19/" : Data.ROOT());
+		String classpath=(Shared.WINDOWS ? "/house/homedirs/b/bushnell/beta19/" : Data.ROOT());
 		String sort_in="";
 		String sorted="sorted_topo#.txt.gz";
 		String sorted_out="sorted_topo1.txt.gz";
@@ -210,10 +211,10 @@ public class MakePacBioScript {
 			if(mode==null){mode="pacbio";}
 			mode=mode.toLowerCase();
 			if(mode.equals("pacbio") || mode.equals("pacbio_illumina")){
-				template=(Data.WINDOWS ? "C:/workspace/prune/cleanPacbioTemplate_ecc.sh" : "/house/homedirs/b/bushnell/template/cleanPacbioTemplate_ecc_maxram.sh");
+				template=(Shared.WINDOWS ? "C:/workspace/prune/cleanPacbioTemplate_ecc.sh" : "/house/homedirs/b/bushnell/template/cleanPacbioTemplate_ecc_maxram.sh");
 			}else if(mode.equals("assembly") || mode.equals("assembly_illumina")
 					|| mode.equals("reference") || mode.equals("reference_illumina")){
-				template=(Data.WINDOWS ? "C:/workspace/prune/correctReference.sh" : "/house/homedirs/b/bushnell/template/correctReference_maxram.sh");
+				template=(Shared.WINDOWS ? "C:/workspace/prune/correctReference.sh" : "/house/homedirs/b/bushnell/template/correctReference_maxram.sh");
 			}else if(mode.equals("ccs") || mode.startsWith("ccs_")){
 				throw new RuntimeException("TODO: Mode "+mode+" is unfinished.");
 			}else if(mode.equals("pacbio_ccs") || mode.endsWith("_ccs")){

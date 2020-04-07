@@ -74,7 +74,7 @@ public class KmerLimit2 extends SketchObject {
 		ReadWrite.MAX_ZIP_THREADS=Shared.threads();
 		SketchObject.setKeyFraction(0.1);
 		defaultParams.minEntropy=0;
-		minProb=0.2f;
+		defaultParams.minProb=0.2f;
 		
 		boolean setHeapSize=false;
 		int heapSize_=8091;
@@ -235,6 +235,9 @@ public class KmerLimit2 extends SketchObject {
 		ffin1=FileFormat.testInput(in1, FileFormat.FASTQ, extin, true, true);
 		ffin2=FileFormat.testInput(in2, FileFormat.FASTQ, extin, true, true);
 
+		minProb=defaultParams.minProb;
+		minQual=defaultParams.minQual;
+		
 		shift=2*k;
 		shift2=shift-2;
 		mask=(shift>63 ? -1L : ~((-1L)<<shift)); //Conditional allows K=32
@@ -490,19 +493,19 @@ public class KmerLimit2 extends SketchObject {
 	public static Sketch capLengthAtCountSum(Sketch sketch0, int max) {
 		int len=0;
 		long sum=0;
-		for(; len<sketch0.counts.length; len++){
-			sum=sum+sketch0.counts[len];
+		for(; len<sketch0.keyCounts.length; len++){
+			sum=sum+sketch0.keyCounts[len];
 			if(sum>max){break;}
 		}
 		if(len>=sketch0.length()){return sketch0;}
 		
-		long[] keys=Arrays.copyOf(sketch0.array, len);
-		int[] counts=Arrays.copyOf(sketch0.counts, len);
+		long[] keys=Arrays.copyOf(sketch0.keys, len);
+		int[] counts=Arrays.copyOf(sketch0.keyCounts, len);
 		
 //		long[] array_, int[] counts_, int taxID_, long imgID_, long gSizeBases_, long gSizeKmers_, long gSequences_, double probCorrect_,
 //		String taxName_, String name0_, String fname_, ArrayList<String> meta_
 		
-		Sketch sk=new Sketch(keys, counts, -1, -1, 
+		Sketch sk=new Sketch(keys, counts, null, null, -1, -1, 
 				sketch0.genomeSizeBases, sketch0.genomeSizeKmers, sketch0.genomeSequences, sketch0.probCorrect,
 				null, null, null, null);
 		
@@ -510,7 +513,7 @@ public class KmerLimit2 extends SketchObject {
 	}
 	
 	public static long calcTargetReads(Sketch sketch, long targetKmers, int minCount, int trials, long seed){
-		final int[] counts0=sketch.counts;
+		final int[] counts0=sketch.keyCounts;
 		final int[] counts=Arrays.copyOf(counts0, counts0.length);
 		final long size=sketch.genomeSizeEstimate(minCount);
 		final long reads=sketch.genomeSequences;
@@ -526,7 +529,7 @@ public class KmerLimit2 extends SketchObject {
 		final int[] expanded=new int[(int)countSum];
 		
 		long roundSum=0;
-		final Random randy=(seed>=0 ? new Random(seed) : new Random());
+		final Random randy=Shared.threadLocalRandom(seed);
 		for(int i=0; i<trials; i++){
 			Tools.fill(counts, counts0);
 //			long rounds=reduceRounds(counts0, counts, minCount, targetKeys, randy);
@@ -943,6 +946,9 @@ public class KmerLimit2 extends SketchObject {
 	final int shift;
 	final int shift2;
 	final long mask;
+	
+	final float minProb;
+	final byte minQual;
 	
 	/*--------------------------------------------------------------*/
 	/*----------------        Common Fields         ----------------*/

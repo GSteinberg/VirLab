@@ -4,8 +4,6 @@ import java.io.File;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Locale;
-import java.util.Random;
-
 import align2.QualityTools;
 import dna.AminoAcid;
 import fileIO.ByteFile;
@@ -85,7 +83,6 @@ public class AddAdapters {
 				ByteFile2.verbose=verbose;
 				stream.FastaReadInputStream.verbose=verbose;
 				ConcurrentGenericReadInputStream.verbose=verbose;
-//				align2.FastaReadInputStream2.verbose=verbose;
 				stream.FastqReadInputStream.verbose=verbose;
 				ReadWrite.verbose=verbose;
 			}else if(a.equals("reads") || a.equals("maxreads")){
@@ -174,7 +171,6 @@ public class AddAdapters {
 		}
 		
 		assert(FastaReadInputStream.settingsOK());
-//		if(maxReads!=-1){ReadWrite.USE_GUNZIP=ReadWrite.USE_UNPIGZ=false;}
 		
 		if(in1==null){throw new RuntimeException("Error - at least one input file is required.");}
 		if(!ByteFile.FORCE_MODE_BF1 && !ByteFile.FORCE_MODE_BF2 && Shared.threads()>2){
@@ -222,7 +218,7 @@ public class AddAdapters {
 			if(adapters==null || adapters.isEmpty()){
 				throw new RuntimeException("\n\nPlease specify adapters with 'adapters=file.fa' or 'literal=AGCTACGT'\n");
 			}
-			randy=new Random();
+			randy=Shared.threadLocalRandom();
 		}
 	}
 	

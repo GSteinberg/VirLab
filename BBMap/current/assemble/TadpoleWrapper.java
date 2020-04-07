@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 
-import dna.Data;
 import jgi.AssemblyStats2;
 import jgi.ReformatReads;
 import shared.PreParser;
@@ -142,7 +141,7 @@ public class TadpoleWrapper {
 		
 		if(outFinal!=null){
 			File f=new File(bestAssembly);
-			boolean success=(Data.WINDOWS ? false : f.renameTo(new File(outFinal)));
+			boolean success=(Shared.WINDOWS ? false : f.renameTo(new File(outFinal)));
 			if(!success && f.exists()){
 				try {
 					ReformatReads.main(new String[] {"in="+bestAssembly, "out="+outFinal, "ow"});

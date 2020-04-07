@@ -22,6 +22,9 @@ import stream.ConcurrentReadInputStream;
 import stream.FASTQ;
 import stream.FastaReadInputStream;
 import stream.Read;
+import stream.ReadStreamWriter;
+import stream.SamLine;
+import stream.SamReadInputStream;
 import structures.ListNum;
 
 
@@ -58,6 +61,8 @@ public class Shuffle {
 		
 		ReadWrite.USE_PIGZ=ReadWrite.USE_UNPIGZ=true;
 		ReadWrite.MAX_ZIP_THREADS=Shared.threads();
+		SamLine.SET_FROM_OK=true;
+		ReadStreamWriter.USE_ATTACHED_SAMLINE=true;
 		
 		int mode_=SHUFFLE;
 		
@@ -76,7 +81,6 @@ public class Shuffle {
 				ByteFile2.verbose=verbose;
 				stream.FastaReadInputStream.verbose=verbose;
 				ConcurrentGenericReadInputStream.verbose=verbose;
-//				align2.FastaReadInputStream2.verbose=verbose;
 				stream.FastqReadInputStream.verbose=verbose;
 				ReadWrite.verbose=verbose;
 			}else if(a.equals("shuffle")){
@@ -192,6 +196,8 @@ public class Shuffle {
 
 		ffin1=FileFormat.testInput(in1, FileFormat.FASTQ, extin, true, true);
 		ffin2=FileFormat.testInput(in2, FileFormat.FASTQ, extin, true, true);
+		
+		useSharedHeader=(ffout1.samOrBam() && ffout1!=null && ffout1.samOrBam());
 	}
 	
 	/*--------------------------------------------------------------*/
@@ -203,7 +209,7 @@ public class Shuffle {
 		ArrayList<Read> bigList=new ArrayList<Read>(65530);
 		final ConcurrentReadInputStream cris;
 		{
-			cris=ConcurrentReadInputStream.getReadInputStream(maxReads, true, ffin1, ffin2, qfin1, qfin2);
+			cris=ConcurrentReadInputStream.getReadInputStream(maxReads, useSharedHeader, ffin1, ffin2, qfin1, qfin2);
 			if(verbose){outstream.println("Started cris");}
 			cris.start(); //4567
 		}
@@ -276,10 +282,12 @@ public class Shuffle {
 			if(ffout1!=null){
 				bsw1=new ByteStreamWriter(ffout1);
 				bsw1.start();
+				if(useSharedHeader){writeHeader(bsw1);}
 			}else{bsw1=null;}
 			if(ffout2!=null){
 				bsw2=new ByteStreamWriter(ffout2);
 				bsw2.start();
+				if(useSharedHeader){writeHeader(bsw1);}
 			}else{bsw2=null;}
 			final boolean b=(bsw2==null);
 			for(int i=0, lim=bigList.size(); i<lim; i++){
@@ -306,6 +314,18 @@ public class Shuffle {
 	/*--------------------------------------------------------------*/
 	/*----------------         Inner Methods        ----------------*/
 	/*--------------------------------------------------------------*/
+	
+	private void writeHeader(ByteStreamWriter bsw){
+		ArrayList<byte[]> list=SamReadInputStream.getSharedHeader(true);
+		if(list==null){
+			System.err.println("Header was null.");
+		}else{
+			for(byte[] line : list){
+				bsw.print(line).print('\n');
+			}
+		}
+	}
+	
 	
 	/*--------------------------------------------------------------*/
 	/*----------------         Inner Classes        ----------------*/
@@ -385,6 +405,8 @@ public class Shuffle {
 
 	private final FileFormat ffout1;
 	private final FileFormat ffout2;
+	
+	private final boolean useSharedHeader;
 	
 	/*--------------------------------------------------------------*/
 	/*----------------        Static Fields         ----------------*/

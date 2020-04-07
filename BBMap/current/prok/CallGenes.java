@@ -3,6 +3,7 @@ package prok;
 import java.io.File;
 import java.io.PrintStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 import dna.AminoAcid;
 import dna.Data;
@@ -10,6 +11,7 @@ import fileIO.ByteFile;
 import fileIO.ByteStreamWriter;
 import fileIO.FileFormat;
 import fileIO.ReadWrite;
+import gff.CompareGff;
 import jgi.BBMerge;
 import shared.Parser;
 import shared.PreParser;
@@ -84,12 +86,16 @@ public class CallGenes {
 
 		ffoutGff=FileFormat.testOutput(outGff, FileFormat.GFF, null, true, overwrite, append, ordered);
 		ffoutAmino=FileFormat.testOutput(outAmino, FileFormat.FA, null, true, overwrite, append, ordered);
+		ffout16S=FileFormat.testOutput(out16S, FileFormat.FA, null, true, overwrite, append, ordered);
 
 		if(ffoutGff!=null){
 			assert(!ffoutGff.isSequence()) : "\nout is for gff files.  To output sequence, please use outa.";
 		}
 		if(ffoutAmino!=null){
 			assert(!ffoutAmino.gff()) : "\nouta is for sequence data.  To output gff, please use out.";
+		}
+		if(ffout16S!=null){
+			assert(!ffout16S.gff()) : "\nout16S is for sequence data.  To output gff, please use out.";
 		}
 	}
 	
@@ -128,6 +134,8 @@ public class CallGenes {
 				Tools.addFiles(arg, pgmList);
 			}else if(a.equals("outamino") || a.equals("aminoout") || a.equals("outa") || a.equals("outaa") || a.equals("aaout") || a.equals("amino")){
 				outAmino=b;
+			}else if(a.equalsIgnoreCase("out16s") || a.equalsIgnoreCase("16sout")){
+				out16S=b;
 			}else if(a.equals("verbose")){
 				verbose=Tools.parseBoolean(b);
 				//ReadWrite.verbose=verbose;
@@ -157,6 +165,14 @@ public class CallGenes {
 			}else if(a.equalsIgnoreCase("longkmers")){
 				GeneModel.load16Skmers=GeneModel.load23Skmers=
 						GeneModel.load5Skmers=GeneModel.loadtRNAkmers=Tools.parseBoolean(b);
+			}else if(a.equalsIgnoreCase("klong5s")){
+				GeneModel.kLong5s=Integer.parseInt(b);
+			}else if(a.equalsIgnoreCase("klong16s")){
+				GeneModel.kLong16s=Integer.parseInt(b);
+			}else if(a.equalsIgnoreCase("klong23s")){
+				GeneModel.kLong23s=Integer.parseInt(b);
+			}else if(a.equalsIgnoreCase("klongtrna")){
+				GeneModel.kLongTRna=Integer.parseInt(b);
 			}
 			
 			else if(a.equals("ordered")){
@@ -263,6 +279,12 @@ public class CallGenes {
 			String b=Data.findPath("?model.pgm");
 			pgmList.add(b);
 		}
+		for(int i=0; i<pgmList.size(); i++){
+			String s=pgmList.get(i);
+			if(s.equalsIgnoreCase("auto") || s.equalsIgnoreCase("default")){
+				pgmList.set(i, Data.findPath("?model.pgm"));
+			}
+		}
 		
 		if(Shared.threads()<2){ordered=false;}
 		assert(!fnaList.isEmpty()) : "At least 1 fasta file is required.";
@@ -280,9 +302,9 @@ public class CallGenes {
 	/** Ensure files can be read and written */
 	private void checkFileExistence(){
 		//Ensure output files can be written
-		if(!Tools.testOutputFiles(overwrite, append, false, outGff, outAmino)){
+		if(!Tools.testOutputFiles(overwrite, append, false, outGff, outAmino, out16S)){
 			outstream.println((outGff==null)+", "+outGff);
-			throw new RuntimeException("\n\noverwrite="+overwrite+"; Can't write to output files "+outGff+", "+outAmino+"\n");
+			throw new RuntimeException("\n\noverwrite="+overwrite+"; Can't write to output files "+outGff+", "+outAmino+", "+out16S+"\n");
 		}
 		
 		//Ensure input files can be read
@@ -296,6 +318,7 @@ public class CallGenes {
 		//Ensure that no file was specified multiple times
 		foo.add(outGff);
 		foo.add(outAmino);
+		foo.add(out16S);
 		if(!Tools.testForDuplicateFiles(true, foo.toArray(new String[0]))){
 			throw new RuntimeException("\nSome file names were specified multiple times.\n");
 		}
@@ -326,8 +349,9 @@ public class CallGenes {
 		if(bsw!=null){
 			bsw.forcePrint("##gff-version 3\n");
 		}
-		
-		ConcurrentReadOutputStream ros=makeCros(ffoutAmino);
+
+		ConcurrentReadOutputStream rosAmino=makeCros(ffoutAmino);
+		ConcurrentReadOutputStream ros16S=makeCros(ffout16S);
 		
 		//Turn off read validation in the input threads to increase speed
 		final boolean vic=Read.VALIDATE_IN_CONSTRUCTOR;
@@ -342,10 +366,10 @@ public class CallGenes {
 			final ConcurrentReadInputStream cris=makeCris(fname);
 
 			//Process the reads in separate threads
-			spawnThreads(cris, bsw, ros, pgm);
+			spawnThreads(cris, bsw, rosAmino, ros16S, pgm);
 			
 			//Close the input stream
-			errorState|=ReadWrite.closeStreams(cris, ros);
+			errorState|=ReadWrite.closeStreams(cris, rosAmino, ros16S);
 		}
 		
 		if(verbose){outstream.println("Finished; closing streams.");}
@@ -368,19 +392,25 @@ public class CallGenes {
 		outstream.println("Gene Starts Made:     \t "+Tools.padLeft(geneStartsMade, 12));
 		outstream.println("Gene Starts Retained: \t "+Tools.padLeft(geneStartsRetained, 12));
 		outstream.println("Gene Stops Retained:  \t "+Tools.padLeft(geneStopsRetained, 12));
-		outstream.println("Genes Out:            \t "+Tools.padLeft(geneStartsOut, 12));
-
+		outstream.println("CDS Out:              \t "+Tools.padLeft(geneStartsOut, 12));
+		
+		if(GeneCaller.call16S){outstream.println("16S Out:              \t "+Tools.padLeft(r16SOut, 12));}
+		if(GeneCaller.call23S){outstream.println("23S Out:              \t "+Tools.padLeft(r23SOut, 12));}
+		if(GeneCaller.call5S){outstream.println("5S Out:               \t "+Tools.padLeft(r5SOut, 12));}
+		if(GeneCaller.calltRNA){outstream.println("tRNA Out:             \t "+Tools.padLeft(tRNAOut, 12));}
+		
 		outstream.println();
 		outstream.println("All ORF Stats:");
-		outstream.println(stCds);
+		outstream.print(stCds);
 		
 		outstream.println();
 		outstream.println("Retained ORF Stats:");
-		outstream.println(stCds2);
+		outstream.print(stCds2);
 		
 		outstream.println();
 		outstream.println("Called ORF Stats:");
-		outstream.println(stCdsPass);
+		stCdsPass.genomeSize=basesIn;
+		outstream.print(stCdsPass);
 		
 		//Throw an exception of there was an error in a thread
 		if(errorState){
@@ -388,6 +418,11 @@ public class CallGenes {
 		}
 		
 		if(compareToGff!=null){
+			if(compareToGff.equals("auto")){
+				compareToGff=fnaList.get(0).replace(".fna", ".gff");
+				compareToGff=compareToGff.replace(".fa", ".gff");
+				compareToGff=compareToGff.replace(".fasta", ".gff");
+			}
 			CompareGff.main(new String[] {outGff, compareToGff});
 		}
 	}
@@ -401,7 +436,8 @@ public class CallGenes {
 	}
 	
 	/** Spawn process threads */
-	private void spawnThreads(final ConcurrentReadInputStream cris, final ByteStreamWriter bsw, ConcurrentReadOutputStream ros, GeneModel pgm){
+	private void spawnThreads(final ConcurrentReadInputStream cris, final ByteStreamWriter bsw, 
+			ConcurrentReadOutputStream rosAmino, ConcurrentReadOutputStream ros16S, GeneModel pgm){
 		
 		//Do anything necessary prior to processing
 		
@@ -411,7 +447,7 @@ public class CallGenes {
 		//Fill a list with ProcessThreads
 		ArrayList<ProcessThread> alpt=new ArrayList<ProcessThread>(threads);
 		for(int i=0; i<threads; i++){
-			alpt.add(new ProcessThread(cris, bsw, ros, pgm, minLen, i));
+			alpt.add(new ProcessThread(cris, bsw, rosAmino, ros16S, pgm, minLen, i));
 		}
 		
 		//Start the threads
@@ -455,6 +491,11 @@ public class CallGenes {
 			geneStopsRetained+=pt.caller.geneStopsRetained;
 			geneStartsOut+=pt.caller.geneStartsOut;
 
+			r16SOut+=pt.caller.r16SOut;
+			r23SOut+=pt.caller.r23SOut;
+			r5SOut+=pt.caller.r5SOut;
+			tRNAOut+=pt.caller.tRNAOut;
+			
 			stCds.add(pt.caller.stCds);
 			stCds2.add(pt.caller.stCds2);
 			stCdsPass.add(pt.caller.stCdsPass);
@@ -497,11 +538,12 @@ public class CallGenes {
 	private class ProcessThread extends Thread {
 		
 		//Constructor
-		ProcessThread(final ConcurrentReadInputStream cris_, final ByteStreamWriter bsw_, ConcurrentReadOutputStream ros_,
-				GeneModel pgm_, final int minLen, final int tid_){
+		ProcessThread(final ConcurrentReadInputStream cris_, final ByteStreamWriter bsw_, 
+				ConcurrentReadOutputStream rosAmino_, ConcurrentReadOutputStream ros16S_, GeneModel pgm_, final int minLen, final int tid_){
 			cris=cris_;
 			bsw=bsw_;
-			ros=ros_;
+			rosAmino=rosAmino_;
+			ros16S=ros16S_;
 			pgm=pgm_;
 			tid=tid_;
 			caller=new GeneCaller(minLen, maxOverlapSameStrand, maxOverlapOppositeStrand, 
@@ -643,17 +685,24 @@ public class CallGenes {
 		ArrayList<Orf> processRead(final Read r){
 			ArrayList<Orf> list=caller.callGenes(r, pgm);
 			
-			if(ros!=null){
+			if(ros16S!=null){
+				if(list!=null && !list.isEmpty()){
+					ArrayList<Read> ssu=fetchType(r, list, Orf.r16S);
+					if(ssu!=null && !ssu.isEmpty()){ros16S.add(ssu, r.numericID);}
+				}
+			}
+			
+			if(rosAmino!=null){
 				if(mode==TRANSLATE){
 					if(list!=null && !list.isEmpty()){
 						ArrayList<Read> prots=translate(r, list);
-						ros.add(prots, r.numericID);
+						if(prots!=null){rosAmino.add(prots, r.numericID);}
 					}
 				}else if(mode==RETRANSLATE) {
 					if(list!=null && !list.isEmpty()){
 						ArrayList<Read> prots=translate(r, list);
 						ArrayList<Read> ret=detranslate(prots);
-						ros.add(ret, r.numericID);
+						if(ret!=null){rosAmino.add(ret, r.numericID);}
 					}
 				}else if(mode==RECODE) {
 					if(list!=null && !list.isEmpty()){
@@ -661,7 +710,7 @@ public class CallGenes {
 						r.mate=null;
 						ArrayList<Read> rec=new ArrayList<Read>(1);
 						rec.add(recoded);
-						ros.add(rec, r.numericID);
+						if(rec!=null){rosAmino.add(rec, r.numericID);}
 					}
 				}else{
 					assert(false) : mode;
@@ -680,8 +729,9 @@ public class CallGenes {
 		protected long genesOutT=0;
 		/** Number of bytes written by this thread */
 		protected long bytesOutT=0;
-		
-		protected ConcurrentReadOutputStream ros;
+
+		protected ConcurrentReadOutputStream rosAmino;
+		protected ConcurrentReadOutputStream ros16S;
 		
 		/** True only if this thread has completed successfully */
 		boolean success=false;
@@ -698,6 +748,21 @@ public class CallGenes {
 		final int tid;
 	}
 	
+	public static ArrayList<Read> fetchType(final Read r, final ArrayList<Orf> list, int type){
+		if(list==null || list.isEmpty()){return null;}
+		ArrayList<Read> ret=new ArrayList<Read>(list.size());
+		for(int strand=0; strand<2; strand++){
+			for(Orf orf : list){
+				if(orf.strand==strand && orf.type==type){
+					Read sequence=fetch(orf, r.bases, r.id);
+					ret.add(sequence);
+				}
+			}
+			r.reverseComplement();
+		}
+		return (ret.size()>0 ? ret : null);
+	}
+	
 	public static ArrayList<Read> translate(final Read r, final ArrayList<Orf> list){
 		if(list==null || list.isEmpty()){return null;}
 		ArrayList<Read> prots=new ArrayList<Read>(list.size());
@@ -710,7 +775,7 @@ public class CallGenes {
 			}
 			r.reverseComplement();
 		}
-		return prots;
+		return prots.isEmpty() ? null : prots;
 	}
 	
 	public static Read recode(final Read r, final ArrayList<Orf> list){
@@ -739,10 +804,28 @@ public class CallGenes {
 	}
 	
 	public static Read translate(Orf orf, byte[] bases, String id){
+//		assert(orf.length()%3==0) : orf.length(); //Happens sometimes on genes that go off the end, perhaps
 		if(orf.strand==1){orf.flip();}
 		byte[] acids=AminoAcid.toAAs(bases, orf.start, orf.stop);
 		if(orf.strand==1){orf.flip();}
 		Read r=new Read(acids, null, id+"\t"+(Shared.strandCodes[orf.strand]+"\t"+orf.start+"-"+orf.stop), 0, Read.AAMASK);
+//		assert((r.length()+1)*3==orf.length());
+		return r;
+	}
+	
+	public static Read fetch(Orf orf, Read source){
+		if(orf.strand==1){source.reverseComplement();}
+		Read r=fetch(orf, source.bases, source.id);
+		if(orf.strand==1){source.reverseComplement();}
+		return r;
+	}
+	
+	public static Read fetch(Orf orf, byte[] bases, String id){
+		if(orf.strand==1){orf.flip();}
+		byte[] sub=Arrays.copyOfRange(bases, orf.start, orf.stop+1);
+		if(orf.strand==1){orf.flip();}
+		Read r=new Read(sub, null, id+"\t"+(Shared.strandCodes[orf.strand]+"\t"+orf.start+"-"+orf.stop), 0, 0);
+		assert(r.length()==orf.length()) : r.length()+", "+orf.length();
 		return r;
 	}
 	
@@ -806,6 +889,11 @@ public class CallGenes {
 	long geneStopsRetained=0;
 	long geneStartsOut=0;
 
+	long r16SOut=0;
+	long r23SOut=0;
+	long r5SOut=0;
+	long tRNAOut=0;
+	
 	ScoreTracker stCds=new ScoreTracker(Orf.CDS);
 	ScoreTracker stCds2=new ScoreTracker(Orf.CDS);
 	ScoreTracker stCdsPass=new ScoreTracker(Orf.CDS);
@@ -816,6 +904,7 @@ public class CallGenes {
 	private ArrayList<String> pgmList=new ArrayList<String>();
 	private String outGff=null;
 	private String outAmino=null;
+	private String out16S=null;
 	private String compareToGff=null;
 	
 	/*--------------------------------------------------------------*/
@@ -824,6 +913,7 @@ public class CallGenes {
 	
 	private final FileFormat ffoutGff;
 	private final FileFormat ffoutAmino;
+	private final FileFormat ffout16S;
 	
 	/** Determines how sequence is processed if it will be output */
 	int mode=TRANSLATE;
@@ -845,5 +935,6 @@ public class CallGenes {
 	private boolean overwrite=false;
 	private boolean append=false;
 	private boolean ordered=false; //this is OK sometimes, but sometimes hangs (e.g. on RefSeq mito), possibly if a sequence produces nothing.
+	//To fix it, just ensure functions like translate always produce an array, even if it is empty.
 	
 }

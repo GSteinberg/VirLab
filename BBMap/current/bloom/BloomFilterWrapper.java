@@ -20,6 +20,7 @@ import stream.ConcurrentReadOutputStream;
 import stream.FASTQ;
 import stream.FastaReadInputStream;
 import stream.Read;
+import stream.SamLine;
 import structures.ListNum;
 import structures.LongList;
 
@@ -71,6 +72,7 @@ public class BloomFilterWrapper {
 		//Set shared static variables
 		ReadWrite.USE_PIGZ=ReadWrite.USE_UNPIGZ=true;
 		ReadWrite.MAX_ZIP_THREADS=Tools.max(Shared.threads()>1 ? 2 : 1, Shared.threads()>20 ? Shared.threads()/2 : Shared.threads());
+		SamLine.SET_FROM_OK=true;
 		
 		//Create a parser object
 		Parser parser=new Parser();
@@ -277,7 +279,7 @@ public class BloomFilterWrapper {
 		{
 			Timer t=new Timer(outstream, true);
 			if(serialIn==null){
-				filter=new BloomFilter(null, null, ref, k, bits, hashes, minConsecutiveMatches,
+				filter=new BloomFilter(null, null, ref, k, k, bits, hashes, minConsecutiveMatches,
 						rcomp, ecco, merge, memFraction);
 				if(serialOut!=null){
 					ReadWrite.writeObjectInThread(filter, serialOut, true);

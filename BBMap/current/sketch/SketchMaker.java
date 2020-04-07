@@ -27,7 +27,7 @@ import structures.ByteBuilder;
 import structures.ListNum;
 import structures.LongList;
 import tax.AccessionToTaxid;
-import tax.GiToNcbi;
+import tax.GiToTaxid;
 import tax.ImgRecord2;
 import tax.TaxNode;
 import tax.TaxTree;
@@ -165,6 +165,8 @@ public class SketchMaker extends SketchObject {
 				accessionFile=b;
 			}else if(a.equalsIgnoreCase("img") || a.equals("imgfile") || a.equals("imgdump")){
 				imgFile=b;
+			}else if(a.equalsIgnoreCase("ssufile") || a.equals("silvafile")){
+				ssuFile=b;
 			}
 			
 			else if(a.equals("tossjunk")){
@@ -200,6 +202,8 @@ public class SketchMaker extends SketchObject {
 		if("auto".equalsIgnoreCase(taxTreeFile)){taxTreeFile=TaxTree.defaultTreeFile();}
 		if("auto".equalsIgnoreCase(giTableFile)){giTableFile=TaxTree.defaultTableFile();}
 		if("auto".equalsIgnoreCase(accessionFile)){accessionFile=TaxTree.defaultAccessionFile();}
+		if("auto".equalsIgnoreCase(ssuFile)){ssuFile=TaxTree.defaultSsuFile();}
+		
 		
 		outMeta=SketchObject.fixMeta(outMeta);
 		
@@ -226,7 +230,7 @@ public class SketchMaker extends SketchObject {
 		}
 		files=(out1==null ? 0 : files_);
 
-		if(!setPrefilter && !prefilter && (mode==PER_TAXA || mode==PER_IMG) && in1!=null && !in1.startsWith("stdin") && (AUTOSIZE || targetSketchSize>200)){
+		if(!setPrefilter && !prefilter && (mode==PER_TAXA || mode==PER_IMG) && in1!=null && !in1.startsWith("stdin") && (AUTOSIZE || AUTOSIZE_LINEAR || targetSketchSize>200)){
 			prefilter=true;
 			System.err.println("Enabled prefilter due to running in per-"+(mode==PER_TAXA ? "taxa" : "IMG")+" mode; override with 'prefilter=f'.");
 		}
@@ -267,26 +271,27 @@ public class SketchMaker extends SketchObject {
 //		}
 		
 		//Ensure input files can be read
-		if(!Tools.testInputFiles(false, true, in1, in2, taxTreeFile, giTableFile, imgFile)){
+		if(!Tools.testInputFiles(false, true, in1, in2, taxTreeFile, giTableFile, imgFile, ssuFile)){
 			throw new RuntimeException("\nCan't read some input files.\n");  
 		}
 		
 		//Ensure that no file was specified multiple times
-		if(!Tools.testForDuplicateFiles(true, in1, in2, out1, taxTreeFile, giTableFile, imgFile)){
+		if(!Tools.testForDuplicateFiles(true, in1, in2, out1, taxTreeFile, giTableFile, imgFile, ssuFile)){
 			throw new RuntimeException("\nSome file names were specified multiple times.\n");
 		}
 		
 		//Create input FileFormat objects
 		ffin1=FileFormat.testInput(in1, FileFormat.FASTQ, extin, true, true);
 		ffin2=FileFormat.testInput(in2, FileFormat.FASTQ, extin, true, true);
+		ffssu=FileFormat.testInput(ssuFile, FileFormat.FASTA, null, true, true);
 		
 //		assert(false) :  defaultParams.trackCounts();
-		tool=new SketchTool(targetSketchSize, defaultParams.minKeyOccuranceCount, defaultParams.trackCounts(), defaultParams.mergePairs);
+		tool=new SketchTool(targetSketchSize, defaultParams);
 		
 		if(taxTreeFile!=null){setTaxtree(taxTreeFile);}
 		
 		if(giTableFile!=null){
-			loadGiToNcbi();
+			loadGiToTaxid();
 		}
 		if(accessionFile!=null){
 			AccessionToTaxid.tree=taxtree;
@@ -296,6 +301,9 @@ public class SketchMaker extends SketchObject {
 		}
 		if(imgFile!=null){
 			TaxTree.loadIMG(imgFile, true, outstream);
+		}
+		if(ssuFile!=null){
+			ssuMap=AddSSU.loadSSU(ffssu, outstream);
 		}
 		
 		if(prefilter){
@@ -558,7 +566,8 @@ public class SketchMaker extends SketchObject {
 	
 	private void singleSketchMT(){
 		Timer t=new Timer();
-		Sketch sketch=tool.processReadsMT(ffin1, ffin2, mode, Shared.threads(), defaultParams.samplerate, maxReads, defaultParams.minEntropy, false);
+		Sketch sketch=tool.processReadsMT(ffin1, ffin2, Shared.threads(), 
+				maxReads, mode, defaultParams.samplerate, defaultParams.minEntropy, defaultParams.minProb, defaultParams.minQual, false);
 		
 		if(outTaxID>=0){sketch.taxID=outTaxID;}
 		if(outTaxName!=null){sketch.setTaxName(outTaxName);}
@@ -579,6 +588,7 @@ public class SketchMaker extends SketchObject {
 		Shared.printMemory();
 
 		if(ffout!=null && ffout.length>0){
+			sketch.addSSU(ssuMap);
 			SketchTool.write(sketch, ffout[0]);
 			sketchesWritten+=1;
 		}
@@ -687,7 +697,10 @@ public class SketchMaker extends SketchObject {
 				if(outName0!=null){sketch.setName0(outName0);}
 				if(outSpid>=0){sketch.spid=outSpid;}
 				if(outImgID>=0){sketch.imgID=outImgID;}
-				if(ffout!=null && ffout.length>0){SketchTool.write(sketch, ffout[0]);}
+				if(ffout!=null && ffout.length>0){
+					sketch.addSSU(ssuMap);
+					SketchTool.write(sketch, ffout[0]);
+				}
 				sketchesMade++;
 				sketchesWritten++;
 			}
@@ -781,6 +794,7 @@ public class SketchMaker extends SketchObject {
 					if(outName0!=null && sketch.name0()==null){sketch.setName0(outName0);}
 					if(outSpid>=0 && sketch.spid<0){sketch.spid=outSpid;}
 					if(outImgID>=0 && sketch.imgID<0){sketch.imgID=outImgID;}
+					sketch.addSSU(ssuMap);
 					SketchTool.write(sketch, tsw[tnum], bb);
 					sketchesWrittenT++;
 				}
@@ -814,10 +828,10 @@ public class SketchMaker extends SketchObject {
 	/*----------------          Tax Methods         ----------------*/
 	/*--------------------------------------------------------------*/
 	
-	private void loadGiToNcbi(){
+	private void loadGiToTaxid(){
 		Timer t=new Timer();
 		outstream.println("Loading gi to taxa translation table.");
-		GiToNcbi.initialize(giTableFile);
+		GiToTaxid.initialize(giTableFile);
 		t.stop();
 		if(true){
 			outstream.println("Time: \t"+t);
@@ -841,7 +855,7 @@ public class SketchMaker extends SketchObject {
 			cris=cris_;
 			threadID=tid_;
 			
-			smm=new SketchMakerMini(tool, mode, defaultParams.minEntropy);
+			smm=new SketchMakerMini(tool, mode, defaultParams.minEntropy, defaultParams.minProb, defaultParams.minQual);
 			localMap=(mode==PER_TAXA ? new HashMap<Long, SketchHeap>() : null);
 		}
 		
@@ -937,7 +951,7 @@ public class SketchMaker extends SketchObject {
 				if(taxtree!=null && (mode==PER_TAXA || mode==PER_IMG || mode==PER_SEQUENCE || ((mode==ONE_SKETCH || mode==PER_HEADER) && smm.heap.taxID<0))){
 					if(mode==PER_IMG){
 						imgID=ImgRecord2.parseImgId(rid, true);
-						tn=taxtree.imgToNcbiNode(imgID);
+						tn=taxtree.imgToTaxNode(imgID);
 						if(tn==null){tn=taxtree.parseNodeFromHeader(rid, bestEffort);}
 //						assert(tn!=null || !rid.startsWith("tid")) : imgID+", "+taxID+", "+rid; //123
 					}else{
@@ -1271,6 +1285,7 @@ public class SketchMaker extends SketchObject {
 				}
 				if(tsw!=null){
 					final int choice=(sketch.hashCode()&Integer.MAX_VALUE)%files;
+					sketch.addSSU(ssuMap);
 					synchronized(tsw[choice]){
 						SketchTool.write(sketch, tsw[choice], bb);
 						sketchesWrittenT++;
@@ -1325,6 +1340,7 @@ public class SketchMaker extends SketchObject {
 	private String taxTreeFile=null;
 	private String accessionFile=null;
 	private String imgFile=null;
+	private String ssuFile=null;
 	
 	/*Override metadata */
 	String outTaxName=null;
@@ -1366,6 +1382,8 @@ public class SketchMaker extends SketchObject {
 	private final FileFormat ffin1;
 	/** Secondary input file */
 	private final FileFormat ffin2;
+
+	private final FileFormat ffssu;
 	
 	/** Primary output files */
 	private final FileFormat ffout[];
@@ -1385,6 +1403,7 @@ public class SketchMaker extends SketchObject {
 	private boolean prefilter=false;
 	private boolean tossJunk=true;
 	boolean bestEffort=true;
+	private HashMap<Integer, byte[]> ssuMap;
 	
 	private final AtomicInteger nextUnknown=new AtomicInteger(minFakeID);
 

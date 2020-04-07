@@ -74,7 +74,11 @@ public class TestFilesystem {
 			testMetadata();
 			t.stop();
 			final long metaTime=t.elapsed;
-			log(time, copyTime, metaTime);
+			t.start();
+			testLs();
+			t.stop();
+			final long lsTime=t.elapsed;
+			log(time, copyTime, metaTime, lsTime);
 			nextTime+=millis;
 			iteration=(iteration+1)%ways;
 		}
@@ -107,6 +111,23 @@ public class TestFilesystem {
 		for(String s : fnames){
 			new File(s).delete();
 		}
+	}
+	
+	private static int testLs(){
+//		File dir=new File("x").getParentFile();
+		File dir=new File(System.getProperty("user.dir"));
+//		System.err.println(dir.getAbsolutePath());
+		
+		File[] array=dir.listFiles();
+		assert(array!=null) : array;
+		assert(array.length>0) : array.length;
+		
+		int count=0;
+		for(File f : array){
+			assert(f.canRead());
+			count++;
+		}
+		return count;
 	}
 	
 	private static void copy(String from0, final String to, int iter){
@@ -168,10 +189,10 @@ public class TestFilesystem {
 	}
 	
 	private static String header(){
-		return "#time\tsize\tcopyTime\tMB/s\tmetaOps\tmetaTime\tops/s\tdate\n";
+		return "#time\tsize\tcopyTime\tMB/s\tmetaOps\tmetaTime\tops/s\tlsTime\tdate\n";
 	}
 	
-	private static void log(final long time, final long copyTime, final long metaTime){
+	private static void log(final long time, final long copyTime, final long metaTime, final long lsTime){
 		StringBuilder sb=new StringBuilder();
 		sb.append(time).append('\t');
 		sb.append(size).append('\t');
@@ -180,6 +201,7 @@ public class TestFilesystem {
 		sb.append(filesToCreate*3).append('\t');
 		sb.append(metaTime/1000000).append('\t');
 		sb.append(String.format(Locale.ROOT, "%.2f", (3*filesToCreate)*1000000000L/Tools.max(1, (double)metaTime))).append('\t');
+		sb.append(String.format(Locale.ROOT, "%.2f", lsTime/1000000.0)).append('\t');
 		sb.append(new Date(time)).append('\n');
 		printLine(sb.toString());
 	}

@@ -39,6 +39,10 @@ public final class SketchTool extends SketchObject {
 	/*----------------         Constructor          ----------------*/
 	/*--------------------------------------------------------------*/
 	
+	public SketchTool(int size_, DisplayParams params){
+		this(size_, params.minKeyOccuranceCount, params.trackCounts(), params.mergePairs);
+	}
+	
 	public SketchTool(int size_, int minKeyOccuranceCount_, boolean trackCounts_, boolean mergePairs_){
 		stTargetSketchSize=size_;
 		minKeyOccuranceCount=minKeyOccuranceCount_;
@@ -179,7 +183,7 @@ public final class SketchTool extends SketchObject {
 	public Sketch toSketch(ArrayList<SketchHeap> heaps, boolean allowZeroSizeSketch){
 		if(heaps==null || heaps.isEmpty()){
 			if(allowZeroSizeSketch){
-				return new Sketch(new long[0], null, null);
+				return new Sketch(new long[0], null, null, null, null);
 			}else{
 				return null;
 			}
@@ -199,7 +203,7 @@ public final class SketchTool extends SketchObject {
 		list.shrinkToUnique();
 		list.reverse();
 		for(int i=0; i<list.size; i++){list.array[i]=Long.MAX_VALUE-list.array[i];}
-		return new Sketch(list.toArray(), null, null);
+		return new Sketch(list.toArray(), null, null, null, null);
 	}
 	
 	/*--------------------------------------------------------------*/
@@ -252,12 +256,23 @@ public final class SketchTool extends SketchObject {
 //		return loadSketches_MT(0, null, fnames.toArray(new String[0]));
 //	}
 	
-	public ArrayList<Sketch> loadSketches_MT(int mode, float samplerate, long reads, float minEntropy, Collection<String> fnames){
-		return loadSketches_MT(mode, samplerate, reads, minEntropy, fnames.toArray(new String[0]));
+	public ArrayList<Sketch> loadSketches_MT(DisplayParams params, Collection<String> fnames){
+		return loadSketches_MT(params.mode, params.samplerate, params.maxReads,
+				params.minEntropy, params.minProb, params.minQual, fnames);
+	}
+	
+	public ArrayList<Sketch> loadSketches_MT(DisplayParams params, String...fnames){
+		return loadSketches_MT(params.mode, params.samplerate, params.maxReads,
+				params.minEntropy, params.minProb, params.minQual, fnames);
+	}
+	
+	public ArrayList<Sketch> loadSketches_MT(int mode, float samplerate, long reads, float minEntropy, float minProb, byte minQual, Collection<String> fnames){
+		return loadSketches_MT(mode, samplerate, reads, minEntropy, minProb, minQual, fnames.toArray(new String[0]));
 	}
 	
 	//TODO: This is only multithreaded per file in persequence mode.
-	public ArrayList<Sketch> loadSketches_MT(int mode, float samplerate, long reads, float minEntropy, String...fnames){
+	public ArrayList<Sketch> loadSketches_MT(int mode, float samplerate, long reads, float minEntropy, float minProb, byte minQual, String...fnames){
+		
 		ConcurrentLinkedQueue<StringNum> decomposedFnames=new ConcurrentLinkedQueue<StringNum>();
 		int num=0;
 		for(String s : fnames){
@@ -273,16 +288,16 @@ public final class SketchTool extends SketchObject {
 		}
 
 		if(decomposedFnames.size()==0){return null;}
-		if(decomposedFnames.size()==1){return loadSketchesFromFile(decomposedFnames.poll().s, null, mode, 0, samplerate, reads, minEntropy, false);}
+		if(decomposedFnames.size()==1){return loadSketchesFromFile(decomposedFnames.poll().s, null, 0, reads, mode, samplerate, minEntropy, minProb, minQual, false);}
 		
 		//Determine how many threads may be used
 		final int threads=Tools.min(Shared.threads(), decomposedFnames.size());
-
+		
 		//Fill a list with LoadThreads
 		ArrayList<LoadThread> allt=new ArrayList<LoadThread>(threads);
 		
 		for(int i=0; i<threads; i++){
-			allt.add(new LoadThread(decomposedFnames, mode, samplerate, reads, minEntropy));
+			allt.add(new LoadThread(decomposedFnames, mode, samplerate, reads, minEntropy, minProb, minQual));
 		}
 		
 		ArrayList<Sketch> sketches=new ArrayList<Sketch>();
@@ -314,32 +329,38 @@ public final class SketchTool extends SketchObject {
 	/*--------------------------------------------------------------*/
 	
 	public ArrayList<Sketch> loadSketchesFromFile(final String fname0, SketchMakerMini smm, 
-			int mode, int maxThreads, float samplerate, long reads, float minEntropy, boolean allowZeroSizeSketch){
+			int maxThreads, long reads, int mode, DisplayParams params, boolean allowZeroSizeSketch){
+		return loadSketchesFromFile(fname0, smm, maxThreads, reads, mode,
+				params.samplerate, params.minEntropy, params.minProb, params.minQual, allowZeroSizeSketch);
+	}
+	
+	public ArrayList<Sketch> loadSketchesFromFile(final String fname0, SketchMakerMini smm, 
+			int maxThreads, long reads, int mode, float samplerate, float minEntropy, float minProb, byte minQual, boolean allowZeroSizeSketch){
 		assert(fname0!=null);//123
 		if(fname0==null){return null;}
 		FileFormat ff=FileFormat.testInput(fname0, FileFormat.FASTA, null, false, true);
 		if(ff.isSequence()){
-			return loadSketchesFromSequenceFile(ff, smm, mode, maxThreads, samplerate, reads, minEntropy, allowZeroSizeSketch);
+			return loadSketchesFromSequenceFile(ff, smm, maxThreads, reads, mode, samplerate, minEntropy, minProb, minQual, allowZeroSizeSketch);
 		}else{
 			return SketchObject.LOADER2 ? loadSketchesFromSketchFile2(ff, allowZeroSizeSketch) : loadSketchesFromSketchFile(ff, allowZeroSizeSketch);
 		}
 	}
 	
 	private ArrayList<Sketch> loadSketchesFromSequenceFile(final FileFormat ff, SketchMakerMini smm, 
-			int mode, int maxThreads, float samplerate, long reads, float minEntropy, boolean allowZeroSizeSketch){
+			int maxThreads, long reads, int mode, float samplerate, float minEntropy, float minProb, byte minQual, boolean allowZeroSizeSketch){
 		maxThreads=(maxThreads<1 ? Shared.threads() : Tools.min(maxThreads, Shared.threads()));
 		
 //		assert(false) : (ff.fasta() || ff.fastq() || ff.samOrBam())+", "+ff.fastq()+", "+maxThreads+", "+
 //				allowMultithreadedFastq+", "+forceDisableMultithreadedFastq+", "+(mode==ONE_SKETCH);
 		
 		if(ff.fastq() && allowMultithreadedFastq && !forceDisableMultithreadedFastq && (mode==ONE_SKETCH || mode==PER_FILE) &&
-				maxThreads>1 && Shared.threads()>2 && (reads<1 || reads*samplerate*(mergePairs ? 2 : 1)>=80000)){
+				maxThreads>1 && Shared.threads()>2 && (reads<1 || reads*samplerate*(mergePairs ? 2 : 1)>=1000)){//limit is low due to PacBio long reads
 			
 			final boolean vic=Read.VALIDATE_IN_CONSTRUCTOR;
 			Read.VALIDATE_IN_CONSTRUCTOR=false;
 
 			if(verbose2){System.err.println("Loading a sketch multithreaded.");}
-			Sketch sketch=processReadsMT(ff.name(), mode, maxThreads, samplerate, reads, minEntropy, allowZeroSizeSketch);
+			Sketch sketch=processReadsMT(ff.name(), maxThreads, reads, mode, samplerate, minEntropy, minProb, minQual, allowZeroSizeSketch);
 			
 			Read.VALIDATE_IN_CONSTRUCTOR=vic;
 			
@@ -347,7 +368,7 @@ public final class SketchTool extends SketchObject {
 			if(sketch!=null && (sketch.length()>0 || allowZeroSizeSketch)){list.add(sketch);}
 			return list;
 		}
-		if(smm==null){smm=new SketchMakerMini(this, mode, minEntropy);}
+		if(smm==null){smm=new SketchMakerMini(this, mode, minEntropy, minProb, minQual);}
 		if(verbose2){System.err.println("Loading sketches via SMM.");}
 		ArrayList<Sketch> sketches=smm.toSketches(ff.name(), samplerate, reads);
 		if(verbose2){System.err.println("Loaded "+(sketches==null ? 0 : sketches.size())+" sketches via SMM.");}
@@ -366,6 +387,9 @@ public final class SketchTool extends SketchObject {
 		long spid=-1;
 		long imgID=-1;
 		long genomeSizeBases=0, genomeSizeKmers=0, genomeSequences=0;
+		long[] baseCounts=null;
+		byte[] ssu=null;
+		int ssuLen=0;
 		float probCorrect=-1;
 		String name=null, name0=null, fname=ff.simpleName();
 		LongList list=null;
@@ -376,127 +400,144 @@ public final class SketchTool extends SketchObject {
 		
 		for(byte[] line=bf.nextLine(); line!=null; line=bf.nextLine()){
 			if(line.length>0){
-//				System.err.println("Processing line "+new String(line));
+				//				System.err.println("Processing line "+new String(line));
 				if(line[0]=='#'){
-					lastHeader=line;
-					if(list!=null){
-						assert(list.size==list.array.length);
-						if(NUC || unsorted){
-							list.sort();
-							list.shrinkToUnique();
-						}else{
-							list.shrink();
-						}
-						if(list.size()>0 || allowZeroSizeSketch){
-							int[] countArray=countList==null ? null : countList.array;
-							Sketch sketch=new Sketch(list.array, countArray, taxID, imgID, genomeSizeBases, genomeSizeKmers, genomeSequences, probCorrect, name, name0, fname, meta);
-							sketch.spid=spid;
-							sketches.add(sketch);
-						}
-//						System.err.println("Made sketch "+sketch);
-					}
-					name=name0=null;
-					fname=ff.simpleName();
-					list=null;
-					countList=null;
-					meta=null;
-					sum=0;
-					taxID=-1;
-					imgID=-1;
-					genomeSizeBases=0;
-					genomeSizeKmers=0;
-					genomeSequences=0;
-					probCorrect=-1;
-					int k_sketch=defaultK;
-					int k2_sketch=0;
-					int hashVersion_sketch=1;
-					
-					if(line.length>1){
-						String[] split=new String(line, 1, line.length-1).split("\t");
-						for(String s : split){
-							final int colon=s.indexOf(':');
-							final String sub=s.substring(colon+1);
-							if(s.startsWith("SZ:") || s.startsWith("SIZE:")){//Sketch length
-								currentSketchSize=Integer.parseInt(sub);
-							}else if(s.startsWith("CD:")){//Coding
-								A48=HEX=NUC=delta=counts=unsorted=false;
-								
-								for(int i=0; i<sub.length(); i++){
-									char c=sub.charAt(i);
-									if(c=='A'){A48=true;}
-									else if(c=='H'){HEX=true;}
-									else if(c=='R'){A48=HEX=false;}
-									else if(c=='N'){NUC=true;}
-									else if(c=='D'){delta=true;}
-									else if(c=='C'){counts=true;}
-									else if(c=='U'){unsorted=true;}
-									else if(c=='M'){assert(aminoOrTranslate()) : "Amino sketch in non-amino mode: "+new String(line);}
-									else if(c=='8'){assert(amino8) : "Amino8 sketch in non-amino8 mode: "+new String(line);}
-									else{assert(false) : "Unknown coding symbol: "+c+"\t"+new String(line);}
-								}
-							}else if(s.startsWith("K:")){//Kmer length
-								if(sub.indexOf(',')>=0){
-									String[] subsplit=sub.split(",");
-									assert(subsplit.length==2) : "Bad header component "+s;
-									int x=Integer.parseInt(subsplit[0]);
-									int y=Integer.parseInt(subsplit[1]);
-									k_sketch=Tools.max(x, y);
-									k2_sketch=Tools.min(x, y);
-								}else{
-									k_sketch=Integer.parseInt(sub);
-									k2_sketch=0;
-								}
-							}else if(s.startsWith("H:")){//Hash version
-								hashVersion_sketch=Integer.parseInt(sub);
-							}else if(s.startsWith("GS:") || s.startsWith("GSIZE:")){//Genomic bases
-								genomeSizeBases=Long.parseLong(sub);
-							}else if(s.startsWith("GK:") || s.startsWith("GKMERS:")){//Genomic kmers
-								genomeSizeKmers=Long.parseLong(sub);
-							}else if(s.startsWith("GQ:")){
-								genomeSequences=Long.parseLong(sub);
-							}else if(s.startsWith("GE:")){//Genome size estimate kmers
-								//ignore
-							}else if(s.startsWith("PC:")){//Probability of correctness
-								probCorrect=Float.parseFloat(sub);
-							}else if(s.startsWith("ID:") || s.startsWith("TAXID:")){
-								taxID=Integer.parseInt(sub);
-							}else if(s.startsWith("IMG:")){
-								imgID=Long.parseLong(sub);
-							}else if(s.startsWith("SPID:")){
-								spid=Integer.parseInt(sub);
-							}else if(s.startsWith("NM:") || s.startsWith("NAME:")){
-								name=sub;
-							}else if(s.startsWith("FN:")){
-								fname=sub;
-							}else if(s.startsWith("NM0:")){
-								name0=sub;
-							}else if(s.startsWith("MT_")){
-								if(meta==null){meta=new ArrayList<String>(1);}
-								meta.add(s.substring(3));
+					if(ssuLen>0){
+						assert(Tools.startsWith(line, "#SSU:"));
+						assert(line.length==ssuLen+5) : ssuLen+", "+line.length+"\n"+new String(line)+"\n";
+						assert(ssu==null);
+						ssu=KillSwitch.copyOfRange(line, 5, line.length);
+						assert(ssu.length==ssuLen);
+						ssuLen=0;
+					}else{
+						lastHeader=line;
+						if(list!=null){
+							assert(list.size==list.array.length);
+							if(NUC || unsorted){
+								list.sort();
+								list.shrinkToUnique();
 							}else{
-								assert(false) : "Unsupported header tag "+s;
+								list.shrink();
+							}
+							if(list.size()>0 || allowZeroSizeSketch){
+								int[] keyCounts=countList==null ? null : countList.array;
+								Sketch sketch=new Sketch(list.array, keyCounts, baseCounts, ssu, taxID, imgID, 
+										genomeSizeBases, genomeSizeKmers, genomeSequences, probCorrect, name, name0, fname, meta);
+								sketch.spid=spid;
+								sketches.add(sketch);
+							}
+							//						System.err.println("Made sketch "+sketch);
+						}
+						name=name0=null;
+						fname=ff.simpleName();
+						list=null;
+						countList=null;
+						meta=null;
+						baseCounts=null;
+						ssu=null;
+						ssuLen=0;
+						sum=0;
+						taxID=-1;
+						imgID=-1;
+						genomeSizeBases=0;
+						genomeSizeKmers=0;
+						genomeSequences=0;
+						probCorrect=-1;
+						int k_sketch=defaultK;
+						int k2_sketch=0;
+						int hashVersion_sketch=1;
+
+						if(line.length>1){
+							String[] split=new String(line, 1, line.length-1).split("\t");
+							for(String s : split){
+								final int colon=s.indexOf(':');
+								final String sub=s.substring(colon+1);
+								if(s.startsWith("SZ:") || s.startsWith("SIZE:")){//Sketch length
+									currentSketchSize=Integer.parseInt(sub);
+								}else if(s.startsWith("CD:")){//Coding
+									A48=HEX=NUC=delta=counts=unsorted=false;
+
+									for(int i=0; i<sub.length(); i++){
+										char c=sub.charAt(i);
+										if(c=='A'){A48=true;}
+										else if(c=='H'){HEX=true;}
+										else if(c=='R'){A48=HEX=false;}
+										else if(c=='N'){NUC=true;}
+										else if(c=='D'){delta=true;}
+										else if(c=='C'){counts=true;}
+										else if(c=='U'){unsorted=true;}
+										else if(c=='M'){assert(aminoOrTranslate()) : "Amino sketch in non-amino mode: "+new String(line);}
+										else if(c=='8'){assert(amino8) : "Amino8 sketch in non-amino8 mode: "+new String(line);}
+										else{assert(false) : "Unknown coding symbol: "+c+"\t"+new String(line);}
+									}
+								}else if(s.startsWith("K:")){//Kmer length
+									if(sub.indexOf(',')>=0){
+										String[] subsplit=sub.split(",");
+										assert(subsplit.length==2) : "Bad header component "+s;
+										int x=Integer.parseInt(subsplit[0]);
+										int y=Integer.parseInt(subsplit[1]);
+										k_sketch=Tools.max(x, y);
+										k2_sketch=Tools.min(x, y);
+									}else{
+										k_sketch=Integer.parseInt(sub);
+										k2_sketch=0;
+									}
+								}else if(s.startsWith("H:")){//Hash version
+									hashVersion_sketch=Integer.parseInt(sub);
+								}else if(s.startsWith("BC:") || s.startsWith("BASECOUNTS:")){//ACGTN
+									baseCounts=Tools.parseLongArray(sub);
+								}else if(s.startsWith("GS:") || s.startsWith("GSIZE:")){//Genomic bases
+									genomeSizeBases=Long.parseLong(sub);
+								}else if(s.startsWith("GK:") || s.startsWith("GKMERS:")){//Genomic kmers
+									genomeSizeKmers=Long.parseLong(sub);
+								}else if(s.startsWith("GQ:")){
+									genomeSequences=Long.parseLong(sub);
+								}else if(s.startsWith("GE:")){//Genome size estimate kmers
+									//ignore
+								}else if(s.startsWith("PC:")){//Probability of correctness
+									probCorrect=Float.parseFloat(sub);
+								}else if(s.startsWith("ID:") || s.startsWith("TAXID:")){
+									taxID=Integer.parseInt(sub);
+								}else if(s.startsWith("IMG:")){
+									imgID=Long.parseLong(sub);
+								}else if(s.startsWith("SPID:")){
+									spid=Integer.parseInt(sub);
+								}else if(s.startsWith("NM:") || s.startsWith("NAME:")){
+									name=sub;
+								}else if(s.startsWith("FN:")){
+									fname=sub;
+								}else if(s.startsWith("NM0:")){
+									name0=sub;
+								}else if(s.startsWith("MT_")){
+									if(meta==null){meta=new ArrayList<String>(1);}
+									meta.add(s.substring(3));
+								}else if(s.startsWith("SSU:")){
+									ssuLen=Integer.parseInt(sub);
+								}else{
+									assert(false) : "Unsupported header tag "+s;
+								}
 							}
 						}
-					}
-					
-					if(KILL_OK){
-						if(k_sketch!=k && !NUC){KillSwitch.kill("Sketch kmer length "+k_sketch+
-								" differs from loaded kmer length "+k+"\n"+new String(line)+"\nfile: "+ff.name());}
-						if(k2_sketch!=k2 && !NUC){KillSwitch.kill("Sketch kmer length "+k_sketch+","+k2_sketch+
-								" differs from loaded kmer length "+k+","+k2+"\n"+new String(line)+"\nfile: "+ff.name());}
-						if(hashVersion_sketch!=HASH_VERSION && !NUC){KillSwitch.kill("Sketch hash version "+hashVersion_sketch+
-								" differs from loaded hash version "+HASH_VERSION+".\n"
-										+ "You may need to download the latest version of BBTools.\n"+new String(line)+"\nfile: "+ff.name());}
-					}else{//Potential hang
-						assert(k_sketch==k || NUC) : "Sketch kmer length "+k_sketch+" differs from loaded kmer length "+k+"\n"+new String(line);
-						assert(k2_sketch==k2 || NUC) : "Sketch kmer length "+k_sketch+","+k2_sketch+" differs from loaded kmer length "+k+","+k2+"\n"+new String(line);
-						assert(hashVersion_sketch==HASH_VERSION || NUC) : "Sketch hash version "+hashVersion_sketch+
-						" differs from loaded hash version "+HASH_VERSION+".\n"
-								+ "You may need to download the latest version of BBTools.\n"+new String(line)+"\n";
-					}
-					if(currentSketchSize>0 || allowZeroSizeSketch){
-						list=new LongList(Tools.max(1, currentSketchSize));
-						if(counts){countList=new IntList(Tools.max(1, currentSketchSize));}
+
+						if(KILL_OK){
+							if(k_sketch!=k && !NUC){KillSwitch.kill("Sketch kmer length "+k_sketch+
+									" differs from loaded kmer length "+k+"\n"+new String(line)+"\nfile: "+ff.name());}
+							if(k2_sketch!=k2 && !NUC){KillSwitch.kill("Sketch kmer length "+k_sketch+","+k2_sketch+
+									" differs from loaded kmer length "+k+","+k2+"\n"+new String(line)+"\nfile: "+ff.name());}
+							if(hashVersion_sketch!=HASH_VERSION && !NUC){KillSwitch.kill("Sketch hash version "+hashVersion_sketch+
+									" differs from loaded hash version "+HASH_VERSION+".\n"
+									+ "You may need to download the latest version of BBTools.\n"+new String(line)+"\nfile: "+ff.name());}
+						}else{//Potential hang
+							assert(k_sketch==k || NUC) : "Sketch kmer length "+k_sketch+" differs from loaded kmer length "+k+"\n"+new String(line);
+							assert(k2_sketch==k2 || NUC) : "Sketch kmer length "+k_sketch+","+k2_sketch+" differs from loaded kmer length "+k+","+k2+"\n"+new String(line);
+							assert(hashVersion_sketch==HASH_VERSION || NUC) : "Sketch hash version "+hashVersion_sketch+
+							" differs from loaded hash version "+HASH_VERSION+".\n"
+							+ "You may need to download the latest version of BBTools.\n"+new String(line)+"\n";
+						}
+						if(currentSketchSize>0 || allowZeroSizeSketch){
+							list=new LongList(Tools.max(1, currentSketchSize));
+							if(counts){countList=new IntList(Tools.max(1, currentSketchSize));}
+						}
 					}
 				}else{
 					long x=(counts ? Sketch.parseA48C(line, countList) : A48 ? Sketch.parseA48(line) :
@@ -519,8 +560,9 @@ public final class SketchTool extends SketchObject {
 			}else{
 				list.shrink();
 			}
-			int[] countArray=countList==null ? null : countList.array;
-			Sketch sketch=new Sketch(list.array, countArray, taxID, imgID, genomeSizeBases, genomeSizeKmers, genomeSequences, probCorrect, name, name0, fname, meta);
+			int[] keyCounts=countList==null ? null : countList.array;
+			Sketch sketch=new Sketch(list.array, keyCounts, baseCounts, ssu, taxID, imgID, 
+					genomeSizeBases, genomeSizeKmers, genomeSequences, probCorrect, name, name0, fname, meta);
 			sketch.spid=spid;
 			sketches.add(sketch);
 		}
@@ -551,6 +593,9 @@ public final class SketchTool extends SketchObject {
 		long spid=-1;
 		long imgID=-1;
 		long genomeSizeBases=0, genomeSizeKmers=0, genomeSequences=0;
+		long[] baseCounts=null;
+		byte[] ssu=null;
+		int ssuLen=0;
 		float probCorrect=-1;
 		String name=null, name0=null, fname=ff.simpleName();
 		LongList list=null;
@@ -575,128 +620,145 @@ public final class SketchTool extends SketchObject {
 				}
 				start++;
 				
-//				byte[] line=lastHeader=bb.toBytes();
-				if(list!=null){
-					
-					//This assertion fails sometimes for Silva per-sequence mode, but it's not important
-//					assert(list.size==list.array.length) : list.size+", "+list.array.length+(lastHeader==null ? "" : ", "+new String(lastHeader));
-					
-					if(NUC || unsorted){
-						list.sort();
-						list.shrinkToUnique();
-					}else{
-						list.shrink();
-					}
-					if(list.size()>0 || allowZeroSizeSketch){
-						int[] countArray=countList==null ? null : countList.array;
-						Sketch sketch=new Sketch(list.array, countArray, taxID, imgID, genomeSizeBases, genomeSizeKmers, genomeSequences, probCorrect, name, name0, fname, meta);
-						sketch.spid=spid;
-						sketches.add(sketch);
-					}
-					//						System.err.println("Made sketch "+sketch);
-				}
-				name=name0=null;
-				fname=ff.simpleName();
-				list=null;
-				countList=null;
-				meta=null;
-				sum=0;
-				taxID=-1;
-				imgID=-1;
-				genomeSizeBases=0;
-				genomeSizeKmers=0;
-				genomeSequences=0;
-				probCorrect=-1;
-				int k_sketch=defaultK;
-				int k2_sketch=0;
-				int hashVersion_sketch=1;
+				if(ssuLen>0){
+					assert(bb.length()==ssuLen+5) : ssuLen+", "+bb.length()+"\n"+bb+"\n";
+					assert(ssu==null);
+					ssu=bb.toBytes(5, bb.length());
+					assert(ssu.length==ssuLen);
+					ssuLen=0;
+				}else{
 
-				if(bb.length>1){
-					String[] split=new String(bb.array, 1, bb.length-1).split("\t");
-					for(String s : split){
-						final int colon=s.indexOf(':');
-						final String sub=s.substring(colon+1);
-						if(s.startsWith("SZ:") || s.startsWith("SIZE:")){//Sketch length
-							currentSketchSize=Integer.parseInt(sub);
-						}else if(s.startsWith("CD:")){//Coding
-							A48=HEX=NUC=delta=counts=unsorted=false;
+					//				byte[] line=lastHeader=bb.toBytes();
+					if(list!=null){
 
-							for(int i=0; i<sub.length(); i++){
-								char c=sub.charAt(i);
-								if(c=='A'){A48=true;}
-								else if(c=='H'){HEX=true;}
-								else if(c=='R'){A48=HEX=false;}
-								else if(c=='N'){NUC=true;}
-								else if(c=='D'){delta=true;}
-								else if(c=='C'){counts=true;}
-								else if(c=='U'){unsorted=true;}
-								else if(c=='M'){assert(aminoOrTranslate()) : "Amino sketch in non-amino mode: "+bb;}
-								else if(c=='8'){assert(amino8) : "Amino8 sketch in non-amino8 mode: "+bb;}
-								else{assert(false) : "Unknown coding symbol: "+c+"\t"+bb;}
-							}
-						}else if(s.startsWith("K:")){//Kmer length
-							if(sub.indexOf(',')>=0){
-								String[] subsplit=sub.split(",");
-								assert(subsplit.length==2) : "Bad header component "+s;
-								int x=Integer.parseInt(subsplit[0]);
-								int y=Integer.parseInt(subsplit[1]);
-								k_sketch=Tools.max(x, y);
-								k2_sketch=Tools.min(x, y);
-							}else{
-								k_sketch=Integer.parseInt(sub);
-								k2_sketch=0;
-							}
-						}else if(s.startsWith("H:")){//Hash version
-							hashVersion_sketch=Integer.parseInt(sub);
-						}else if(s.startsWith("GS:") || s.startsWith("GSIZE:")){//Genomic bases
-							genomeSizeBases=Long.parseLong(sub);
-						}else if(s.startsWith("GK:") || s.startsWith("GKMERS:")){//Genomic kmers
-							genomeSizeKmers=Long.parseLong(sub);
-						}else if(s.startsWith("GQ:")){
-							genomeSequences=Long.parseLong(sub);
-						}else if(s.startsWith("GE:")){//Genome size estimate kmers
-							//ignore
-						}else if(s.startsWith("PC:")){//Probability of correctness
-							probCorrect=Float.parseFloat(sub);
-						}else if(s.startsWith("ID:") || s.startsWith("TAXID:")){
-							taxID=Integer.parseInt(sub);
-						}else if(s.startsWith("IMG:")){
-							imgID=Long.parseLong(sub);
-						}else if(s.startsWith("SPID:")){
-							spid=Integer.parseInt(sub);
-						}else if(s.startsWith("NM:") || s.startsWith("NAME:")){
-							name=sub;
-						}else if(s.startsWith("FN:")){
-							fname=sub;
-						}else if(s.startsWith("NM0:")){
-							name0=sub;
-						}else if(s.startsWith("MT_")){
-							if(meta==null){meta=new ArrayList<String>(1);}
-							meta.add(s.substring(3));
+						//This assertion fails sometimes for Silva per-sequence mode, but it's not important
+						//					assert(list.size==list.array.length) : list.size+", "+list.array.length+(lastHeader==null ? "" : ", "+new String(lastHeader));
+
+						if(NUC || unsorted){
+							list.sort();
+							list.shrinkToUnique();
 						}else{
-							assert(false) : "Unsupported header tag "+s;
+							list.shrink();
+						}
+						if(list.size()>0 || allowZeroSizeSketch){
+							int[] keyCounts=countList==null ? null : countList.array;
+							Sketch sketch=new Sketch(list.array, keyCounts, baseCounts, ssu, taxID, imgID, 
+									genomeSizeBases, genomeSizeKmers, genomeSequences, probCorrect, name, name0, fname, meta);
+							sketch.spid=spid;
+							sketches.add(sketch);
+						}
+						//						System.err.println("Made sketch "+sketch);
+					}
+					name=name0=null;
+					fname=ff.simpleName();
+					list=null;
+					countList=null;
+					meta=null;
+					baseCounts=null;
+					ssu=null;
+					ssuLen=0;
+					sum=0;
+					taxID=-1;
+					imgID=-1;
+					genomeSizeBases=0;
+					genomeSizeKmers=0;
+					genomeSequences=0;
+					probCorrect=-1;
+					int k_sketch=defaultK;
+					int k2_sketch=0;
+					int hashVersion_sketch=1;
+
+					if(bb.length>1){
+						String[] split=new String(bb.array, 1, bb.length-1).split("\t");
+						for(String s : split){
+							final int colon=s.indexOf(':');
+							final String sub=s.substring(colon+1);
+							if(s.startsWith("SZ:") || s.startsWith("SIZE:")){//Sketch length
+								currentSketchSize=Integer.parseInt(sub);
+							}else if(s.startsWith("CD:")){//Coding
+								A48=HEX=NUC=delta=counts=unsorted=false;
+
+								for(int i=0; i<sub.length(); i++){
+									char c=sub.charAt(i);
+									if(c=='A'){A48=true;}
+									else if(c=='H'){HEX=true;}
+									else if(c=='R'){A48=HEX=false;}
+									else if(c=='N'){NUC=true;}
+									else if(c=='D'){delta=true;}
+									else if(c=='C'){counts=true;}
+									else if(c=='U'){unsorted=true;}
+									else if(c=='M'){assert(aminoOrTranslate()) : "Amino sketch in non-amino mode: "+bb;}
+									else if(c=='8'){assert(amino8) : "Amino8 sketch in non-amino8 mode: "+bb;}
+									else{assert(false) : "Unknown coding symbol: "+c+"\t"+bb;}
+								}
+							}else if(s.startsWith("K:")){//Kmer length
+								if(sub.indexOf(',')>=0){
+									String[] subsplit=sub.split(",");
+									assert(subsplit.length==2) : "Bad header component "+s;
+									int x=Integer.parseInt(subsplit[0]);
+									int y=Integer.parseInt(subsplit[1]);
+									k_sketch=Tools.max(x, y);
+									k2_sketch=Tools.min(x, y);
+								}else{
+									k_sketch=Integer.parseInt(sub);
+									k2_sketch=0;
+								}
+							}else if(s.startsWith("H:")){//Hash version
+								hashVersion_sketch=Integer.parseInt(sub);
+							}else if(s.startsWith("BC:") || s.startsWith("BASECOUNTS:")){//ACGTN
+								baseCounts=Tools.parseLongArray(sub);
+							}else if(s.startsWith("GS:") || s.startsWith("GSIZE:")){//Genomic bases
+								genomeSizeBases=Long.parseLong(sub);
+							}else if(s.startsWith("GK:") || s.startsWith("GKMERS:")){//Genomic kmers
+								genomeSizeKmers=Long.parseLong(sub);
+							}else if(s.startsWith("GQ:")){
+								genomeSequences=Long.parseLong(sub);
+							}else if(s.startsWith("GE:")){//Genome size estimate kmers
+								//ignore
+							}else if(s.startsWith("PC:")){//Probability of correctness
+								probCorrect=Float.parseFloat(sub);
+							}else if(s.startsWith("ID:") || s.startsWith("TAXID:")){
+								taxID=Integer.parseInt(sub);
+							}else if(s.startsWith("IMG:")){
+								imgID=Long.parseLong(sub);
+							}else if(s.startsWith("SPID:")){
+								spid=Integer.parseInt(sub);
+							}else if(s.startsWith("NM:") || s.startsWith("NAME:")){
+								name=sub;
+							}else if(s.startsWith("FN:")){
+								fname=sub;
+							}else if(s.startsWith("NM0:")){
+								name0=sub;
+							}else if(s.startsWith("MT_")){
+								if(meta==null){meta=new ArrayList<String>(1);}
+								meta.add(s.substring(3));
+							}else if(s.startsWith("SSU:")){
+								ssuLen=Integer.parseInt(sub);
+							}else{
+								assert(false) : "Unsupported header tag "+s;
+							}
 						}
 					}
-				}
-				
-				if(KILL_OK){
-					if(k_sketch!=k && !NUC){KillSwitch.kill("Sketch kmer length "+k_sketch+
-							" differs from loaded kmer length "+k+"\n"+bb+"\nfile: "+ff.name());}
-					if(k2_sketch!=k2 && !NUC){KillSwitch.kill("Sketch kmer length "+k_sketch+","+k2_sketch+
-							" differs from loaded kmer length "+k+","+k2+"\n"+bb+"\nfile: "+ff.name());}
-					if(hashVersion_sketch!=HASH_VERSION && !NUC){KillSwitch.kill("Sketch hash version "+hashVersion_sketch+
-							" differs from loaded hash version "+HASH_VERSION+".\n"
-									+ "You may need to download the latest version of BBTools.\nfile: "+ff.name());}
-				}else{//Potential hang
-					assert(k_sketch==k || NUC) : "Sketch kmer length "+k_sketch+" differs from loaded kmer length "+k+"\n"+bb;
-					assert(k2_sketch==k2 || NUC) : "Sketch kmer length "+k_sketch+","+k2_sketch+" differs from loaded kmer length "+k+","+k2+"\n"+bb;
-					assert(hashVersion_sketch==HASH_VERSION || NUC) : "Sketch hash version "+hashVersion_sketch+
-					" differs from loaded hash version "+HASH_VERSION+".\n"
-							+ "You may need to download the latest version of BBTools.\nfile: "+ff.name();
-				}
-				if(currentSketchSize>0 || allowZeroSizeSketch){
-					list=new LongList(Tools.max(1, currentSketchSize));
-					if(counts){countList=new IntList(Tools.max(1, currentSketchSize));}
+
+					if(KILL_OK){
+						if(k_sketch!=k && !NUC){KillSwitch.kill("Sketch kmer length "+k_sketch+
+								" differs from loaded kmer length "+k+"\n"+bb+"\nfile: "+ff.name());}
+						if(k2_sketch!=k2 && !NUC){KillSwitch.kill("Sketch kmer length "+k_sketch+","+k2_sketch+
+								" differs from loaded kmer length "+k+","+k2+"\n"+bb+"\nfile: "+ff.name());}
+						if(hashVersion_sketch!=HASH_VERSION && !NUC){KillSwitch.kill("Sketch hash version "+hashVersion_sketch+
+								" differs from loaded hash version "+HASH_VERSION+".\n"
+								+ "You may need to download the latest version of BBTools.\nfile: "+ff.name());}
+					}else{//Potential hang
+						assert(k_sketch==k || NUC) : "Sketch kmer length "+k_sketch+" differs from loaded kmer length "+k+"\n"+bb;
+						assert(k2_sketch==k2 || NUC) : "Sketch kmer length "+k_sketch+","+k2_sketch+" differs from loaded kmer length "+k+","+k2+"\n"+bb;
+						assert(hashVersion_sketch==HASH_VERSION || NUC) : "Sketch hash version "+hashVersion_sketch+
+						" differs from loaded hash version "+HASH_VERSION+".\n"
+						+ "You may need to download the latest version of BBTools.\nfile: "+ff.name();
+					}
+					if(currentSketchSize>0 || allowZeroSizeSketch){
+						list=new LongList(Tools.max(1, currentSketchSize));
+						if(counts){countList=new IntList(Tools.max(1, currentSketchSize));}
+					}
 				}
 			}else{
 				bb.clear();
@@ -743,8 +805,9 @@ public final class SketchTool extends SketchObject {
 			}else{
 				list.shrink();
 			}
-			int[] countArray=countList==null ? null : countList.array;
-			Sketch sketch=new Sketch(list.array, countArray, taxID, imgID, genomeSizeBases, genomeSizeKmers, genomeSequences, probCorrect, name, name0, fname, meta);
+			int[] keyCounts=countList==null ? null : countList.array;
+			Sketch sketch=new Sketch(list.array, keyCounts, baseCounts, ssu, taxID, imgID, 
+					genomeSizeBases, genomeSizeKmers, genomeSequences, probCorrect, name, name0, fname, meta);
 			sketch.spid=spid;
 			sketches.add(sketch);
 		}
@@ -768,6 +831,9 @@ public final class SketchTool extends SketchObject {
 		long spid=-1;
 		long imgID=-1;
 		long genomeSizeBases=0, genomeSizeKmers=0, genomeSequences=0;
+		long[] baseCounts=null;
+		byte[] ssu=null;
+		int ssuLen=0;
 		float probCorrect=-1;
 		String name=null, name0=null, fname=null;
 		LongList list=null;
@@ -782,6 +848,13 @@ public final class SketchTool extends SketchObject {
 				if(line.charAt(0)=='#'){
 					if(line.length()>1 && line.charAt(1)=='#'){
 						//ignore
+					}else if(ssuLen>0){
+						assert(line.startsWith("#SSU:"));
+						assert(line.length()==ssuLen+5) : ssuLen+", "+line.length()+"\n"+line+"\n";
+						assert(ssu==null);
+						ssu=KillSwitch.copyOfRange(line.getBytes(), 5, line.length());
+						assert(ssu.length==ssuLen);
+						ssuLen=0;
 					}else{
 						if(list!=null){
 							assert(list.size==list.array.length);
@@ -792,8 +865,9 @@ public final class SketchTool extends SketchObject {
 								list.shrink();
 							}
 							if(list.size()>0){
-								int[] countArray=countList==null ? null : countList.array;
-								Sketch sketch=new Sketch(list.array, countArray, taxID, imgID, genomeSizeBases, genomeSizeKmers, genomeSequences, probCorrect, name, name0, fname, meta);
+								int[] keyCounts=countList==null ? null : countList.array;
+								Sketch sketch=new Sketch(list.array, keyCounts, baseCounts, ssu, taxID, imgID, 
+										genomeSizeBases, genomeSizeKmers, genomeSequences, probCorrect, name, name0, fname, meta);
 								sketch.spid=spid;
 								sketches.add(sketch);
 							}
@@ -804,6 +878,9 @@ public final class SketchTool extends SketchObject {
 						list=null;
 						countList=null;
 						meta=null;
+						baseCounts=null;
+						ssu=null;
+						ssuLen=0;
 						sum=0;
 						taxID=-1;
 						imgID=-1;
@@ -853,6 +930,8 @@ public final class SketchTool extends SketchObject {
 									}
 								}else if(s.startsWith("H:")){//Hash version
 									hashVersion_sketch=Integer.parseInt(sub);
+								}else if(s.startsWith("BC:") || s.startsWith("BASECOUNTS:")){//ACGTN
+									baseCounts=Tools.parseLongArray(sub);
 								}else if(s.startsWith("GS:") || s.startsWith("GSIZE:")){//Genomic bases
 									genomeSizeBases=Long.parseLong(sub);
 								}else if(s.startsWith("GK:") || s.startsWith("GKMERS:")){//Genomic kmers
@@ -878,6 +957,8 @@ public final class SketchTool extends SketchObject {
 								}else if(s.startsWith("MT_")){
 									if(meta==null){meta=new ArrayList<String>(1);}
 									meta.add(s.substring(3));
+								}else if(s.startsWith("SSU:")){
+									ssuLen=Integer.parseInt(sub);
 								}else{
 									assert(false) : "Unsupported header tag "+s;
 								}
@@ -924,8 +1005,9 @@ public final class SketchTool extends SketchObject {
 			}else{
 				list.shrink();
 			}
-			int[] countArray=countList==null ? null : countList.array;
-			Sketch sketch=new Sketch(list.array, countArray, taxID, imgID, genomeSizeBases, genomeSizeKmers, genomeSequences, probCorrect, name, name0, fname, meta);
+			int[] keyCounts=countList==null ? null : countList.array;
+			Sketch sketch=new Sketch(list.array, keyCounts, baseCounts, ssu, taxID, imgID, 
+					genomeSizeBases, genomeSizeKmers, genomeSequences, probCorrect, name, name0, fname, meta);
 			sketch.spid=spid;
 			sketches.add(sketch);
 		}
@@ -940,10 +1022,10 @@ public final class SketchTool extends SketchObject {
 	
 	private class LoadThread extends Thread{
 		
-		public LoadThread(ConcurrentLinkedQueue<StringNum> queue_, int mode_, float samplerate_, long reads_, float minEntropy) {
+		public LoadThread(ConcurrentLinkedQueue<StringNum> queue_, int mode_, float samplerate_, long reads_, float minEntropy, float minProb, byte minQual) {
 			queue=queue_;
 			list=new ArrayList<Sketch>();
-			smm=new SketchMakerMini(SketchTool.this, mode_, minEntropy);
+			smm=new SketchMakerMini(SketchTool.this, mode_, minEntropy, minProb, minQual);
 			samplerate=samplerate_;
 			reads=reads_;
 		}
@@ -954,7 +1036,7 @@ public final class SketchTool extends SketchObject {
 			for(StringNum sn=queue.poll(); sn!=null; sn=queue.poll()){
 				ArrayList<Sketch> temp=null;
 				try {
-					temp=loadSketchesFromFile(sn.s, smm, smm.mode, 1, samplerate, reads, smm.minEntropy(), false);
+					temp=loadSketchesFromFile(sn.s, smm, 1, reads, smm.mode, samplerate, smm.minEntropy(), smm.minProb(), smm.minQual(), false);
 				} catch (Throwable e) {
 					System.err.println("Failure loading "+sn+":\n"+e);
 					e.printStackTrace();
@@ -1011,9 +1093,9 @@ public final class SketchTool extends SketchObject {
 	
 	private class LoadThread2 extends Thread{
 		
-		LoadThread2(ConcurrentReadInputStream cris_, float minEntropy){
+		LoadThread2(ConcurrentReadInputStream cris_, float minEntropy, float minProb, byte minQual){
 			cris=cris_;
-			smm=new SketchMakerMini(SketchTool.this, ONE_SKETCH, minEntropy);
+			smm=new SketchMakerMini(SketchTool.this, ONE_SKETCH, minEntropy, minProb, minQual);
 		}
 		
 		@Override
@@ -1095,21 +1177,29 @@ public final class SketchTool extends SketchObject {
 	/*----------------         Read Loading         ----------------*/
 	/*--------------------------------------------------------------*/
 	
-	public Sketch processReadsMT(String fname, int mode, int maxThreads, float samplerate, long reads, float minEntropy, boolean allowZeroSizeSketch){
+	public Sketch processReadsMT(String fname, int maxThreads, long reads, int mode, float samplerate,
+			float minEntropy, float minProb, byte minQual, boolean allowZeroSizeSketch){
 		if(fname.indexOf('#')>=0 && FileFormat.isFastq(ReadWrite.rawExtension(fname)) && !new File(fname).exists()){
-			return processReadsMT(fname.replaceFirst("#", "1"), fname.replaceFirst("#", "2"), mode, maxThreads, samplerate, reads, minEntropy, allowZeroSizeSketch);
+			return processReadsMT(fname.replaceFirst("#", "1"), fname.replaceFirst("#", "2"), maxThreads, reads, mode, samplerate,
+					minEntropy, minProb, minQual, allowZeroSizeSketch);
 		}else{
-			return processReadsMT(fname, null, mode, maxThreads, samplerate, reads, minEntropy, allowZeroSizeSketch);
+			return processReadsMT(fname, null, maxThreads, reads, mode, samplerate, minEntropy, minProb, minQual, allowZeroSizeSketch);
 		}
 	}
 	
-	public Sketch processReadsMT(String fname1, String fname2, int mode, int maxThreads, float samplerate, long reads, float minEntropy, boolean allowZeroSizeSketch){
+	public Sketch processReadsMT(String fname1, String fname2, int maxThreads, long reads, int mode, float samplerate,
+			float minEntropy, float minProb, byte minQual, boolean allowZeroSizeSketch){
 		final FileFormat ffin1=FileFormat.testInput(fname1, FileFormat.FASTQ, null, true, true);
 		final FileFormat ffin2=FileFormat.testInput(fname2, FileFormat.FASTQ, null, true, true);
-		return processReadsMT(ffin1, ffin2, mode, maxThreads, samplerate, reads, minEntropy, allowZeroSizeSketch);
+		return processReadsMT(ffin1, ffin2, maxThreads, reads, mode, samplerate, minEntropy, minProb, minQual, allowZeroSizeSketch);
 	}
 	
-	public Sketch processReadsMT(FileFormat ffin1, FileFormat ffin2, int mode, int maxThreads, float samplerate, long reads, float minEntropy, boolean allowZeroSizeSketch){
+	public Sketch processReadsMT(FileFormat ffin1, FileFormat ffin2, int maxThreads, long reads, int mode, DisplayParams params, boolean allowZeroSizeSketch){
+		return processReadsMT(ffin1, ffin2, maxThreads, reads, mode, params.samplerate, params.minEntropy, params.minProb, params.minQual, allowZeroSizeSketch);
+	}
+	
+	public Sketch processReadsMT(FileFormat ffin1, FileFormat ffin2, int maxThreads, long reads, int mode, float samplerate,
+			float minEntropy, float minProb, byte minQual, boolean allowZeroSizeSketch){
 		assert(mode==ONE_SKETCH || mode==PER_FILE);
 		final boolean compressed=ffin1.compressed();
 		
@@ -1126,13 +1216,14 @@ public final class SketchTool extends SketchObject {
 //			if(verbose){outstream.println("Started cris");}
 		}
 		
-		final int threads=Tools.min(maxThreads,
-				(compressed ? 1 : 2)*(ffin2==null ? 4 : 8)*(mergePairs ? 3 : minEntropy>0 ? 2 : 1));
+		//TODO: bgzip actually decompresses fast.
+		final int threads=(int)Tools.min(maxThreads,
+				1.75f*(compressed ? 1 : 2)*(ffin2==null ? 4 : 8)*(mergePairs ? 3 : minEntropy>0 ? 2 : 1));
 		
 		if(verbose2){System.err.println("Starting "+threads+" load threads.");}
 		ArrayList<LoadThread2> list=new ArrayList<LoadThread2>(threads);
 		for(int i=0; i<threads; i++){
-			list.add(new LoadThread2(cris, minEntropy));
+			list.add(new LoadThread2(cris, minEntropy, minProb, minQual));
 			list.get(i).start();
 		}
 		

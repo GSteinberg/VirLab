@@ -7,16 +7,21 @@ import java.io.PrintStream;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicLongArray;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import com.sun.net.httpserver.HttpsServer;
 
 import dna.Data;
 import fileIO.ReadWrite;
@@ -45,6 +50,7 @@ import structures.IntList;
 import structures.StringNum;
 
 /**
+ * Server for taxonomy or Sketch queries.
  * @author Shijie Yao, Brian Bushnell
  * @date Dec 13, 2016
  *
@@ -81,12 +87,15 @@ public class TaxServer {
 		TaxFilter.printNodesAdded=false;
 		TaxFilter.REQUIRE_PRESENT=false; //Due to missing entries in TaxDump.
 		Read.JUNK_MODE=Read.FIX_JUNK;
+		SketchObject.compareSelf=true;
 		
 		int port_=3068; //Taxonomy server
 		String killCode_=null;
 		boolean allowRemoteFileAccess_=false;
 		boolean allowLocalHost_=false;
 		String addressPrefix_="128."; //LBL
+		long defaultSketchReads=200000;
+		boolean https=false;
 		
 		//Create a parser object
 		Parser parser=new Parser();
@@ -104,6 +113,12 @@ public class TaxServer {
 				verbose=Tools.parseBoolean(b);
 			}else if(a.equals("verbose2")){
 				verbose2=SketchObject.verbose2=Tools.parseBoolean(b);
+			}else if(a.equals("html")){
+				useHtml=Tools.parseBoolean(b);
+			}else if(a.equals("https")){
+				https=Tools.parseBoolean(b);
+			}else if(a.equals("http")){
+				https=!Tools.parseBoolean(b);
 			}else if(a.equals("table") || a.equals("gi") || a.equals("gitable")){
 				giTableFile=b;
 			}else if(a.equals("tree") || a.equals("taxtree")){
@@ -131,6 +146,8 @@ public class TaxServer {
 				oldAddress=b;
 			}else if(a.equals("sketchonly")){
 				sketchOnly=Tools.parseBoolean(b);
+			}else if(a.equals("sketchreads")){
+				defaultSketchReads=Tools.parseKMG(b);
 			}else if(a.equals("handlerthreads")){
 				handlerThreads=Integer.parseInt(b);
 			}else if(a.equals("sketchthreads") || a.equals("sketchcomparethreads")){
@@ -147,6 +164,8 @@ public class TaxServer {
 				printHeaders=Tools.parseBoolean(b);
 			}else if(a.equals("countqueries")){
 				countQueries=Tools.parseBoolean(b);
+			}else if(a.equals("clear") || a.equals("clearmem")){
+				clearMem=Tools.parseBoolean(b);
 			}else if(a.equals("dbname")){
 				SketchObject.defaultParams.dbName=b;
 			}else if(a.equals("allowremotefileaccess")){
@@ -200,7 +219,7 @@ public class TaxServer {
 		SketchObject.postParse();
 		
 		if(sketchOnly){
-			hashNames=false;
+//			hashNames=false;
 			giTableFile=null;
 			accessionFile=null;
 			imgFile=null;
@@ -214,14 +233,15 @@ public class TaxServer {
 		addressPrefix=addressPrefix_;
 		
 		//Fill some data objects
-		USAGE=makeUsage();
+		USAGE=makeUsagePrefix();
+		rawHtml=(useHtml ? loadRawHtml() : null);
 		typeMap=makeTypeMap();
 		commonMap=makeCommonMap();
 		
 		//Load the GI table
 		if(giTableFile!=null){
 			outstream.println("Loading gi table.");
-			GiToNcbi.initialize(giTableFile);
+			GiToTaxid.initialize(giTableFile);
 		}
 		
 		//Load the taxTree
@@ -270,14 +290,17 @@ public class TaxServer {
 		if(hasSketches){
 			outstream.println("Loading sketches.");
 			Timer t=new Timer();
-			searcher.loadReferences(SketchObject.PER_TAXA, 1, SketchObject.defaultParams.minEntropy);
+			searcher.loadReferences(SketchObject.PER_TAXA, SketchObject.defaultParams);
 			t.stopAndPrint();
 //			System.gc();
 		}
 		
 		SketchObject.allowMultithreadedFastq=(maxConcurrentSketchLoadThreads>1);
+		SketchObject.defaultParams.maxReads=defaultSketchReads;
+		ReadWrite.USE_UNPIGZ=false;
+//		ReadWrite.USE_UNBGZIP=false;
 		
-		{
+		if(clearMem){
 			System.err.println("Clearing memory.");
 			System.gc();
 			Shared.printMemory();
@@ -290,7 +313,7 @@ public class TaxServer {
 		}
 		
 		//Wait for server initialization
-		httpServer=initializeServer(2000, 7);
+		httpServer=initializeServer(1000, 8, https);
 		assert(httpServer!=null);
 		
 		//Initialize handlers
@@ -309,6 +332,7 @@ public class TaxServer {
 
 		httpServer.createContext("/help", new HelpHandler());
 		httpServer.createContext("/usage", new HelpHandler());
+		httpServer.createContext("/stats", new StatsHandler());
 		httpServer.createContext("/favicon.ico", new IconHandler());
 		
 		handlerThreads=handlerThreads>0 ? handlerThreads : Tools.max(2, Shared.threads());
@@ -339,13 +363,17 @@ public class TaxServer {
 	}
 	
 	/** Iterative wait for server initialization */
-	private HttpServer initializeServer(int millis0, int iterations){
+	private HttpServer initializeServer(int millis0, int iterations, boolean https){
 		HttpServer server=null;
 		InetSocketAddress isa=new InetSocketAddress(port);
 		Exception ee=null;
 		for(int i=0, millis=millis0; i<iterations && server==null; i++){
 			try {
-				server = HttpServer.create(isa, 0);
+				if(https){
+					server=HttpsServer.create(isa, 0);
+				}else{
+					server=HttpServer.create(isa, 0);
+				}
 			} catch (java.net.BindException e) {//Expected
 				System.err.println(e);
 				System.err.println("\nWaiting "+millis+" ms");
@@ -365,10 +393,38 @@ public class TaxServer {
 	}
 	
 	public void returnUsage(long startTime, HttpExchange t){
+		if(useHtml){
+			returnUsageHtml(startTime, t);
+			return;
+		}
 		if(logUsage){System.err.println("usage");}
-		String usage=USAGE();
-		bytesOut.addAndGet(usage.length());
-		ServerTools.reply(usage, "text/plain", t, verbose2, 200, true);
+//		String usage=USAGE(USAGE);
+		bytesOut.addAndGet(USAGE.length());
+		ServerTools.reply(USAGE, "text/plain", t, verbose2, 200, true);
+		final long stopTime=System.nanoTime();
+		final long elapsed=stopTime-startTime;
+		timeMeasurementsUsage.incrementAndGet();
+		elapsedTimeUsage.addAndGet(elapsed);
+		lastTimeUsage.set(elapsed);
+	}
+	
+	public void returnUsageHtml(long startTime, HttpExchange t){
+		if(logUsage){System.err.println("usage");}
+		String s=makeUsageHtml();
+		bytesOut.addAndGet(s.length());
+		ServerTools.reply(s, "html", t, verbose2, 200, true);
+		final long stopTime=System.nanoTime();
+		final long elapsed=stopTime-startTime;
+		timeMeasurementsUsage.incrementAndGet();
+		elapsedTimeUsage.addAndGet(elapsed);
+		lastTimeUsage.set(elapsed);
+	}
+	
+	public void returnStats(long startTime, HttpExchange t){
+		if(logUsage){System.err.println("stats");}
+		String stats=makeStats();
+		bytesOut.addAndGet(stats.length());
+		ServerTools.reply(stats, "text/plain", t, verbose2, 200, true);
 		final long stopTime=System.nanoTime();
 		final long elapsed=stopTime-startTime;
 		timeMeasurementsUsage.incrementAndGet();
@@ -385,28 +441,49 @@ public class TaxServer {
 		
 		@Override
 		public void handle(HttpExchange t) throws IOException {
+			if(verbose2){System.err.println("Icon handler");}
 			iconQueries.incrementAndGet();
 			ServerTools.reply(favIcon, "image/x-icon", t, verbose2, 200, true);
 		}
 		
 	}
 	
+	/*--------------------------------------------------------------*/
+	
 	/** Handles queries that fall through other handlers */
 	class HelpHandler implements HttpHandler {
 		
 		@Override
 		public void handle(HttpExchange t) throws IOException {
+			if(verbose2){System.err.println("Help handler");}
 			final long startTime=System.nanoTime();
 			returnUsage(startTime, t);
 		}
 		
 	}
 	
+	/*--------------------------------------------------------------*/
+	
+	/** Handles queries that fall through other handlers */
+	class StatsHandler implements HttpHandler {
+		
+		@Override
+		public void handle(HttpExchange t) throws IOException {
+			if(verbose2){System.err.println("Http handler");}
+			final long startTime=System.nanoTime();
+			returnStats(startTime, t);
+		}
+		
+	}
+	
+	/*--------------------------------------------------------------*/
+	
 	/** Handles requests to kill the server */
 	class KillHandler implements HttpHandler {
 		
 		@Override
 		public void handle(HttpExchange t) throws IOException {
+			if(verbose2){System.err.println("Kill handler");}
 			
 			//Parse the query from the URL
 			String rparam=getRParam(t, false);
@@ -444,198 +521,19 @@ public class TaxServer {
 			return false;
 		}
 	}
+	
+	/*--------------------------------------------------------------*/
 
 	/** Listens for sketch comparison requests */
 	class SketchHandler implements HttpHandler {
 		
-		private String parseRparamSketch(HttpExchange t){
-			//Parse the query from the URL
-			String rparam=getRParam(t, false);
-			if(rparam!=null){bytesIn.addAndGet(rparam.length());}
-
-			if(rparam.length()<1 || rparam.equalsIgnoreCase("help") || rparam.equalsIgnoreCase("usage") || rparam.equalsIgnoreCase("help/") || rparam.equalsIgnoreCase("usage/")){
-				return null;
-			}
-			
-			if(rparam.startsWith("sketch/")){rparam=rparam.substring(7);}
-			else if(rparam.equals("sketch")){rparam="";}
-			while(rparam.startsWith("/")){rparam=rparam.substring(1);}
-
-			if(verbose2){
-				System.err.println(rparam);
-				System.err.println("rparam.startsWith(\"file/\"):"+rparam.startsWith("file/"));
-			}
-			
-			return rparam;
-		}
-		
 		@Override
 		public void handle(HttpExchange t) throws IOException {
-			
-			final long startTime=System.nanoTime();
-			
-			if(!hasSketches){
-				ServerTools.reply("\nERROR: This server has no sketches loaded.\n"
-						+ "Please download the latest BBTools version to use SendSketch.\n", "text/plain", t, verbose2, 400, true);
-				return;
-			}
-			
-			String rparam=parseRparamSketch(t);
-			if(rparam==null){
-				returnUsage(startTime, t);
-				return;
-			}
-			
-			//Toggle between local files and sketch transmission
-			boolean fileMode=false;
-			boolean jsonMode=false;
-			if(rparam.startsWith("json/") || rparam.startsWith("JSON/")){
-				rparam=rparam.substring(5);
-				jsonMode=true;
-			}
-			if(rparam.startsWith("file/")){
-				if(verbose2){System.err.println("A");}
-				rparam=rparam.substring(5);
-				fileMode=true;
-			}else{
-				if(verbose2){System.err.println("B");}
-			}
-			final boolean internal=incrementQueries(t, fileMode, false, false, false, false, false, false, false, false, -1);
-
-			if(verbose2){System.err.println(rparam);}
-			if(verbose2){System.err.println("fileMode="+fileMode);}
-			
-			if(fileMode && !internal && !allowRemoteFileAccess){
-				if(verbose){System.err.println("Illegal file query from "+ServerTools.getClientAddress(t));}
-				malformedQueries.incrementAndGet();
-//				if(verbose){System.err.println("test1");}
-//				String body=getBody(t);//123
-				ServerTools.reply("\nERROR: This server does not allow remote file access. "
-						+ "You may only use the 'local' flag from with the local intranet.\n", "text/plain", t, verbose2, 400, true);
-//				if(verbose){System.err.println("test2");}
-				return;
-			}
-			
-			DisplayParams params=SketchObject.defaultParams;
-			if(jsonMode){
-				params=params.clone();
-				params.format=DisplayParams.FORMAT_JSON;
-			}
-
-			String body=getBody(t);
-			
-			if(body!=null){bytesIn.addAndGet(body.length());}
-			
-			if(verbose2){System.err.println("Found body: "+body);}
-			if(body!=null && body.length()>0){
-				if(fileMode && !body.startsWith("##")){
-					body="##"+body;
-				}
-				try {
-					params=SketchObject.defaultParams.parseDoubleHeader(body);
-					if(verbose2){System.err.println("Passed parse params.");}
-					
-				} catch (Throwable e) {
-					String s=Tools.toString(e);
-					ServerTools.reply("\nERROR: \n"+ s,
-							"text/plain", t, verbose2, 400, true);
-					return;
-				}
-				if(!params.compatible()){
-					ServerTools.reply("\nERROR: The sketch is not compatible with this server.\n"
-							+ "Server settings: k="+SketchObject.k+(SketchObject.k2>0 ? ","+SketchObject.k2 : "")
-							+" amino="+SketchObject.amino+" hash_version="+SketchObject.HASH_VERSION+"\n"
-							+ "You may need to download a newer version of BBTools; this server is running version "+Shared.BBMAP_VERSION_STRING,
-							"text/plain", t, verbose2, 400, true);
-					return;
-				}
-			}
-			if(params.trackCounts()){
-				depthQueries.incrementAndGet();
-			}
-			
-			if(verbose2){System.err.println("Parsed params: "+params.toString());}
-			
-			//List of query sketches
-			ArrayList<Sketch> sketches;
-			
-			if(fileMode){
-				if(!new File(rparam).exists() && !rparam.startsWith("/")){
-					String temp="/"+rparam;
-					if(new File(temp).exists()){rparam=temp;}
-				}
-				sketches=loadSketchesFromFile(rparam, params);
-			}else{
-				sketches=loadSketchesFromBody(body);
-			}
-			if(verbose2){System.err.println("Loaded "+sketches.size()+" sketches.");}
-			
-			if(params.chunkNum<0){
-				if(sketches==null || sketches.size()<2){
-					unknownChunkSingle.incrementAndGet();
-				}else{
-					unknownChunkMulti.incrementAndGet();
-				}
-			}else if(params.chunkNum==0){
-				if(sketches==null || sketches.size()<2){
-					firstChunkSingle.incrementAndGet();
-				}else{
-					firstChunkMulti.incrementAndGet();
-				}
-			}else{
-				if(sketches==null || sketches.size()<2){
-					nthChunkSingle.incrementAndGet();
-				}else{
-					nthChunkMulti.incrementAndGet();
-				}
-			}
-			
-			String response=null;
-			if(sketches==null || sketches.isEmpty()){
-				malformedQueries.incrementAndGet();
-				response="Error.";
-				if(verbose){
-					StringBuilder sb=new StringBuilder();
-					sb.append("Malformed query from ").append(ServerTools.getClientAddress(t)).append(". body:");
-					if(body==null){
-						sb.append(" null");
-					}else{
-						String[] split = body.split("\n");
-						sb.append(" ").append(split.length).append(" lines total, displaying ").append(Tools.min(3, split.length)).append('.');
-						for(int i=0; i<3 && i<split.length; i++){
-							String s=split[i];
-							int len=s.length();
-							if(s.length()>1000){s=s.substring(0, 1000)+" [truncated, "+len+" total]";}
-							sb.append('\n');
-							sb.append(s);
-						}
-					}
-					System.err.println(sb);
-				}
-			}else{
-				if(verbose2){
-					System.err.println("Received "+sketches.get(0).name()+", size "+sketches.get(0).array.length);
-					System.err.println("params: "+params);
-				}
-				response=compare(sketches, params);
-//				searcher.compare(sketches, response, params, maxConcurrentSketchCompareThreads); //This is where it gets stuck if comparing takes too long
-				if(verbose2){System.err.println("Result: '"+response+"'");}
-			}
-			
-			bytesOut.addAndGet(response.length());
-			ServerTools.reply(response, "text/plain", t, verbose2, 200, true);
-			
-			final long stopTime=System.nanoTime();
-			final long elapsed=stopTime-startTime;
-			if(fileMode){
-				timeMeasurementsLocal.incrementAndGet();
-				elapsedTimeLocal.addAndGet(elapsed);
-				lastTimeLocal.set(elapsed);
-			}else{
-				timeMeasurementsRemote.incrementAndGet();
-				elapsedTimeRemote.addAndGet(elapsed);
-				lastTimeRemote.set(elapsed);
-			}
+			if(verbose2){outstream.println("Got a request.");}
+			SketchInstance si=new SketchInstance(t);
+			if(verbose2){outstream.println("Made si.");}
+			si.handleInner();
+			if(verbose2){outstream.println("Done.");}
 		}
 		
 		private ArrayList<Sketch> loadSketchesFromBody(String body){
@@ -658,16 +556,290 @@ public class TaxServer {
 			ArrayList<Sketch> sketches=null;
 			
 			SketchTool tool=searcher.tool;
-			if(tool.minKeyOccuranceCount!=params.minKeyOccuranceCount || params.printDepth){
-				tool=new SketchTool(SketchObject.targetSketchSize, params.minKeyOccuranceCount, params.printDepth, params.mergePairs);
+			if(tool.minKeyOccuranceCount!=params.minKeyOccuranceCount || params.trackCounts()){
+				tool=new SketchTool(SketchObject.targetSketchSize, params);
 			}
+			
 			if(verbose2){System.err.println("Loading sketches from file "+fname);}
-			sketches=tool.loadSketchesFromFile(fname, (SketchMakerMini)null, params.mode, maxConcurrentSketchLoadThreads, params.samplerate, params.reads, params.minEntropy, true);
+			sketches=tool.loadSketchesFromFile(fname, (SketchMakerMini)null, maxConcurrentSketchLoadThreads, params.maxReads, params.mode, params, true);
 			if(verbose2){System.err.println("Loaded "+(sketches==null ? "null" : sketches.size())+" sketches from file "+fname);}
 			return sketches;
 		}
 		
+		//Created in handle()
+		private class SketchInstance {
+			
+			SketchInstance(HttpExchange t_){
+				t=t_;
+				instanceStartTime=System.nanoTime();
+			}
+			
+			void handleInner(){
+				
+				if(!hasSketches){
+					if(verbose2){System.err.println("No sketches.");}
+					ServerTools.reply("\nERROR: This server has no sketches loaded.\n"
+							+ "Please download the latest BBTools version to use SendSketch.\n", "text/plain", t, verbose2, 400, true);
+					return;
+				}
+				
+				String rparam=parseRparamSketch(t);
+				if(verbose2){System.err.println("Parsed rparam.");}
+				if(rparam==null){
+					returnUsage(instanceStartTime, t);
+					return;
+				}
+				final boolean internal=incrementQueries(t, fileMode, refMode, false, false, false, false, false, false, false, false, -1);
+				if(verbose2){System.err.println("Incremented queries rparam.");}
+
+				if(verbose2){System.err.println(rparam);}
+				if(verbose2){System.err.println("fileMode="+fileMode+", refMode="+refMode);}
+				
+				if(fileMode && !internal && !allowRemoteFileAccess){
+					if(verbose){System.err.println("Illegal file query from "+ServerTools.getClientAddress(t));}
+					malformedQueries.incrementAndGet();
+//					if(verbose){System.err.println("test1");}
+//					String body=getBody(t);//123
+					ServerTools.reply("\nERROR: This server does not allow remote file access. "
+							+ "You may only use the 'local' flag from with the local intranet.\n", "text/plain", t, verbose2, 400, true);
+//					if(verbose){System.err.println("test2");}
+					return;
+				}
+
+				String body=getBody(t);
+				if(verbose2){System.err.println("Got body.");}
+				
+				if(body!=null){bytesIn.addAndGet(body.length());}
+				
+				if(verbose2){System.err.println("Found body: "+body);}
+				if(body!=null && body.length()>0){
+					if((fileMode || refMode) && !body.startsWith("##")){
+						body="##"+body;
+					}
+					try {
+						params=params.parseDoubleHeader(body);
+						if(verbose2){System.err.println("Passed parse params.");}
+						
+					} catch (Throwable e) {
+						String s=Tools.toString(e);
+						ServerTools.reply("\nERROR: \n"+ s,
+								"text/plain", t, verbose2, 400, true);
+						return;
+					}
+					if(!params.compatible()){
+						ServerTools.reply("\nERROR: The sketch is not compatible with this server.\n"
+								+ "Server settings: k="+SketchObject.k+(SketchObject.k2>0 ? ","+SketchObject.k2 : "")
+								+" amino="+SketchObject.amino+" hash_version="+SketchObject.HASH_VERSION+"\n"
+								+ "You may need to download a newer version of BBTools; this server is running version "+Shared.BBMAP_VERSION_STRING,
+								"text/plain", t, verbose2, 400, true);
+						return;
+					}
+				}
+				if(params.trackCounts()){
+					depthQueries.incrementAndGet();
+				}
+				
+				if(verbose2){System.err.println("Parsed params: "+params.toString());}
+				
+				//List of query sketches
+				ArrayList<Sketch> sketches;
+				
+				if(fileMode){
+					File f=new File(rparam);
+					if(!f.exists() && !rparam.startsWith("/")){
+						String temp="/"+rparam;
+						f=new File(temp);
+						if(f.exists()){rparam=temp;}
+					}
+//					if(f.exists()){
+//						if(f.length()>100000000L){
+//							if(params.reads<0){
+//								params.reads=200000;//Cap default number of reads at 200000
+//							}
+//						}
+//					}
+					sketches=loadSketchesFromFile(rparam, params);
+				}else if(refMode){
+					String[] split=rparam.split(",");
+					sketches=new ArrayList<Sketch>(split.length);
+					for(String s : split){
+						Sketch sk=findRefSketch(s);
+						if(sk!=null){sketches.add(sk);}
+					}
+				}else{
+					sketches=loadSketchesFromBody(body);
+				}
+				if(verbose2){System.err.println("Loaded "+sketches.size()+" sketches.");}
+				
+				final int numSketches=sketches==null ? 0 : sketches.size();
+				if(params.chunkNum<0){
+					if(numSketches<2){
+						unknownChunkSingle.incrementAndGet();
+					}else{
+						unknownChunkMulti.incrementAndGet();
+					}
+				}else if(params.chunkNum==0){
+					if(numSketches<2){
+						firstChunkSingle.incrementAndGet();
+					}else{
+						firstChunkMulti.incrementAndGet();
+					}
+				}else{
+					if(numSketches<2){
+						nthChunkSingle.incrementAndGet();
+					}else{
+						nthChunkMulti.incrementAndGet();
+					}
+				}
+				bulkCount.addAndGet(numSketches);
+				
+				if(params.inputVersion==null){params.inputVersion="unknown";}
+				synchronized(versionMap){
+					StringNum sn=versionMap.get(params.inputVersion);
+					if(sn==null){versionMap.put(params.inputVersion, new StringNum(params.inputVersion, 1));}
+					else{sn.increment();}
+				}
+				
+				String response=null;
+				if(sketches==null || sketches.isEmpty()){
+					malformedQueries.incrementAndGet();
+					response="Error.";
+					if(verbose){
+						StringBuilder sb=new StringBuilder();
+						sb.append("Malformed query from ").append(ServerTools.getClientAddress(t)).append(". body:");
+						if(body==null){
+							sb.append(" null");
+						}else{
+							String[] split = body.split("\n");
+							sb.append(" ").append(split.length).append(" lines total, displaying ").append(Tools.min(3, split.length)).append('.');
+							for(int i=0; i<3 && i<split.length; i++){
+								String s=split[i];
+								int len=s.length();
+								if(s.length()>1000){s=s.substring(0, 1000)+" [truncated, "+len+" total]";}
+								sb.append('\n');
+								sb.append(s);
+							}
+						}
+						System.err.println(sb);
+					}
+				}else{
+					if(verbose2){
+						System.err.println("Received "+sketches.get(0).name()+", size "+sketches.get(0).keys.length);
+						System.err.println("params: "+params);
+						System.err.println("postparsed: "+params.postParsed());
+						System.err.println("taxwhitelist: "+params.taxFilterWhite);
+					}
+					response=compare(sketches, params);
+//					searcher.compare(sketches, response, params, maxConcurrentSketchCompareThreads); //This is where it gets stuck if comparing takes too long
+					if(verbose2){System.err.println("Result: '"+response+"'");}
+				}
+				
+				bytesOut.addAndGet(response.length());
+				ServerTools.reply(response, "text/plain", t, verbose2, 200, true);
+				
+				final long stopTime=System.nanoTime();
+				final long elapsed=stopTime-instanceStartTime;
+				if(fileMode){
+					timeMeasurementsLocal.incrementAndGet();
+					elapsedTimeLocal.addAndGet(elapsed);
+					lastTimeLocal.set(elapsed);
+				}else if(refMode){
+					timeMeasurementsReference.incrementAndGet();
+					elapsedTimeReference.addAndGet(elapsed);
+					lastTimeReference.set(elapsed);
+				}else{
+					timeMeasurementsRemote.incrementAndGet();
+					elapsedTimeRemote.addAndGet(elapsed);
+					lastTimeRemote.set(elapsed);
+
+					queryCounts.incrementAndGet(Tools.min(numSketches, queryCounts.length()-1));
+					timesByCount.addAndGet(Tools.min(numSketches, queryCounts.length()-1), elapsed);
+				}
+			}
+			
+			private String parseRparamSketch(HttpExchange t){
+				//Parse the query from the URL
+				String rparam=getRParam(t, false);
+				if(rparam!=null){bytesIn.addAndGet(rparam.length());}
+
+				if(rparam.length()<1 || rparam.equalsIgnoreCase("help") || rparam.equalsIgnoreCase("usage") || rparam.equalsIgnoreCase("help/") || rparam.equalsIgnoreCase("usage/")){
+					return null;
+				}
+				
+				if(rparam.startsWith("sketch/")){rparam=rparam.substring(7);}
+				else if(rparam.equals("sketch")){rparam="";}
+				while(rparam.startsWith("/")){rparam=rparam.substring(1);}
+				
+				//Toggle between local files and sketch transmission
+				
+				if(rparam.length()<2){
+					params=SketchObject.defaultParams;
+				}else{
+					params=SketchObject.defaultParams.clone();
+					String[] args=rparam.split("/");
+					int trimmed=0;
+					for(int i=0; i<args.length; i++){//parse rparam
+						String arg=args[i];
+						if(arg.length()>0){
+							String[] split=arg.split("=");
+							String a=split[0].toLowerCase();
+							String b=split.length>1 ? split[1] : null;
+
+							if(a.equals("file")){
+								fileMode=true;
+								trimmed+=5;
+								break;
+							}else if(a.equals("ref") || a.equals("taxid")){
+								refMode=true;
+								trimmed+=4;
+								break;
+							}else if(params.parse(arg, a, b)){
+								trimmed+=arg.length()+1;
+							}else{
+								assert(false) : "Bad argument:'"+arg+"'"+"\n"+Arrays.toString(args)+"\n"+rparam;
+							}
+						}
+					}
+					params.postParse(true, true);
+//					System.err.println("Trimmed="+trimmed+", rparam="+rparam);
+					if(trimmed>0){
+						rparam=rparam.substring(Tools.min(trimmed, rparam.length()));
+					}
+//					System.err.println("rparam="+rparam);
+				}
+				
+				if(verbose2){
+					System.err.println(rparam);
+					System.err.println("rparam.startsWith(\"file/\"):"+rparam.startsWith("file/"));
+				}
+				
+				return rparam;
+			}
+			
+			private final HttpExchange t;
+			private DisplayParams params;
+			private final long instanceStartTime;
+			private boolean fileMode=false;
+			private boolean refMode=false;
+		}
+		
 	}
+	
+	private Sketch findRefSketch(String s){
+		assert(s!=null);
+		if(s==null || s.length()<1){return null;}
+		int tid=-1;
+		if(Tools.isDigit(s.charAt(0))){tid=Integer.parseInt(s);}
+		else{
+			TaxNode tn=getTaxNodeByName(s);
+			tid=tn==null ? -1 : tn.id;
+		}
+		Sketch sk=tid<0 ? null : searcher.findReferenceSketch(tid);
+		if(sk!=null){sk=(Sketch)sk.clone();}
+		return sk;
+	}
+	
+	/*--------------------------------------------------------------*/
 
 	/** Handles taxonomy lookups */
 	class TaxHandler implements HttpHandler {
@@ -678,6 +850,7 @@ public class TaxServer {
 		
 		@Override
 		public void handle(HttpExchange t) throws IOException {
+			if(verbose2){System.err.println("Tax handler");}
 			final long startTime=System.nanoTime();
 			
 			if(sketchOnly){
@@ -689,7 +862,9 @@ public class TaxServer {
 			//Parse the query from the URL
 			String rparam=getRParam(t, true);
 			
+
 			boolean simple=skipNonCanonical;
+			
 			{//Legacy support for old style of invoking simple
 				if(rparam.startsWith("simpletax/")){rparam=rparam.substring(7); simple=true;}
 				else if(rparam.startsWith("stax/")){rparam=rparam.substring(5); simple=true;}
@@ -724,6 +899,38 @@ public class TaxServer {
 			}
 		}
 		
+		//TODO: Integrate something like this to improve parsing
+//		String parse(String rparam){
+//
+//			if(rparam.length()<2){return rparam;}
+//
+//			String[] args=rparam.split("/");
+//			int trimmed=0;
+//			for(int i=0; i<args.length; i++){//parse rparam
+//				String arg=args[i];
+//				if(arg.length()>0){
+//					String[] split=arg.split("=");
+//					String a=split[0].toLowerCase();
+//					String b=split.length>1 ? split[1] : null;
+//
+//					if(a.equals("file")){
+//						fileMode=true;
+//						trimmed+=5;
+//						break;
+//					}else if(params.parse(arg, a, b)){
+//						trimmed+=arg.length()+1;
+//					}else{
+//						assert(false) : "Bad argument:'"+arg+"'"+"\n"+Arrays.toString(args)+"\n"+rparam;
+//					}
+//				}
+//			}
+//			params.postParse(true);
+//			//			System.err.println("Trimmed="+trimmed+", rparam="+rparam);
+//			if(trimmed>0){
+//				rparam=rparam.substring(Tools.min(trimmed, rparam.length()));
+//			}
+//		}
+		
 		/** Only print nodes at canonical tax levels */
 		public final boolean skipNonCanonical;
 	}
@@ -733,6 +940,7 @@ public class TaxServer {
 	/*--------------------------------------------------------------*/
 	
 	static String getBody(HttpExchange t){
+		if(verbose2){System.err.println("getBody");}
 		InputStream is=t.getRequestBody();
 		String s=ServerTools.readStream(is);
 		return s;
@@ -740,6 +948,7 @@ public class TaxServer {
 	
 	/** Parse the query from the URL */
 	static String getRParam(HttpExchange t, boolean allowPost){
+		if(verbose2){System.err.println("getRParam");}
 		String rparam = t.getRequestURI().toString();
 		
 		//Trim leading slashes
@@ -767,6 +976,7 @@ public class TaxServer {
 	
 	/** All tax queries enter here from the handler */
 	String toResponse(boolean simple, String[] params, HttpExchange t){
+		if(verbose2){System.err.println("toResponse");}
 
 		boolean printNumChildren=false;
 		boolean printChildren=false;
@@ -818,21 +1028,23 @@ public class TaxServer {
 		if(params.length<2){
 			if(params.length==1 && "advice".equalsIgnoreCase(params[0])){return TAX_ADVICE;}
 			if(logUsage){System.err.println("usage");}
-			return USAGE();
+			return USAGE(USAGE);
 		}
 		if(params.length>3){
 			if(logUsage){System.err.println("usage");}
-			return USAGE();
+			return USAGE(USAGE);
 		}
 		
 		final String query=params[params.length-1];
 		final String[] names=query.split(",");
+		if(names==null){return USAGE(USAGE);}
 		
 		if(names==null || names.length<2){
 			firstChunkSingle.incrementAndGet();
 		}else{
 			firstChunkMulti.incrementAndGet();
 		}
+		bulkCount.addAndGet(names.length);
 //		System.err.println(params[2]+", "+ancestor);
 		
 		//Raw query type code
@@ -856,13 +1068,20 @@ public class TaxServer {
 			if(type2==IMG){source=SOURCE_IMG;}
 		}
 		
-		plaintext=(type>=PT_OFFSET || plaintext);
-		semicolon=(type>=SC_OFFSET || semicolon);
-		path=(type>=PA_OFFSET || path);
+		plaintext=(type>=PT_BIT || plaintext);
+		semicolon=(type>=SC_BIT || semicolon);
+		path=(type>=PA_BIT || path);
 		if(semicolon || path){plaintext=false;}
 		if(path){semicolon=false;}
 		
-		final boolean internal=incrementQueries(t, false, simple, ancestor, plaintext, semicolon, path, printChildren, printPath, printSize, type); //Ignores usage information.
+		final boolean internal=incrementQueries(t, false, false, simple, ancestor, 
+				plaintext, semicolon, path, printChildren, printPath, printSize, type); //Ignores usage information.
+		
+//		if(type2==GI){//123
+//			return "{\"error\": \"GI number support is temporarily suspended due to conflicts in NCBI databases.  "
+//					+ "It may come back split into nucleotide and protein GI numbers, which currently are not exclusive.\"}";
+//		}
+		
 		if(!internal && !allowRemoteFileAccess){
 			path=printPath=false;
 		}
@@ -935,7 +1154,7 @@ public class TaxServer {
 //		if(printChildren){j.add(getChildren(id, originalLevel, printRange));}
 		while(tn!=null && tn.levelExtended!=TaxTree.LIFE_E && tn.id!=TaxTree.CELLULAR_ORGANISMS_ID){
 			if(!skipNonCanonical || tn.isSimple()){
-				j.add(tn.levelStringExtended(originalLevel), toJson(tn, originalLevel, printNumChildren, printChildren, printPath, printSize, printRange, source, -1));
+				j.addAndRename(tn.levelStringExtended(originalLevel), toJson(tn, originalLevel, printNumChildren, printChildren, printPath, printSize, printRange, source, -1));
 			}
 			if(tn.pid==tn.id){break;}
 			tn=tree.getNode(tn.pid);
@@ -994,7 +1213,7 @@ public class TaxServer {
 		}else if(type2==TAXID){
 			for(String name : names){
 				sb.append(comma);
-				TaxNode tn=getTaxNodeNcbi(Integer.parseInt(name));
+				TaxNode tn=getTaxNodeTaxid(Integer.parseInt(name));
 				if(tn==null){sb.append("-1");}
 				else{sb.append(tn.id);}
 				comma=",";
@@ -1017,7 +1236,7 @@ public class TaxServer {
 		}else if(type2==IMG){
 			for(String name : names){
 				sb.append(comma);
-				int ncbi=TaxTree.imgToNcbi(Long.parseLong(name));
+				int ncbi=TaxTree.imgToTaxid(Long.parseLong(name));
 				sb.append(ncbi);
 				comma=",";
 			}
@@ -1036,14 +1255,14 @@ public class TaxServer {
 		}else if(type2==NAME){
 			tn=getTaxNodeByName(name);
 		}else if(type2==TAXID){
-			tn=getTaxNodeNcbi(Integer.parseInt(name));
+			tn=getTaxNodeTaxid(Integer.parseInt(name));
 		}else if(type2==ACCESSION){
 			int ncbi=AccessionToTaxid.get(name);
 			tn=(ncbi<0 ? null : tree.getNode(ncbi));
 		}else if(type2==HEADER || type2==SILVAHEADER){
 			tn=getTaxNodeHeader(name, type2==SILVAHEADER);
 		}else if(type2==IMG){
-			int ncbi=TaxTree.imgToNcbi(Long.parseLong(name));
+			int ncbi=TaxTree.imgToTaxid(Long.parseLong(name));
 			tn=(ncbi<0 ? null : tree.getNode(ncbi));
 		}else{
 			tn=null;
@@ -1099,7 +1318,7 @@ public class TaxServer {
 		}else if(type2==TAXID){
 			for(String name : names){
 				sb.append(comma);
-				TaxNode tn=getTaxNodeNcbi(Integer.parseInt(name));
+				TaxNode tn=getTaxNodeTaxid(Integer.parseInt(name));
 //				if(verbose2){outstream.println("name="+name+", tn="+tn);}
 				if(tn==null){sb.append("Not found");}
 				else{sb.append(tree.toSemicolon(tn, skipNonCanonical));}
@@ -1125,7 +1344,7 @@ public class TaxServer {
 		}else if(type2==IMG){
 			for(String name : names){
 				sb.append(comma);
-				final int tid=TaxTree.imgToNcbi(Long.parseLong(name));
+				final int tid=TaxTree.imgToTaxid(Long.parseLong(name));
 				TaxNode tn=tree.getNode(tid, true);
 				if(tn==null){sb.append("Not found");}
 				else{sb.append(tree.toSemicolon(tn, skipNonCanonical));}
@@ -1152,7 +1371,7 @@ public class TaxServer {
 		}else if(type==NAME){
 			tn0=getTaxNodeByName(name);
 		}else if(type==TAXID){
-			tn0=getTaxNodeNcbi(Integer.parseInt(name));
+			tn0=getTaxNodeTaxid(Integer.parseInt(name));
 		}else if(type==ACCESSION){
 			int ncbi=AccessionToTaxid.get(name);
 			tn0=(ncbi>=0 ? tree.getNode(ncbi) : null);
@@ -1160,7 +1379,7 @@ public class TaxServer {
 			tn0=getTaxNodeHeader(name, type==SILVAHEADER);
 		}else if(type==IMG){
 			img=Long.parseLong(name);
-			final int tid=TaxTree.imgToNcbi(img);
+			final int tid=TaxTree.imgToTaxid(img);
 			tn0=tree.getNode(tid, true);
 		}else{
 			JsonObject j=new JsonObject("error","Bad type; should be gi, taxid, or name; e.g. /name/homo_sapiens");
@@ -1193,7 +1412,7 @@ public class TaxServer {
 			while(tn!=null && tn.levelExtended!=TaxTree.LIFE_E && tn.id!=TaxTree.CELLULAR_ORGANISMS_ID){
 //				System.err.println(tn+", "+(!skipNonCanonical)+", "+tn.isSimple());
 				if(!skipNonCanonical || tn.isSimple()){
-					j.add(tn.levelStringExtended(originalLevel), toJson(tn, originalLevel, printNumChildren, printChildren, printPath && tn==tn0, printSize, printRange, source, img));
+					j.addAndRename(tn.levelStringExtended(originalLevel), toJson(tn, originalLevel, printNumChildren, printChildren, printPath && tn==tn0, printSize, printRange, source, img));
 //					System.err.println(j);
 				}
 				if(tn.pid==tn.id){break;}
@@ -1281,7 +1500,7 @@ public class TaxServer {
 			}
 		}else if(type2==TAXID){
 			for(String name : names){
-				TaxNode tn=getTaxNodeNcbi(Integer.parseInt(name));
+				TaxNode tn=getTaxNodeTaxid(Integer.parseInt(name));
 				if(tn!=null){list.add(tn.id);}
 				else{notFound.incrementAndGet();}
 			}
@@ -1293,7 +1512,7 @@ public class TaxServer {
 			}
 		}else if(type2==IMG){
 			for(String name : names){
-				final int tid=TaxTree.imgToNcbi(Long.parseLong(name));
+				final int tid=TaxTree.imgToTaxid(Long.parseLong(name));
 				if(tid>=0){list.add(tid);}
 				else{notFound.incrementAndGet();}
 			}
@@ -1322,12 +1541,12 @@ public class TaxServer {
 	TaxNode getTaxNodeGi(int gi){
 		int ncbi=-1;
 		try {
-			ncbi=GiToNcbi.getID(gi);
+			ncbi=GiToTaxid.getID(gi);
 		} catch (Throwable e) {
 			if(verbose){e.printStackTrace();}
 		}
 		if(ncbi<0){notFound.incrementAndGet();}
-		return ncbi<0 ? null : getTaxNodeNcbi(ncbi);
+		return ncbi<0 ? null : getTaxNodeTaxid(ncbi);
 	}
 	
 	/** Look up a TaxNode by parsing the full header */
@@ -1338,7 +1557,7 @@ public class TaxServer {
 	}
 	
 	/** Look up a TaxNode from the ncbi TaxID */
-	TaxNode getTaxNodeNcbi(int ncbi){
+	TaxNode getTaxNodeTaxid(int ncbi){
 		TaxNode tn=null;
 		try {
 			tn=tree.getNode(ncbi);
@@ -1356,6 +1575,8 @@ public class TaxServer {
 	private static HashMap<String, Integer> makeTypeMap() {
 		HashMap<String, Integer> map=new HashMap<String, Integer>(63);
 		map.put("gi", GI);
+//		map.put("ngi", NGI);
+//		map.put("pgi", PGI);
 		map.put("name", NAME);
 		map.put("tax_id", TAXID);
 		map.put("ncbi", TAXID);
@@ -1368,6 +1589,8 @@ public class TaxServer {
 		map.put("silvaheader", SILVAHEADER);
 		
 		map.put("pt_gi", PT_GI);
+//		map.put("pt_ngi", PT_NGI);
+//		map.put("pt_pgi", PT_PGI);
 		map.put("pt_name", PT_NAME);
 		map.put("pt_tax_id", PT_TAXID);
 		map.put("pt_id", PT_TAXID);
@@ -1379,8 +1602,10 @@ public class TaxServer {
 		map.put("pt_accession", PT_ACCESSION);
 		map.put("pt_img", PT_IMG);
 		map.put("pt_silvaheader", PT_SILVAHEADER);
-		
+
 		map.put("sc_gi", SC_GI);
+//		map.put("sc_ngi", SC_NGI);
+//		map.put("sc_pgi", SC_PGI);
 		map.put("sc_name", SC_NAME);
 		map.put("sc_tax_id", SC_TAXID);
 		map.put("sc_id", SC_TAXID);
@@ -1462,7 +1687,7 @@ public class TaxServer {
 	}
 	
 	//Customize usage message to include domain
-	private String makeUsage(){
+	private String makeUsagePrefix(){
 		if(!sketchOnly){
 			return "Welcome to the JGI taxonomy server!\n"
 					+ "This service provides taxonomy information from NCBI taxID numbers, gi numbers, organism names, and accessions.\n"
@@ -1475,6 +1700,11 @@ public class TaxServer {
 					+ "Names are case-insensitive and underscores are equivalent to spaces.\n"
 					+ "/id/9606 will give taxonomy information for an NCBI taxID.\n"
 					+ "/gi/1234 will give taxonomy information from an NCBI gi number.\n"
+					
+//					+ "\n****NOTICE**** gi number support is temporarily suspended due to conflicts in NCBI data.\n"
+//					+ "Support may be restored, altered, or discontinued pending a response from NCBI.\n"
+//					+ "Currently, it is not possible to ensure correct results when looking up a GI number, because some map to multiple organisms.\n\n"
+					
 					+ "/accession/NZ_AAAA01000057.1 will give taxonomy information from an accession.\n"
 					+ "/header/ will accept an NCBI sequence header such as gi|7|emb|X51700.1| Bos taurus\n"
 					+ "/silvaheader/ will accept a Silva sequence header such as KC415233.1.1497 Bacteria;Spirochaetae;Spirochaetes\n"
@@ -1500,7 +1730,7 @@ public class TaxServer {
 					+ "curl https://taxonomy.jgi-psf.org/id/9606\n"
 					+ "\nQueries longer than around 8kB can be sent via POST: curl https://taxonomy.jgi-psf.org/POST"
 					+ "\n...where the data sent is, for example: name/e.coli,h.sapiens,c.lupus\n"
-					+ "\nLast restarted "+new Date()+"\n"
+					+ "\nLast restarted "+startTime+"\n"
 					+ "Running BBMap version "+Shared.BBMAP_VERSION_STRING+"\n";
 		}else{
 			StringBuilder sb=new StringBuilder();
@@ -1521,9 +1751,9 @@ public class TaxServer {
 			}else if(SketchObject.blacklist()!=null){
 				sb.append("This server is running in blacklist mode, using "+new File(SketchObject.blacklist()).getName()+".\n\n");
 			}
-			sb.append("Last restarted "+new Date()+"\n");
+			sb.append("Last restarted "+startTime+"\n");
 			sb.append("Running BBMap version "+Shared.BBMAP_VERSION_STRING+"\n");
-			sb.append("Settings: k="+SketchObject.k+(SketchObject.k2>0 ? ","+SketchObject.k2 : ""));
+			sb.append("Settings:\tk="+SketchObject.k+(SketchObject.k2>0 ? ","+SketchObject.k2 : ""));
 			if(SketchObject.amino){sb.append(" amino");}
 			if(SketchObject.makeIndex){sb.append(" index");}
 			if(SketchObject.useWhitelist()){sb.append(" whitelist");}
@@ -1533,49 +1763,137 @@ public class TaxServer {
 		}
 	}
 	
-	public String USAGE(){
-		if(!countQueries){return USAGE;}
+	private String makeUsageHtml(){
+		String html=rawHtml;
+		html=html.replace("STATISTICSSTRING", makeStats());
+//		html=html.replace("TIMESTAMPSTRING", startTime);
+//		html=html.replace("VERSIONSTRING", "Running BBMap version "+Shared.BBMAP_VERSION_STRING);
+		return html;
+	}
+	
+	private String loadRawHtml(){
+		String path=Data.findPath("?tax_server.html");
+		String html=ReadWrite.readString(path);
+		return html;
+	}
+	
+	private String makeStats(){
+		ByteBuilder sb=new ByteBuilder();
+		
+		if(!sketchOnly){
+			sb.append("JGI taxonomy server stats:\n"
+					+ "\nLast restarted "+startTime+"\n"
+					+ "Running BBMap version "+Shared.BBMAP_VERSION_STRING+"\n");
+		}else{
+			sb.append("JGI"+(SketchObject.defaultParams.dbName==null ? "" : " "+SketchObject.defaultParams.dbName)+" sketch server stats:\n\n");
+			
+			if(domain!=null) {sb.append("Domain: "+domain+"\n");}
+			if(SketchObject.useWhitelist()){
+				sb.append("This server is running in whitelist mode; for best results, use local queries.\n");
+				sb.append("Remote queries should specify a larger-than-normal sketch size.\n\n");
+			}else if(SketchObject.blacklist()!=null){
+				sb.append("This server is running in blacklist mode, using "+new File(SketchObject.blacklist()).getName()+".\n\n");
+			}
+			sb.append("Last restarted "+startTime+"\n");
+			sb.append("Running BBMap version "+Shared.BBMAP_VERSION_STRING+"\n");
+			sb.append("Settings: k="+SketchObject.k+(SketchObject.k2>0 ? ","+SketchObject.k2 : ""));
+			if(SketchObject.amino){sb.append(" amino");}
+			if(SketchObject.makeIndex){sb.append(" index");}
+			if(SketchObject.useWhitelist()){sb.append(" whitelist");}
+			if(SketchObject.blacklist()!=null){sb.append(" blacklist="+new File(SketchObject.blacklist()).getName());}
+		}
+		sb.nl().nl();
+		sb.append(basicStats());
+		if(sketchOnly){sb.append(makeExtendedStats());}
+		
+		return sb.toString();
+	}
+	
+	public String makeExtendedStats(){
+		ByteBuilder sb=new ByteBuilder();
+		sb.append('\n');
+
+		{
+			sb.append("\nVersion\tCount\n");
+			ArrayList<String> list=new ArrayList<String>();
+			for(Entry<String, StringNum> e : versionMap.entrySet()){
+				list.add(e.getValue().toString());
+			}
+			Collections.sort(list);
+			for(String s : list){
+				sb.append(s).append('\n');
+			}
+		}
+
+		{
+			sb.append("\nSketchs\tCount\tAvgTime\n");
+			for(int i=0; i<timesByCount.length(); i++){
+				double a=timesByCount.get(i)/1000000.0;
+				long b=queryCounts.get(i);
+				if(b>0){
+					sb.append(i).append('\t').append(b).append('\t').append(a/b, 3).append('\n');
+				}
+			}
+			sb.append('\n');
+		}
+		return sb.toString();
+	}
+	
+	public String USAGE(String prefix){
+		if(!countQueries){return prefix;}
+		String basicStats=basicStats();
+		return (prefix==null ? basicStats : prefix+"\n"+basicStats);
+	}
+	
+	public String basicStats(){
+		if(!countQueries){return "";}
+		StringBuilder sb=new StringBuilder(500);
+		
 		final long uq=usageQueries.getAndIncrement();
 		final long mq=malformedQueries.get();
 		final long pt=plaintextQueries.get(), sc=semicolonQueries.get(), pa=pathQueries.get(), pp=printPathQueries.get(), ps=printSizeQueries.get();
-		final long i=internalQueries.get();
-		final long l=localQueries.get();
+		final long iq=internalQueries.get();
+		final long lq=localQueries.get();
+		final long rfq=refQueries.get();
 		final long q=queries.get();
 		final long nf=notFound.get();
 		final double avgTimeDL=.000001*(elapsedTimeLocal.get()/(Tools.max(1.0, timeMeasurementsLocal.get())));//in milliseconds
 		final double lastTimeDL=.000001*lastTimeLocal.get();
 		final double avgTimeDR=.000001*(elapsedTimeRemote.get()/(Tools.max(1.0, timeMeasurementsRemote.get())));//in milliseconds
 		final double lastTimeDR=.000001*lastTimeRemote.get();
+		final double avgTimeDRF=.000001*(elapsedTimeReference.get()/(Tools.max(1.0, timeMeasurementsReference.get())));//in milliseconds
+		final double lastTimeDRF=.000001*lastTimeReference.get();
 		final double avgTimeDU=.000001*(elapsedTimeUsage.get()/(Tools.max(1.0, timeMeasurementsUsage.get())));//in milliseconds
 		final double lastTimeDU=.000001*lastTimeUsage.get();
-		final long e=q-i;
-		final long r=q-l;
-		StringBuilder sb=new StringBuilder(USAGE.length()+500);
-		sb.append(USAGE);
+		final long exq=q-iq;
+		final long rmq=q-lq;
 
 		sb.append('\n').append("Queries:   ").append(q);
 		sb.append('\n').append("Usage:     ").append(uq);
 		if(sketchOnly){
 			sb.append('\n').append("Invalid:   ").append(mq);
-			sb.append('\n').append("Avg time:  ").append(String.format("%.3f ms (local queries)", avgTimeDL));
-			sb.append('\n').append("Last time: ").append(String.format("%.3f ms (local queries)", lastTimeDL));
-			sb.append('\n').append("Avg time:  ").append(String.format("%.3f ms (remote queries)", avgTimeDR));
-			sb.append('\n').append("Last time: ").append(String.format("%.3f ms (remote queries)", lastTimeDR));
+			sb.append('\n').append("Avg time:  ").append(String.format(Locale.ROOT, "%.3f ms (local queries)", avgTimeDL));
+			sb.append('\n').append("Last time: ").append(String.format(Locale.ROOT, "%.3f ms (local queries)", lastTimeDL));
+			sb.append('\n').append("Avg time:  ").append(String.format(Locale.ROOT, "%.3f ms (remote queries)", avgTimeDR));
+			sb.append('\n').append("Last time: ").append(String.format(Locale.ROOT, "%.3f ms (remote queries)", lastTimeDR));
+			sb.append('\n').append("Avg time:  ").append(String.format(Locale.ROOT, "%.3f ms (ref queries)", avgTimeDRF));
+			sb.append('\n').append("Last time: ").append(String.format(Locale.ROOT, "%.3f ms (ref queries)", lastTimeDRF));
 		}else{
-			sb.append('\n').append("Avg time:  ").append(String.format("%.3f ms", avgTimeDR));
-			sb.append('\n').append("Last time: ").append(String.format("%.3f ms", lastTimeDR));
-			sb.append('\n').append("Avg time:  ").append(String.format("%.3f ms (usage queries)", avgTimeDU));
-			sb.append('\n').append("Last time: ").append(String.format("%.3f ms (usage queries)", lastTimeDU));
+			sb.append('\n').append("Avg time:  ").append(String.format(Locale.ROOT, "%.3f ms", avgTimeDR));
+			sb.append('\n').append("Last time: ").append(String.format(Locale.ROOT, "%.3f ms", lastTimeDR));
+			sb.append('\n').append("Avg time:  ").append(String.format(Locale.ROOT, "%.3f ms (usage queries)", avgTimeDU));
+			sb.append('\n').append("Last time: ").append(String.format(Locale.ROOT, "%.3f ms (usage queries)", lastTimeDU));
 		}
 		sb.append('\n');
-		sb.append('\n').append("Internal:  ").append(i);
-		sb.append('\n').append("External:  ").append(e);
+		sb.append('\n').append("Internal:  ").append(iq);
+		sb.append('\n').append("External:  ").append(exq);
 		if(!sketchOnly){sb.append('\n').append("NotFound:  ").append(nf);}
 		sb.append('\n');
 		
 		if(sketchOnly){
-			sb.append('\n').append("Local:     ").append(l);
-			sb.append('\n').append("Remote:    ").append(r);
+			sb.append('\n').append("Local:     ").append(lq);
+			sb.append('\n').append("Remote:    ").append(rmq);
+			sb.append('\n').append("Reference: ").append(rfq);
 			sb.append('\n');
 			sb.append('\n').append("Depth:     ").append(depthQueries.get());
 			sb.append('\n');
@@ -1587,6 +1905,7 @@ public class TaxServer {
 			sb.append('\n').append("Bulk:      ").append(firstChunkMulti.get());
 			sb.append('\n').append("UnknownS:  ").append(unknownChunkSingle.get());
 			sb.append('\n').append("UnknownB:  ").append(unknownChunkMulti.get());
+			sb.append('\n').append("Total:     ").append(bulkCount.get());
 		}else{
 			sb.append('\n').append("gi:        ").append(giQueries.get());
 			sb.append('\n').append("Name:      ").append(nameQueries.get());
@@ -1607,18 +1926,20 @@ public class TaxServer {
 			sb.append('\n').append("Size:      ").append(ps);
 			sb.append('\n').append("Single:    ").append(firstChunkSingle.get());
 			sb.append('\n').append("Bulk:      ").append(firstChunkMulti.get());
+			sb.append('\n').append("Total:     ").append(bulkCount.get());
 		}
 		sb.append('\n');
 		return sb.toString();
 	}
 	
-	public boolean incrementQueries(HttpExchange t, boolean local, boolean simple, boolean ancestor, 
+	public boolean incrementQueries(HttpExchange t, boolean local, boolean refMode, boolean simple, boolean ancestor, 
 			boolean plaintext, boolean semicolon, boolean path, boolean printChildren, boolean printPath, boolean printSize, int type){
 		final boolean internal=ServerTools.isInternalQuery(t, addressPrefix, allowLocalHost, printIP, printHeaders);
 		
 		if(!countQueries){return internal;}
 		queries.incrementAndGet();
 		if(local){localQueries.incrementAndGet();}
+		else if(refMode){localQueries.incrementAndGet();}
 		
 		if(type>=0){
 			int type2=type&15;
@@ -1762,6 +2083,10 @@ public class TaxServer {
 	/*--------------------------------------------------------------*/
 	/*----------------           Counters           ----------------*/
 	/*--------------------------------------------------------------*/
+	
+	private HashMap<String, StringNum> versionMap=new HashMap<String, StringNum>();
+	private AtomicLongArray timesByCount=new AtomicLongArray(10000);
+	private AtomicLongArray queryCounts=new AtomicLongArray(10000);
 
 	private AtomicLong notFound=new AtomicLong(0);
 	private AtomicLong queries=new AtomicLong(0);
@@ -1769,6 +2094,7 @@ public class TaxServer {
 	private AtomicLong internalQueries=new AtomicLong(0);
 	/** Local filesystem sketch */
 	private AtomicLong localQueries=new AtomicLong(0);
+	private AtomicLong refQueries=new AtomicLong(0);
 
 	private AtomicLong depthQueries=new AtomicLong(0);
 	
@@ -1785,6 +2111,7 @@ public class TaxServer {
 	
 	private AtomicLong singleQueries=new AtomicLong(0);
 	private AtomicLong bulkQueries=new AtomicLong(0);
+	private AtomicLong bulkCount=new AtomicLong(0);
 	
 	private AtomicLong giQueries=new AtomicLong(0);
 	private AtomicLong nameQueries=new AtomicLong(0);
@@ -1824,6 +2151,10 @@ public class TaxServer {
 	private AtomicLong elapsedTimeLocal=new AtomicLong(0);
 	private AtomicLong timeMeasurementsLocal=new AtomicLong(0);
 	private AtomicLong lastTimeLocal=new AtomicLong(0);
+	
+	private AtomicLong elapsedTimeReference=new AtomicLong(0);
+	private AtomicLong timeMeasurementsReference=new AtomicLong(0);
+	private AtomicLong lastTimeReference=new AtomicLong(0);
 
 	private AtomicLong malformedQueries=new AtomicLong(0);
 	
@@ -1835,6 +2166,7 @@ public class TaxServer {
 	public boolean printHeaders=false;
 	public boolean countQueries=true;
 	public float prealloc=0;
+	public boolean useHtml=false;
 
 	/** Location of GiTable file */
 	private String giTableFile=null;
@@ -1873,7 +2205,7 @@ public class TaxServer {
 	private String oldAddress=null;
 
 	/** Address of current server instance (optional) */
-	public String domain="taxonomy.jgi-psf.org";
+	public String domain=null;//"taxonomy.jgi-psf.org";
 
 	public int maxConcurrentSketchCompareThreads=8;//TODO: This might be too high when lots of concurrent sessions are active
 	public int maxConcurrentSketchLoadThreads=4;//TODO: This might be too high when lots of concurrent sessions are active
@@ -1886,6 +2218,8 @@ public class TaxServer {
 	public final String favIconPath=Data.findPath("?favicon.ico");
 	public final byte[] favIcon=ReadWrite.readRaw(favIconPath);
 	
+	private final String startTime=new Date().toString();
+	
 	/** Listen on this port */
 	public final int port;
 	/** Code to validate kill requests */
@@ -1894,19 +2228,19 @@ public class TaxServer {
 	public final HttpServer httpServer;
 
 	/** Bit to set for plaintext query types */
-	public static final int PT_OFFSET=16;
+	public static final int PT_BIT=16;
 	/** Bit to set for semicolon-delimited query types */
-	public static final int SC_OFFSET=32;
+	public static final int SC_BIT=32;
 	/** Bit to set for path query types */
-	public static final int PA_OFFSET=64;
+	public static final int PA_BIT=64;
 	/** Request query types */
 	public static final int UNKNOWN=0, GI=1, NAME=2, TAXID=3, HEADER=4, ACCESSION=5, IMG=6, SILVAHEADER=7;
 	/** Plaintext-response query types */
-	public static final int PT_GI=GI+PT_OFFSET, PT_NAME=NAME+PT_OFFSET, PT_TAXID=TAXID+PT_OFFSET,
-			PT_HEADER=HEADER+PT_OFFSET, PT_ACCESSION=ACCESSION+PT_OFFSET, PT_IMG=IMG+PT_OFFSET, PT_SILVAHEADER=SILVAHEADER+PT_OFFSET;
+	public static final int PT_GI=GI+PT_BIT, PT_NAME=NAME+PT_BIT, PT_TAXID=TAXID+PT_BIT,
+			PT_HEADER=HEADER+PT_BIT, PT_ACCESSION=ACCESSION+PT_BIT, PT_IMG=IMG+PT_BIT, PT_SILVAHEADER=SILVAHEADER+PT_BIT;
 	/** Semicolon-response query types */
-	public static final int SC_GI=GI+SC_OFFSET, SC_NAME=NAME+SC_OFFSET, SC_TAXID=TAXID+SC_OFFSET,
-			SC_HEADER=HEADER+SC_OFFSET, SC_ACCESSION=ACCESSION+SC_OFFSET, SC_IMG=IMG+SC_OFFSET, SC_SILVAHEADER=SILVAHEADER+PT_OFFSET;
+	public static final int SC_GI=GI+SC_BIT, SC_NAME=NAME+SC_BIT, SC_TAXID=TAXID+SC_BIT,
+			SC_HEADER=HEADER+SC_BIT, SC_ACCESSION=ACCESSION+SC_BIT, SC_IMG=IMG+SC_BIT, SC_SILVAHEADER=SILVAHEADER+PT_BIT;
 	
 	public static final int SOURCE_REFSEQ=1, SOURCE_SILVA=2, SOURCE_IMG=3;
 	
@@ -1916,6 +2250,9 @@ public class TaxServer {
 	public static final String BAD_CODE="Incorrect code.";
 	/** Generic response for badly-formatted queries */
 	public final String USAGE;
+	/** HTML version */
+//	public final String USAGE_HTML;
+	public final String rawHtml;
 	
 	/** Tool for comparing query sketches to reference sketches */
 	public final SketchSearcher searcher=new SketchSearcher();
@@ -1925,6 +2262,7 @@ public class TaxServer {
 	final boolean allowRemoteFileAccess;
 	final boolean allowLocalHost;
 	final String addressPrefix;
+	private boolean clearMem=true;
 	
 	/*--------------------------------------------------------------*/
 	/*----------------        Common Fields         ----------------*/

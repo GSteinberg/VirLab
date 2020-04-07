@@ -71,7 +71,7 @@ public class KmerLimit extends SketchObject {
 		ReadWrite.MAX_ZIP_THREADS=Shared.threads();
 		SketchObject.setKeyFraction(0.1);
 		defaultParams.minEntropy=0;
-		minProb=0.2f;
+		defaultParams.minProb=0.2f;
 		
 		boolean setHeapSize=false;
 		int heapSize_=4095;
@@ -228,6 +228,9 @@ public class KmerLimit extends SketchObject {
 		ffin1=FileFormat.testInput(in1, FileFormat.FASTQ, extin, true, true);
 		ffin2=FileFormat.testInput(in2, FileFormat.FASTQ, extin, true, true);
 
+		minProb=defaultParams.minProb;
+		minQual=defaultParams.minQual;
+		
 		shift=2*k;
 		shift2=shift-2;
 		mask=(shift>63 ? -1L : ~((-1L)<<shift)); //Conditional allows K=32
@@ -625,6 +628,9 @@ public class KmerLimit extends SketchObject {
 	final int shift;
 	final int shift2;
 	final long mask;
+	
+	final float minProb;
+	final byte minQual;
 	
 	/*--------------------------------------------------------------*/
 	/*----------------        Common Fields         ----------------*/

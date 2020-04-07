@@ -209,11 +209,17 @@ public class GeneModelParser {
 		}else if(Tools.startsWith(line, "##")){
 			//ignore
 		}else if(Tools.startsWith(line, "#files")){//Not necessary
-			for(String s : new String(line).split("\t")){
-				if(s.charAt(0)!='#'){
-					gm.fnames.add(s);
-				}
+			String[] split=new String(line).split("\t");
+			try {
+				gm.numFiles+=Integer.parseInt(split[1]);
+			} catch (NumberFormatException e) {
+				gm.numFiles+=split.length-1;//old style pgm
 			}
+//			for(String s : new String(line).split("\t")){
+//				if(s.charAt(0)!='#'){
+//					gm.fnames.add(s);
+//				}
+//			}
 		}else if(Tools.startsWith(line, "#taxIDs")){//Can be made faster
 			for(String s : new String(line).split("\t")){
 				if(s.charAt(0)!='#'){

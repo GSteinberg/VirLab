@@ -30,6 +30,10 @@ public class Realigner {
 	}
 	
 	public boolean realign(final Read r, final SamLine sl, final Scaffold scaf, final boolean unclip){
+		return realign(r, sl, scaf.bases, unclip);
+	}
+	
+	public boolean realign(final Read r, final SamLine sl, final byte[] ref, final boolean unclip){
 		if(!r.mapped() || sl.supplementary() || !sl.primary()){return false;}
 		int[] mSCNID=r.countMatchSymbols();
 		int sumBad=mSCNID[1]+mSCNID[4]+mSCNID[5], sumIndel=mSCNID[4]+mSCNID[5];
@@ -62,17 +66,17 @@ public class Realigner {
 		realignmentsAttempted++;
 		
 		SiteScore ss=null;
-		final byte[] rbases=makeRbases(scaf.bases, start, stop, padding);
+		final byte[] rbases=makeRbases(ref, start, stop, padding);
 		byte[] qbases=r.bases;
 		if(sl.strand()==Shared.MINUS){
 			qbases=AminoAcid.reverseComplementBases(qbases);
 		}
 		
-		SiteScore oldSS=r.toSite(); //123 Slow
-		oldSS.match=r.match.clone(); //123 Slow
-		String oldSL=sl.toString(); //123 Slow
-		assert(oldSS.lengthsAgree()) : oldSS.start+", "+oldSS.stop+", "+oldSS.matchLength()+", "+oldSS.mappedLength()+", "+scaf.length+"\n"+sl+"\n"+oldSS+"\n";
-		assert(!oldSS.matchContainsXY()) : oldSS.start+", "+oldSS.stop+", "+oldSS.matchLength()+", "+oldSS.mappedLength()+", "+scaf.length+"\n"+sl+"\n"+oldSS+"\n";
+//		SiteScore oldSS=r.toSite(); //123 Slow
+//		oldSS.match=r.match.clone(); //123 Slow
+//		String oldSL=sl.toString(); //123 Slow
+//		assert(oldSS.lengthsAgree()) : oldSS.start+", "+oldSS.stop+", "+oldSS.matchLength()+", "+oldSS.mappedLength()+", "+scaf.length+"\n"+sl+"\n"+oldSS+"\n";
+//		assert(!oldSS.matchContainsXY()) : oldSS.start+", "+oldSS.stop+", "+oldSS.matchLength()+", "+oldSS.mappedLength()+", "+scaf.length+"\n"+sl+"\n"+oldSS+"\n";
 		
 		assert(!r.shortmatch()); //Otherwise convert it or change the score function.
 		final int score0=msa.score(r.match);
@@ -98,12 +102,12 @@ public class Realigner {
 		
 		SiteScore oldSS2=ss.clone(); //123 Slow
 		oldSS2.match=ss.match.clone(); //123 Slow
-		assert(ss.lengthsAgree()) : ss.start+", "+ss.stop+", "+ss.matchLength()+", "+ss.mappedLength()+", "+scaf.length+"\n"+sl+"\n"+ss+"\n"
-			+oldSS.start+", "+oldSS.stop+", "+oldSS.matchLength()+", "+oldSS.mappedLength()+", "+scaf.length+"\n"+sl+"\n"+oldSS+"\n"
-			;
-		assert(!oldSS.matchContainsXY()) : ss.start+", "+ss.stop+", "+ss.matchLength()+", "+ss.mappedLength()+", "+scaf.length+"\n"+sl+"\n"+ss+"\n"
-			+oldSS.start+", "+oldSS.stop+", "+oldSS.matchLength()+", "+oldSS.mappedLength()+", "+scaf.length+"\n"+sl+"\n"+oldSS+"\n"
-			;
+//		assert(ss.lengthsAgree()) : ss.start+", "+ss.stop+", "+ss.matchLength()+", "+ss.mappedLength()+", "+scaf.length+"\n"+sl+"\n"+ss+"\n"
+//			+oldSS.start+", "+oldSS.stop+", "+oldSS.matchLength()+", "+oldSS.mappedLength()+", "+scaf.length+"\n"+sl+"\n"+oldSS+"\n"
+//			;
+//		assert(!oldSS.matchContainsXY()) : ss.start+", "+ss.stop+", "+ss.matchLength()+", "+ss.mappedLength()+", "+scaf.length+"\n"+sl+"\n"+ss+"\n"
+//			+oldSS.start+", "+oldSS.stop+", "+oldSS.matchLength()+", "+oldSS.mappedLength()+", "+scaf.length+"\n"+sl+"\n"+oldSS+"\n"
+//			;
 		
 		//These pass
 //		assert(sl.strand()==ss.strand()) : sl.strand()+", "+ss.strand()+", "+r.strand()+", "+oldSS.strand()+", "+oldSS2.strand();
@@ -119,9 +123,9 @@ public class Realigner {
 		ss.stop=ss.stop+paddedStart;
 		
 		{
-			int clipped2=ss.clipTipIndels(scaf.length);
-			if(unclip && clipped2>0 && scaf.bases!=null && oldSS2.match[oldSS2.match.length-1]=='Y'){
-				ss.unclip(qbases, scaf.bases);
+			int clipped2=ss.clipTipIndels(ref.length);
+			if(unclip && clipped2>0 && ref!=null && oldSS2.match[oldSS2.match.length-1]=='Y'){
+				ss.unclip(qbases, ref);
 //				System.err.println(sl.strand()+"\n"+new String(new String(oldSS2.match)+"\n"+new String(ss.match)));
 			}
 		}
@@ -139,7 +143,7 @@ public class Realigner {
 		
 		r.match=ss.match;
 		sl.pos=Tools.max(0, r.start)+1;
-		sl.cigar=SamLine.toCigar14(r.match, r.start, r.stop, scaf.length, qbases);
+		sl.cigar=SamLine.toCigar14(r.match, r.start, r.stop, ref.length, qbases);
 		sl.optional=null;
 		
 //		assert((ss.start>=0) == (SamLine.countLeadingClip(sl.cigar, true, true)==0)) : ss.start+", "+ss.stop+", "+scaf.length+"\n"+sl+"\n"+ss+"\n"
@@ -149,12 +153,12 @@ public class Realigner {
 //			+oldSL+"\n"+oldSS+"\n"+oldSS2+"\n"
 //		;
 		
-		assert((ss.start>=0) || (SamLine.countLeadingClip(sl.cigar, true, true)>0)) : ss.start+", "+ss.stop+", "+scaf.length+"\n"+sl+"\n"+ss+"\n"
-			+oldSL+"\n"+oldSS+"\n"+oldSS2+"\n"
-		;
-		assert((ss.stop<scaf.length) || (SamLine.countTrailingClip(sl.cigar, true, true)>0)) : ss.start+", "+ss.stop+", "+scaf.length+"\n"+sl+"\n"
-			+oldSL+"\n"+oldSS+"\n"+oldSS2+"\n"
-		;
+//		assert((ss.start>=0) || (SamLine.countLeadingClip(sl.cigar, true, true)>0)) : ss.start+", "+ss.stop+", "+scaf.length+"\n"+sl+"\n"+ss+"\n"
+//			+oldSL+"\n"+oldSS+"\n"+oldSS2+"\n"
+//		;
+//		assert((ss.stop<scaf.length) || (SamLine.countTrailingClip(sl.cigar, true, true)>0)) : ss.start+", "+ss.stop+", "+scaf.length+"\n"+sl+"\n"
+//			+oldSL+"\n"+oldSS+"\n"+oldSS2+"\n"
+//		;
 		
 		//Perform clipping
 		r.match=SamLine.cigarToShortMatch_old(sl.cigar, true);
@@ -173,6 +177,8 @@ public class Realigner {
 		}
 		return out;
 	}
+	
+	public MSA msa(){return msa;}
 
 	long realignmentsAttempted=0;
 	long realignmentsSucceeded=0;

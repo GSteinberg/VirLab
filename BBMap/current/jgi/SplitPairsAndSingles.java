@@ -684,11 +684,8 @@ public final class SplitPairsAndSingles {
 		basesIn+=r.length();
 		final String id=r.id;
 		
-		final SamLine sl;
-		if(r.obj!=null && r.obj.getClass()==SamLine.class){
-			sl=(SamLine)r.obj;
-			if(!sl.primary() || sl.supplementary()){return null;}
-		}else{sl=null;}
+		final SamLine sl=r.samline;
+		if(sl!=null && (!sl.primary() || sl.supplementary())){return null;}
 		
 		assert(id!=null) : "Read number "+r.numericID+" has no name and thus cannot be re-paired.  To ignore this, run with the -da flag.";
 		if(id==null){return null;}

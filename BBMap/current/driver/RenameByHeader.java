@@ -37,7 +37,9 @@ public class RenameByHeader {
 			outstream=pp.outstream;
 		}
 		
-		ReadWrite.USE_PIGZ=ReadWrite.USE_UNPIGZ=false;
+		ReadWrite.USE_PIGZ=false;
+		ReadWrite.USE_UNPIGZ=false;
+		ReadWrite.USE_UNBGZIP=false;
 		
 		for(int i=0; i<args.length; i++){
 			String arg=args[i];

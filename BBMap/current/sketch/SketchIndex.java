@@ -104,7 +104,7 @@ public class SketchIndex extends SketchObject {
 	
 	public SketchResults getSketchesList(final Sketch a, DisplayParams params){
 		final int minHits=params.minHits, contamLevel=params.contamLevel();
-		final boolean countContamHits=params.needContamCounts(), metaFilter=params.hasMetaFilters();
+		final boolean countContamHits=params.needContamCounts();//, metaFilter=params.hasMetaFilters(), taxFilter=params.hasTaxFilters();
 		final Timer t=(printTime ? new Timer() : null);
 		
 		final int[] singleton=new int[1];
@@ -123,8 +123,8 @@ public class SketchIndex extends SketchObject {
 			taxHits=null;
 		}
 		
-		for(int i=0; i<a.array.length; i++){
-			long key=a.array[i];
+		for(int i=0; i<a.keys.length; i++){
+			long key=a.keys[i];
 			AbstractKmerTable set=tableArray[(int)(key%WAYS)];
 //			System.err.println(set.getValue(key));
 			final int[] ids=set.getValues(key, singleton);
@@ -178,7 +178,8 @@ public class SketchIndex extends SketchObject {
 //				System.err.println("B: "+last+", "+id+", "+count+", "+minHits);
 				if(last>-1 && (hits>=minHits)){
 					final Sketch ref=refSketches.get(last);
-					if(!metaFilter || ref.passesMeta(params)){list.add(ref);}
+//					if(!metaFilter || ref.passesMeta(params)){list.add(ref);}
+					list.add(ref);
 				}
 				last=id;
 				hits=0;
@@ -186,7 +187,8 @@ public class SketchIndex extends SketchObject {
 		}
 		if(last>-1 && (hits>=minHits)){
 			final Sketch ref=refSketches.get(last);
-			if(!metaFilter || ref.passesMeta(params)){list.add(ref);}
+//			if((!metaFilter || ref.passesMeta(params)) && (!taxFilter || params.passesFilter(ref))){list.add(ref);}
+			list.add(ref);
 		}
 		if(printTime){
 			t.stop("Time for fetching sketches: \t");
@@ -198,7 +200,7 @@ public class SketchIndex extends SketchObject {
 	
 	public SketchResults getSketchesMap(final Sketch a, DisplayParams params){
 		final int minHits=params.minHits, contamLevel=params.contamLevel();
-		final boolean countContamHits=params.needContamCounts(), metaFilter=params.hasMetaFilters();
+		final boolean countContamHits=params.needContamCounts();//, metaFilter=params.hasMetaFilters(), taxFilter=params.hasTaxFilters();
 		final Timer t=(printTime ? new Timer() : null);
 		final int[] singleton=new int[1];
 		
@@ -226,12 +228,12 @@ public class SketchIndex extends SketchObject {
 		
 		int[] refHitCounts;
 		if(params.printRefHits){
-			refHitCounts=new int[a.array.length];
+			refHitCounts=new int[a.keys.length];
 			a.setRefHitCounts(refHitCounts);
 		}else{refHitCounts=null;}
 		
-		for(int i=0; i<a.array.length; i++){
-			long key=a.array[i];
+		for(int i=0; i<a.keys.length; i++){
+			long key=a.keys[i];
 			AbstractKmerTable set=tableArray[(int)(key%WAYS)];
 //			System.err.println(set.getValue(key));
 			final int[] ids=set.getValues(key, singleton);
@@ -275,7 +277,8 @@ public class SketchIndex extends SketchObject {
 			if(value>=minHits){
 				int id=keys[i];
 				final Sketch ref=refSketches.get(id);
-				if(!metaFilter || ref.passesMeta(params)){list.add(ref);}
+//				if((!metaFilter || ref.passesMeta(params)) && (!taxFilter || params.passesFilter(ref))){list.add(ref);}
+				list.add(ref);
 			}
 		}
 		if(printTime){
@@ -300,11 +303,11 @@ public class SketchIndex extends SketchObject {
 //			System.err.println("Thread running.");
 			int id=nextIndex.getAndIncrement();
 			final int numSketches=refSketches.size();
-			final int limit0=Tools.min((AUTOSIZE ? Integer.MAX_VALUE : targetSketchSize), indexLimit);
+			final int limit0=Tools.min((AUTOSIZE || AUTOSIZE_LINEAR ? Integer.MAX_VALUE : targetSketchSize), indexLimit);
 //			System.err.println("numSketches="+numSketches);
 			while(id<numSketches){
 				final Sketch sk=refSketches.get(id);
-				final long[] array=sk.array;
+				final long[] array=sk.keys;
 				final int limit=Tools.min(array.length, limit0);
 //				System.err.println("limit="+limit);
 				for(int i=0; i<limit; i++){

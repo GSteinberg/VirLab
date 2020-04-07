@@ -3,7 +3,7 @@
 usage(){
 echo "
 Written by Brian Bushnell
-Last modified February 19, 2019
+Last modified April 11, 2019
 
 Description:  Compares reads to the kmers in a reference dataset, optionally 
 allowing an edit distance. Splits the reads into two outputs - those that 
@@ -81,6 +81,7 @@ bqhist=<file>       Quality histogram designed for box plots.
 lhist=<file>        Read length histogram.
 phist=<file>        Polymer length histogram.
 gchist=<file>       Read GC content histogram.
+ihist=<file>        Insert size histogram, for paired reads in mapped sam.
 gcbins=100          Number gchist bins.  Set to 'auto' to use read length.
 maxhistlen=6000     Set an upper bound for histogram lengths; higher uses 
                     more memory.  The default is 6000 for some histograms
@@ -100,6 +101,7 @@ varfile=<file>      Ignore substitution errors listed in this file when
                     CallVariants.
 vcf=<file>          Ignore substitution errors listed in this VCF file 
                     when calculating error rates.
+ignorevcfindels=t   Also ignore indels listed in the VCF.
 
 Processing parameters:
 k=27                Kmer length used for finding contaminants.  Contaminants 
@@ -203,7 +205,6 @@ minlength=10        (ml) Reads shorter than this after trimming will be
 mlf=0               (minlengthfraction) Reads shorter than this fraction of 
                     original length after trimming will be discarded.
 maxlength=          Reads longer than this after trimming will be discarded.
-                    Pairs will be discarded only if both are longer.
 minavgquality=0     (maq) Reads with average quality (after trimming) below 
                     this will be discarded.
 maqb=0              If positive, calculate maq from this many initial bases.
@@ -319,12 +320,11 @@ popd > /dev/null
 
 #DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/"
 CP="$DIR""current/"
-NATIVELIBDIR="$DIR""jni/"
+JNI="-Djava.library.path=""$DIR""jni/"
+JNI=""
 
 z="-Xmx1g"
 z2="-Xms1g"
-EA="-ea"
-EOOM=""
 set=0
 silent=0
 json=0
@@ -336,6 +336,7 @@ fi
 
 calcXmx () {
 	source "$DIR""/calcmem.sh"
+	setEnvironment
 	parseXmx "$@"
 	if [[ $set == 1 ]]; then
 		return
@@ -347,32 +348,7 @@ calcXmx () {
 calcXmx "$@"
 
 bbduk() {
-	if [[ $SHIFTER_RUNTIME == 1 ]]; then
-		#Ignore NERSC_HOST
-		shifter=1
-	elif [[ $NERSC_HOST == genepool ]]; then
-		module unload oracle-jdk
-		module load oracle-jdk/1.8_144_64bit
-		module load samtools/1.4
-		module load pigz
-	elif [[ $NERSC_HOST == denovo ]]; then
-		module unload java
-		module load java/1.8.0_144
-		module load PrgEnv-gnu/7.1
-		module load samtools/1.4
-		module load pigz
-	elif [[ $NERSC_HOST == cori ]]; then
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/jgi
-		module use /global/common/software/m342/nersc-builds/denovo/Modules/usg
-		module unload java
-		module load java/1.8.0_144
-		module unload PrgEnv-intel
-		module load PrgEnv-gnu/7.1
-		module load samtools/1.4
-		module load pigz
-	fi
-	#local CMD="java -Djava.library.path=$NATIVELIBDIR $EA $z $z2 -cp $CP jgi.BBDuk $@"
-	local CMD="java $EA $z $z2 -cp $CP jgi.BBDuk $@"
+	local CMD="java $EA $EOOM $z $z2 $JNI -cp $CP jgi.BBDuk $@"
 	if [[ $silent == 0 ]] && [[ $json == 0 ]]; then
 		echo $CMD >&2
 	fi

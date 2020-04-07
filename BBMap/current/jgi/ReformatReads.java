@@ -94,7 +94,6 @@ public class ReformatReads {
 				ByteFile2.verbose=verbose;
 				stream.FastaReadInputStream.verbose=verbose;
 				ConcurrentGenericReadInputStream.verbose=verbose;
-//				align2.FastaReadInputStream2.verbose=verbose;
 				stream.FastqReadInputStream.verbose=verbose;
 				ReadWrite.verbose=verbose;
 			}else if(a.equals("sample") || a.equals("samplereads") || a.equals("samplereadstarget") || a.equals("srt")){
@@ -131,11 +130,14 @@ public class ReformatReads {
 			}else if(a.equals("allowidenticalnames") || a.equals("ain")){
 				allowIdenticalPairNames=Tools.parseBoolean(b);
 			}else if(a.equals("rcompmate") || a.equals("rcm")){
-				reverseComplimentMate=Tools.parseBoolean(b);
-				outstream.println("Set RCOMPMATE to "+reverseComplimentMate);
-			}else if(a.equals("rcomp") || a.equals("rc")){
-				reverseCompliment=Tools.parseBoolean(b);
-				outstream.println("Set RCOMP to "+reverseCompliment);
+				reverseComplementMate=Tools.parseBoolean(b);
+				outstream.println("Set RCOMPMATE to "+reverseComplementMate);
+			}else if(a.equals("rcomp") || a.equals("rc") || a.equals("reversecomplement")){
+				reverseComplement=Tools.parseBoolean(b);
+				outstream.println("Set RCOMP to "+reverseComplement);
+			}else if(a.equals("comp") || a.equals("complement")){
+				complement=Tools.parseBoolean(b);
+				outstream.println("Warning: Setting non-standard parameter 'complement'.");
 			}else if(a.equals("deleteempty") || a.equals("deletempty") || a.equals("delempty") || a.equals("def")){
 				deleteEmptyFiles=Tools.parseBoolean(b);
 			}else if(a.equals("mappedonly")){
@@ -254,8 +256,9 @@ public class ReformatReads {
 			usePairGC=parser.usePairGC;
 			tossJunk=parser.tossJunk;
 			recalibrateQuality=parser.recalibrateQuality;
-			
-			idFilter=parser.idFilter;
+
+			minIdFilter=parser.minIdFilter;
+			maxIdFilter=parser.maxIdFilter;
 			subfilter=parser.subfilter;
 			clipfilter=parser.clipfilter;
 			delfilter=parser.delfilter;
@@ -581,9 +584,9 @@ public class ReformatReads {
 					
 					final SamLine sl1;
 					if(sam){
-						sl1=(SamLine) r1.obj;
+						sl1=r1.samline;
 						assert(r2==null);
-//						sl2=(r2==null ? null : (SamLine) r2.obj);
+//						sl2=(r2==null ? null : r2.samline);
 //						if(sl1!=null && Shared.TRIM_RNAME){
 //							sl1.setRname(Tools.trimToWhitespace(sl1.rname()));
 //							sl1.setRnext(Tools.trimToWhitespace(sl1.rnext()));
@@ -639,12 +642,14 @@ public class ReformatReads {
 					{
 						readsProcessed++;
 						basesProcessed+=initialLength1;
-						if(reverseCompliment){r1.reverseComplement();}
+						if(reverseComplement){r1.reverseComplement();}
+						if(complement){r1.complement();}
 					}
 					if(r2!=null){
 						readsProcessed++;
 						basesProcessed+=initialLength2;
-						if(reverseCompliment || reverseComplimentMate){r2.reverseComplement();}
+						if(reverseComplement || reverseComplementMate){r2.reverseComplement();}
+						if(complement){r2.complement();}
 					}
 					
 					if(verifypairing){
@@ -746,10 +751,10 @@ public class ReformatReads {
 						}
 					}
 					
-					if(idFilter>=0 || USE_EDIT_FILTER){
+					if(minIdFilter>=0 || maxIdFilter<1 || USE_EDIT_FILTER){
 						if(r1!=null && !r1.discarded()){
-							assert(r1.match!=null || (r1.obj!=null && r1.obj.getClass().equals(SamLine.class))) : "idfilter requires sam/bam input.";
-							boolean pass=passesIDFilter(r1, idFilter, false);
+							assert(r1.match!=null || r1.samline!=null) : "idfilter requires sam/bam input.";
+							boolean pass=passesIDFilter(r1, minIdFilter, maxIdFilter, false);
 							if(USE_EDIT_FILTER){
 								pass=pass&&passesEditFilter(r1, false);
 							}
@@ -760,8 +765,8 @@ public class ReformatReads {
 							}
 						}
 						if(r2!=null && !r2.discarded()){
-							assert(r2.match!=null || (r2.obj!=null && r2.obj.getClass().equals(SamLine.class))) : "idfilter requires sam/bam input.";
-							boolean pass=passesIDFilter(r2, idFilter, false);
+							assert(r2.match!=null || r2.samline!=null) : "idfilter requires sam/bam input.";
+							boolean pass=passesIDFilter(r2, minIdFilter, maxIdFilter, false);
 							if(USE_EDIT_FILTER){
 								pass=pass&&passesEditFilter(r2, false);
 							}
@@ -1200,7 +1205,7 @@ public class ReformatReads {
 			outstream.println("Low quality discards:   \t"+lowqReadsT+" reads ("+String.format(Locale.ROOT, "%.2f",lowqReadsT*rpmult)+"%) \t"+
 					lowqBasesT+" bases ("+String.format(Locale.ROOT, "%.2f",lowqBasesT*bpmult)+"%)");
 		}
-		if(idFilter>=0 || USE_EDIT_FILTER){
+		if(minIdFilter>=0 || maxIdFilter<1 || USE_EDIT_FILTER){
 			outstream.println("Identity/edit discards: \t"+idfilteredReadsT+" reads ("+String.format(Locale.ROOT, "%.2f",idfilteredReadsT*rpmult)+"%) \t"+
 					idfilteredBasesT+" bases ("+String.format(Locale.ROOT, "%.2f",idfilteredBasesT*bpmult)+"%)");
 		}
@@ -1276,29 +1281,34 @@ public class ReformatReads {
 		for(int i=0; i<old.length; i++){array[i+padLeft]=old[i];}
 		return array;
 	}
-		
-		
-	public static final boolean passesIDFilter(Read r, float minId, boolean requireMapped){
+	
+	public static final boolean passesIDFilter(Read r, float minId, float maxId, boolean requireMapped){
+		if(!passesMinIDFilter(r, minId, requireMapped)){return false;}
+		return passesMaxIDFilter(r, maxId);
+	}
+	
+	public static final boolean passesMinIDFilter(Read r, float minId, boolean requireMapped){
 		if(minId<=0 || r.perfect()){return true;}
-		if(r.match==null){
-			Object o=r.obj;
-			if(o!=null && o.getClass()==SamLine.class){
-				SamLine sl=(SamLine)o;
-				r.match=sl.toShortMatch(false);
-			}
+		if(r.match==null && r.samline!=null){
+			r.match=r.samline.toShortMatch(false);
 		}
 		if(r.match==null){return !requireMapped;}
 		return Read.identityFlat(r.match, true)>=minId;
 	}
 	
+	public static final boolean passesMaxIDFilter(Read r, float maxId){
+		if(maxId>=1){return true;}
+		if(r.match==null && r.samline!=null){
+			r.match=r.samline.toShortMatch(false);
+		}
+		if(r.match==null){return true;}
+		return Read.identityFlat(r.match, true)<=maxId;
+	}
+	
 	public final boolean passesEditFilter(Read r, boolean requireMapped){
 		if(r.perfect()){return true;}
-		if(r.match==null){
-			Object o=r.obj;
-			if(o!=null && o.getClass()==SamLine.class){
-				SamLine sl=(SamLine)o;
-				r.match=sl.toShortMatch(false);
-			}
+		if(r.match==null && r.samline!=null){
+			r.match=r.samline.toShortMatch(false);
 		}
 		if(r.match==null){return !requireMapped;}
 		r.toLongMatchString(false);
@@ -1425,8 +1435,7 @@ public class ReformatReads {
 	}
 	
 	public void setSampleSeed(long seed){
-		randy=new Random();
-		if(seed>-1){randy.setSeed(seed);}
+		randy=Shared.threadLocalRandom(seed);
 	}
 
 	
@@ -1435,8 +1444,8 @@ public class ReformatReads {
 	public static final void fixHeader(Read r){
 		if(r!=null){
 			r.id=fixHeader(r.id);
-			if(r.obj!=null && r.obj.getClass()==SamLine.class){
-				((SamLine)r.obj).qname=r.id;
+			if(r.samline!=null){
+				r.samline.qname=r.id;
 			}
 		} 
 	}
@@ -1518,8 +1527,9 @@ public class ReformatReads {
 	private final HashMap<String,Integer> nameMap1, nameMap2;
 	private boolean uniqueNames=false;
 
-	private boolean reverseComplimentMate=false;
-	private boolean reverseCompliment=false;
+	private boolean reverseComplementMate=false;
+	private boolean reverseComplement=false;
+	private boolean complement=false;
 	private boolean verifyinterleaving=false;
 	private boolean verifypairing=false;
 	private boolean allowIdenticalPairNames=true;
@@ -1551,8 +1561,9 @@ public class ReformatReads {
 	private boolean addunderscore=false;
 	private boolean stoptag=false;
 	private boolean iupacToN=false;
-	
-	private float idFilter=-1;
+
+	private float minIdFilter=-1;
+	private float maxIdFilter=-1;
 	private int subfilter=-1;
 	private int clipfilter=-1;
 	private int delfilter=-1;
