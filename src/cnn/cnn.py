@@ -2,7 +2,10 @@ from Bio import SeqIO # FASTA reader
 import numpy as np
 from data import get_data
 
+# Hyper parameters
 total_epochs = 10
+batch_size = 30
+learning_rate = 0.1
 
 from torch.utils.data import Dataset, DataLoader
 
@@ -51,7 +54,7 @@ class Net(nn.Module):
 
 
 def train(model, train_loader, epoch):
-    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.5)
+    optimizer = optim.SGD(model.parameters(), lr=learning_rate, momentum=0.5)
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = Variable(data), Variable(target)
@@ -104,7 +107,6 @@ def main():
     full_dataset = VirLabDataset(data, labels)
     train_size = int(0.8 * len(full_dataset))
     test_size = len(full_dataset) - train_size
-    batch_size = 30
     train_dataset, test_dataset = torch.utils.data.random_split(full_dataset, [train_size, test_size])
     train_loader = DataLoader(dataset=train_dataset,
                               batch_size=batch_size,
