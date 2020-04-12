@@ -1,6 +1,9 @@
 from Bio import SeqIO # FASTA reader
 import numpy as np
 
+data_size = 300
+total_epochs = 20
+
 def find_min_length(fasta_sequences):
     seq_lengths = []
 
@@ -19,7 +22,7 @@ def get_data(fasta_sequences):
     min_len = 9083 # in the dengue_fasta
     sequences = []
     for i, fasta in enumerate(fasta_sequences):
-        if i == 300:
+        if i == data_size:
             break
         name, sequence = fasta.id, str(fasta.seq)
         one_hot_sequence = one_hot_encode(sequence.lower())
@@ -112,12 +115,13 @@ def test(model, test_loader):
         100. * correct / len(test_loader.dataset)))
 
 def main():
+    
     file = "/Users/alevenberg/research/VirLab/src/cnn/genomes/aedes/dengue.fasta"
     filetype = "fasta"
     aedes_fasta_sequences = list(SeqIO.parse(file, filetype))
 
     aedes_data = get_data(aedes_fasta_sequences)
-    aedes_labels = np.ones(300)
+    aedes_labels = np.ones(data_size)
 
     file = "/Users/alevenberg/research/VirLab/src/cnn/genomes/culex/japanese-encephalitis.fasta"
     filetype = "fasta"
@@ -125,7 +129,7 @@ def main():
 
     min_len = find_min_length(culex_fasta_sequences)
     culex_data = get_data(culex_fasta_sequences)
-    culex_labels = np.zeros(300)
+    culex_labels = np.zeros(data_size)
 
     data = np.concatenate((aedes_data, culex_data))
     labels = np.concatenate((aedes_labels, culex_labels))
@@ -150,7 +154,7 @@ def main():
     print("Dataset size: ", len(full_dataset)) # 600 - 300 Aedes and 300 Culex
     model = Net()
     model = model.double()
-    for epoch in range(1, 10):
+    for epoch in range(1, total_epochs):
         train(model, train_loader, epoch)
         test(model, test_loader)
 
