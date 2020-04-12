@@ -2,13 +2,27 @@ from Bio import SeqIO # FASTA reader
 import glob
 import re
 import os
+import numpy as np
 
-def get_data(fasta_sequences):
-    min_len = 9083 # in the dengue_fasta
+def find_min_length(combined_sequences):
+    seq_lengths = []
+    for value in combined_sequences.values():
+        for fasta in value:
+            name, sequence = fasta.id, str(fasta.seq)
+            seq_lengths.append(len(sequence))
+    # Debug
+    # print("Minimum length is", min(seq_lengths))
+    return min(seq_lengths)
+
+def one_hot_encode(seq):
+    # https://en.wikipedia.org/wiki/FASTA_format#Sequence_representation
+    ltrdict = {'a':[1,0,0,0],'c':[0,1,0,0],'g':[0,0,1,0],'t':[0,0,0,1], 'b':[0,0,0,0], 'v':[0,0,0,0], 'n':[0,0,0,0], 'd':[0,0,0,0], 'm':[0,0,0,0], 'h':[0,0,0,0], 'w':[0,0,0,0], 'y':[0,0,0,0], 's':[0,0,0,0], 'r':[0,0,0,0], 'k':[0,0,0,0]}
+    return [ltrdict[x] for x in seq]
+
+def get_clean_data(fasta_sequences, min_len):
     sequences = []
+    # Will take all of them
     for i, fasta in enumerate(fasta_sequences):
-        if i == data_size:
-            break
         name, sequence = fasta.id, str(fasta.seq)
         one_hot_sequence = one_hot_encode(sequence.lower())
         if (len(one_hot_sequence) >= min_len):
@@ -44,18 +58,40 @@ def debug_data(sequences, type):
         counter += 1
         total += n
     print("There are " + str(total) + " " + type + " sequences")
-# Get FASTA files from genome directory
-aedes_paths = glob.glob("./genomes/aedes/*.fasta")
-culex_paths = glob.glob("./genomes/culex/*.fasta")
 
-aedes_sequences = parse_paths(aedes_paths)
-culex_sequences = parse_paths(culex_paths)
+def combine_sequences(sequences_dictionary):
+    return_value = {}
+    for vector, value in sequences_dictionary.items():
+        vector_sequences = []
+        for virus, virus_sequences in value.items():
+            vector_sequences.extend(virus_sequences)
+        return_value[vector] = vector_sequences
+        # Debug
+        # print(vector, "vector has", len(vector_sequences), "sequences")
+    return return_value
 
-debug_data(aedes_sequences, "aedes")
-debug_data(culex_sequences, "culex")
-# aedes_data = get_data(aedes_fasta_sequences)
-# aedes_labels = np.ones(data_size)
-#
-# file = "/Users/alevenberg/research/VirLab/src/cnn/genomes/culex/japanese-encephalitis.fasta"
-# filetype = "fasta"
-# culex_fasta_sequences = list(SeqIO.parse(file, filetype))
+def get_data():
+    # Get FASTA files from genome directory
+    aedes_paths = glob.glob("./genomes/aedes/*.fasta")
+    culex_paths = glob.glob("./genomes/culex/*.fasta")
+
+    aedes_sequences = parse_paths(aedes_paths)
+    culex_sequences = parse_paths(culex_paths)
+
+    sequences = {"aedes":aedes_sequences, "culex":culex_sequences}
+
+    aedes = "aedes"
+    culex = "culex"
+
+    # debug_data(sequences[aedes],aedes)
+    # debug_data(sequences[culex],culex)
+
+    combined_sequences = combine_sequences(sequences)
+    min_length = find_min_length(combined_sequences)
+
+    clean_data = {}
+    for key, value in combined_sequences.items():
+        data = get_clean_data(value, min_length)
+        clean_data[key] = data
+
+    return clean_data

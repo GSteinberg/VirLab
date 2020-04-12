@@ -1,36 +1,8 @@
 from Bio import SeqIO # FASTA reader
 import numpy as np
+from data import get_data
 
-data_size = 300
 total_epochs = 20
-
-def find_min_length(fasta_sequences):
-    seq_lengths = []
-
-    for fasta in fasta_sequences:
-        name, sequence = fasta.id, str(fasta.seq)
-        seq_lengths.append(len(sequence))
-
-    return min(seq_lengths)
-
-def one_hot_encode(seq):
-    # https://en.wikipedia.org/wiki/FASTA_format#Sequence_representation
-    ltrdict = {'a':[1,0,0,0],'c':[0,1,0,0],'g':[0,0,1,0],'t':[0,0,0,1], 'b':[0,0,0,0], 'v':[0,0,0,0], 'n':[0,0,0,0], 'd':[0,0,0,0], 'm':[0,0,0,0], 'h':[0,0,0,0], 'w':[0,0,0,0], 'y':[0,0,0,0], 's':[0,0,0,0], 'r':[0,0,0,0], 'k':[0,0,0,0]}
-    return [ltrdict[x] for x in seq]
-
-def get_data(fasta_sequences):
-    min_len = 9083 # in the dengue_fasta
-    sequences = []
-    for i, fasta in enumerate(fasta_sequences):
-        if i == data_size:
-            break
-        name, sequence = fasta.id, str(fasta.seq)
-        one_hot_sequence = one_hot_encode(sequence.lower())
-        if (len(one_hot_sequence) >= min_len):
-            one_hot_sequence = one_hot_sequence[0: (min_len-1)]
-        sequences.append(np.expand_dims(one_hot_sequence, axis=0))
-    # print((np.asarray(sequences, dtype=np.double)).dtype)
-    return np.asarray(sequences, dtype=np.double)
 
 from torch.utils.data import Dataset, DataLoader
 
@@ -67,7 +39,7 @@ class Net(nn.Module):
         self.conv1 = nn.Conv2d(in_channels = 1, out_channels = 10, kernel_size=1, padding=0)
         self.conv2 = nn.Conv2d(in_channels = 10, out_channels = 20, kernel_size=1)
         self.mp = nn.MaxPool2d(2)
-        self.fc = nn.Linear(45400, 10)
+        self.fc = nn.Linear(45300, 10)
 
     def forward(self, x):
         in_size = x.size(0)
@@ -95,7 +67,7 @@ def train(model, train_loader, epoch):
                 100. * batch_idx / len(train_loader), loss.item()))
 
 
-def test(model, test_loader):
+def test(model, test_loader, epoch):
     model.eval()
     test_loss = 0
     correct = 0
@@ -110,26 +82,21 @@ def test(model, test_loader):
         correct += pred.eq(target.data.view_as(pred)).cpu().sum()
 
     test_loss /= len(test_loader.dataset)
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-        test_loss, correct, len(test_loader.dataset),
+    print('\nTest Epoch: {} Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+        epoch, test_loss, correct, len(test_loader.dataset),
         100. * correct / len(test_loader.dataset)))
 
 def main():
-    
-    file = "/Users/alevenberg/research/VirLab/src/cnn/genomes/aedes/dengue.fasta"
-    filetype = "fasta"
-    aedes_fasta_sequences = list(SeqIO.parse(file, filetype))
+    print ("Getting data...")
+    clean_data = get_data()
 
-    aedes_data = get_data(aedes_fasta_sequences)
-    aedes_labels = np.ones(data_size)
+    aedes_data = clean_data["aedes"]
+    aedes_size = len(aedes_data)
+    aedes_labels = np.ones(aedes_size)
 
-    file = "/Users/alevenberg/research/VirLab/src/cnn/genomes/culex/japanese-encephalitis.fasta"
-    filetype = "fasta"
-    culex_fasta_sequences = list(SeqIO.parse(file, filetype))
-
-    min_len = find_min_length(culex_fasta_sequences)
-    culex_data = get_data(culex_fasta_sequences)
-    culex_labels = np.zeros(data_size)
+    culex_data = clean_data["culex"]
+    culex_size = len(culex_data)
+    culex_labels = np.zeros(culex_size)
 
     data = np.concatenate((aedes_data, culex_data))
     labels = np.concatenate((aedes_labels, culex_labels))
@@ -146,20 +113,22 @@ def main():
 
     test_loader = DataLoader(dataset=test_dataset,
                               batch_size=batch_size,
-                              shuffle=False)
+                              shuffle=True)
 
     # 300 batches, 1 channel, H=9082, W=4
-    print("Data size: ", culex_data.shape) # (300, 1, 9082, 4)
-    print("Data size: ", aedes_data.shape) # (300, 1, 9082, 4)
+    print("Culex Data size: ", culex_data.shape) # (300, 1, 9082, 4)
+    print("Aedes Data size: ", aedes_data.shape) # (300, 1, 9082, 4)
     print("Dataset size: ", len(full_dataset)) # 600 - 300 Aedes and 300 Culex
+
+    print("Training size: ", len(train_dataset))
+    print("Testing size: ", len(test_dataset))
+
+    print ("Running model...")
+
     model = Net()
     model = model.double()
     for epoch in range(1, total_epochs):
         train(model, train_loader, epoch)
         test(model, test_loader)
 
-    # https://github.com/hunkim/PyTorchZeroToAll/blob/master/10_1_cnn_mnist.py
-    # https://hanqingguo.github.io/CNN1
-    # https://towardsdatascience.com/pytorch-layer-dimensions-what-sizes-should-they-be-and-why-4265a41e01fd
-    # http://cs231n.github.io/convolutional-networks/
 main()
