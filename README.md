@@ -36,7 +36,7 @@ Past Contributers: Hayden Brown (hbrown10@binghamton.edu), Yan Ma (yma73@bingham
  - [ ] Turning reads into contigs and test on those
  - [ ] Convert some nested for loops to list comprehensions for speed and readability
  - [ ] Adding script for one hot encoding
- 
+
 ***Janis***
 
  - [ ] Reproduce stats for full genomes and record them
@@ -45,5 +45,6 @@ Past Contributers: Hayden Brown (hbrown10@binghamton.edu), Yan Ma (yma73@bingham
 
 ***Anna***
 
- - [ ] Fix the cnn input shape sizes. Get CNN working for 300 samples
- - [ ] Get it to work for a bunch of genomes of different sizes
+ - [ ] Graph loss curve for model
+ - [ ] Write the data in binary format once parsed - pickle
+ - [ ] Save model weights and track best weights
