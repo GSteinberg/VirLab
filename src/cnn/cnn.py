@@ -2,7 +2,7 @@ from Bio import SeqIO # FASTA reader
 import numpy as np
 from data import get_data
 
-total_epochs = 20
+total_epochs = 10
 
 from torch.utils.data import Dataset, DataLoader
 
