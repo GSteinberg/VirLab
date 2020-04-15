@@ -77,7 +77,6 @@ def get_data():
 
     aedes_sequences = parse_paths(aedes_paths)
     culex_sequences = parse_paths(culex_paths)
-
     sequences = {"aedes":aedes_sequences, "culex":culex_sequences}
 
     aedes = "aedes"

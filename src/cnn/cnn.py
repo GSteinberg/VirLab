@@ -31,6 +31,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 class Net(nn.Module):
 
     def __init__(self):
@@ -58,9 +60,11 @@ def train(model, train_loader, epoch):
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = Variable(data), Variable(target)
+        data = data.to(device)
         optimizer.zero_grad()
         output = model(data)
         target = target.long()
+        target = target.to(device)
         loss = F.nll_loss(output, target)
         loss.backward()
         optimizer.step()
@@ -76,9 +80,11 @@ def test(model, test_loader, epoch):
     correct = 0
     for data, target in test_loader:
         data, target = Variable(data, volatile=True), Variable(target)
+        data = data.to(device)
         output = model(data)
         # sum up batch loss
         target = target.long()
+        target = target.to(device)
         test_loss += F.nll_loss(output, target, size_average=False).data
         # get the index of the max log-probability
         pred = output.data.max(1, keepdim=True)[1]
@@ -127,10 +133,11 @@ def main():
 
     print ("Running model...")
 
+
     model = Net()
-    model = model.double()
+    model = model.double().to(device)
     for epoch in range(1, total_epochs):
         train(model, train_loader, epoch)
-        test(model, test_loader)
+        test(model, test_loader, epoch)
 
 main()
