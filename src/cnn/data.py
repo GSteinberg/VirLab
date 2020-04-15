@@ -101,4 +101,4 @@ def main():
     with open('data.pickle', 'rb') as handle:
         pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-main()
+# main()

@@ -88,6 +88,7 @@ def test(model, test_loader, epoch):
         test_loss += F.nll_loss(output, target, size_average=False).data
         # get the index of the max log-probability
         pred = output.data.max(1, keepdim=True)[1]
+        # print("Pred", pred, output)
         correct += pred.eq(target.data.view_as(pred)).cpu().sum()
 
     test_loss /= len(test_loader.dataset)
@@ -136,7 +137,7 @@ def main():
 
     model = Net()
     model = model.double().to(device)
-    test(model, test_loader, epoch)
+    test(model, test_loader, 0)
 
     for epoch in range(1, total_epochs):
         train(model, train_loader, epoch)
