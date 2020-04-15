@@ -3,6 +3,7 @@ import glob
 import re
 import os
 import numpy as np
+import pickle
 
 def find_min_length(combined_sequences):
     seq_lengths = []
@@ -94,3 +95,10 @@ def get_data():
         clean_data[key] = data
 
     return clean_data
+
+def main():
+    data = get_data()
+    with open('data.pickle', 'rb') as handle:
+        pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+main()

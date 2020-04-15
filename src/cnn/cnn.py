@@ -136,6 +136,8 @@ def main():
 
     model = Net()
     model = model.double().to(device)
+    test(model, test_loader, epoch)
+
     for epoch in range(1, total_epochs):
         train(model, train_loader, epoch)
         test(model, test_loader, epoch)
