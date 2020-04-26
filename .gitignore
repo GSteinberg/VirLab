@@ -6,11 +6,10 @@ __pycache__
 # Virtual environment
 env
 
-<<<<<<< HEAD
 # Do not upload generated results (see .gitignore file in results folder)
 
 # Cache
-src/ref/
+**/ref/*
 
 # OS generated files
 .DS_Store
@@ -20,6 +19,15 @@ src/ref/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Vim files
+*.swp
+
+#Cache files?
+*.xml
+*.gz
+
+
+
 =======
 # Do not upload generated results
->>>>>>> 767e25891f3d29841c551909950f2be5e5813437

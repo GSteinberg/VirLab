@@ -4,24 +4,29 @@ import os
 from src.genome import Genome
 from src.genome import Read
 import re
+from pathlib import Path
 
 # Takes a FASTA file, outputs it as a list of genome objects
 # with vector, disease and seq
 def parse_dir( dataset1, dataset2 ):
 	genomes = []
 
-#TODO fix empty list
 
-	for dirName, subdirList, fileList in os.walk(".."):
+
+	for dirName, subdirList, fileList in os.walk("genomes"):
 		# if dataset1 and dataset2 are in VirLab
-		'''
+		'''	
 		print("dir: ", dirName)
 		print("subdirs: ", subdirList)
 		print("files: ", fileList)
-		'''
-		if dirName in ("../genomes/" + dataset1, "../genomes/" + dataset2):
-			vector = dirName.rsplit("/")[-1]
-			#print("dir: ", dirName)
+		'''	
+		if dirName in (dataset1, dataset2):
+			if "/" in dirName:
+				vector = dirName.rsplit("/")[-1]
+			elif "\\" in dirName:
+				vector = dirName.rsplit("\\")[-1]
+
+			print("dir: ", dirName)
 
 			for filename in fileList:
 				# Split file name to obtain file type
@@ -33,6 +38,7 @@ def parse_dir( dataset1, dataset2 ):
 
 				# records = list of genomes. Each one having traits
 				records = list(SeqIO.parse(dirName + "/" + filename, filetype))
+		#		print(records)
 				chars = set('NWKMRYSBVHDX')
 				for genome in records:
 					# handle ambiguous genomic data, throw all ambigous files out
