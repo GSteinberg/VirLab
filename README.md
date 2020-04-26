@@ -1,5 +1,6 @@
 # VirLab
 Contributers: Gabriel Steinberg (gsteinb1@binghamton.edu), Kenneth Chiu (kchiu@binghamton.edu), Anna Levenberg (alevenb1@binghamton.edu), Janis Louie (jlouie2@binghamton.edu), Len Kaupert (lkauper1@binghamton.edu)
+
 Past Contributers: Hayden Brown (hbrown10@binghamton.edu), Yan Ma (yma73@binghamton.edu)
 ### Vector identification in metagenomic data using k-mers
 - The goal is to find the vector of a disease with an unknown vector by training an SVM on genomes with known vectors.
