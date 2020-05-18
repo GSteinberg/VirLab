@@ -136,7 +136,10 @@ def main():
 
     model = Net()
     model = model.double().to(device)
-    test(model, test_loader, epoch)
+
+    # Graphing the accuracy and loss for train and test
+    test(model, test_loader, epoch) # Should be 50%
+    # Plot graphs
 
     for epoch in range(1, total_epochs):
         train(model, train_loader, epoch)
