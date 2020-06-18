@@ -78,6 +78,7 @@ def get_data():
 
     aedes_sequences = parse_paths(aedes_paths)
     culex_sequences = parse_paths(culex_paths)
+    
     sequences = {"aedes":aedes_sequences, "culex":culex_sequences}
 
     aedes = "aedes"
@@ -98,7 +99,7 @@ def get_data():
 
 def main():
     data = get_data()
-    with open('data.pickle', 'rb') as handle:
+    with open('data.pickle', 'wb') as handle:
         pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-# main()
+main()

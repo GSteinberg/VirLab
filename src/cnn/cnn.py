@@ -1,6 +1,7 @@
 from Bio import SeqIO # FASTA reader
 import numpy as np
-from data import get_data
+# from data import get_data
+import pickle
 
 # Hyper parameters
 total_epochs = 10
@@ -98,7 +99,9 @@ def test(model, test_loader, epoch):
 
 def main():
     print ("Getting data...")
-    clean_data = get_data()
+    with open('data.pickle', 'rb') as handle:
+        unserialized_data = pickle.load(handle)
+    clean_data = unserialized_data
 
     aedes_data = clean_data["aedes"]
     aedes_size = len(aedes_data)
@@ -139,10 +142,9 @@ def main():
     model = model.double().to(device)
 
     # Graphing the accuracy and loss for train and test
-    test(model, test_loader, epoch) # Should be 50%
+    # test(model, test_loader, epoch) # Should be 50%
     # Plot graphs
-    #test(model, test_loader, 0)
-
+    test(model, test_loader, 0)
 
     for epoch in range(1, total_epochs):
         train(model, train_loader, epoch)
