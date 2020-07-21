@@ -9,7 +9,7 @@ env
 # Do not upload generated results (see .gitignore file in results folder)
 
 # Cache
-**/ref/*
+ref/*
 
 # OS generated files
 .DS_Store
@@ -24,8 +24,8 @@ Thumbs.db
 *.swp
 
 #Cache files?
-*.xml
-*.gz
+**.xml
+*/*.gz
 
 
 

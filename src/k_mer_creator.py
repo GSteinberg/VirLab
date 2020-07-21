@@ -1,6 +1,5 @@
 """K-MER CREATOR"""
 
-iIMPORT_PATH = 'src'
 
 import src.fasta_parser as fp
 import src.kruskal_wallis as kw
@@ -19,8 +18,6 @@ MIN_GEN_LEN = 76
 MIN_SIG_KMERS = 2
 K_MIN = 4
 K_MAX = 4
-DATASET1 = str(Path("genomes/Test_Aedes"))
-DATASET2 = str(Path("genomes/Test_Culex"))
 PATH = ""
 
 # Helper for replacing blanks in kmer signatures with 0s
@@ -28,9 +25,13 @@ def toZero( list, kmer ):
 	list[kmer] = 0
 
 
-def analyze_range( k_min, k_max, dataset1, dataset2 ):
+def analyze_range( k_min, k_max, dataset1_path, dataset2_path):
+	#retrieve dataset names from paths
+	dataset1 = dfp.dataset_from_path(dataset1_path)
+	dataset2 = dfp.dataset_from_path(dataset2_path)
+
 	# returns list of genome objs w/ vector, disease, and seq for each obj
-	genomes = fp.parse_dir(dataset1, dataset2 )
+	genomes = fp.parse_dir(dataset1_path, dataset2_path)
 	##print(genomes)
 
 	# populates kmers member for each gen obj
@@ -61,11 +62,10 @@ def analyze_range( k_min, k_max, dataset1, dataset2 ):
 	# For compatability with BBMap
 	# make fasta file with species 1 test data
 
-	# dataset1[1:] to account for slash
 	with open(Path(PATH, "results/test_genomes_1.fasta"), 'w', newline='') as test_file:
 		for gen in test_data:
 			
-			if len(gen.sequence) >= MIN_GEN_LEN and gen.vector == dfp.dataset_from_path(dataset1):
+			if len(gen.sequence) >= MIN_GEN_LEN and gen.vector == dataset1:
 				test_file.write(str(gen))
 				test_file.write("\n\n")
 		test_file.flush()
@@ -74,7 +74,7 @@ def analyze_range( k_min, k_max, dataset1, dataset2 ):
 	with open(Path(PATH, "results/test_genomes_2.fasta"), 'w+', newline='') as test_file:
 		for gen in test_data:
 			#print("GEN.VECTOR: %s" %(gen.vector))
-			if len(gen.sequence) >= MIN_GEN_LEN and gen.vector == dfp.dataset_from_path(dataset2):
+			if len(gen.sequence) >= MIN_GEN_LEN and gen.vector == dataset2:
 				test_file.write(str(gen))
 				test_file.write("\n\n")
 		test_file.flush()
@@ -98,7 +98,7 @@ def analyze_range( k_min, k_max, dataset1, dataset2 ):
 	# TRAINING SET
 	# make csv file with kmer counts for training set
 	filename = Path(PATH, "results/%s-%smers in %s and %s.csv" % \
-		(k_min, k_max, dfp.dataset_from_path(dataset1), dfp.dataset_from_path(dataset2)))
+		(k_min, k_max, dataset1, dataset2))
 	
 	with open(filename, "w+", newline="") as csv_file:
 		fieldnames = []
@@ -125,16 +125,16 @@ def analyze_range( k_min, k_max, dataset1, dataset2 ):
 
 	# returns list of the most significant k_mers
 	# takes about 1/3 of computation time
-	sig_kmers = kw.test( filename, dfp.dataset_from_path(dataset1), dfp.dataset_from_path(dataset1) )
+	sig_kmers = kw.test(filename, dataset1, dataset1)
 
 	# Make csv for only significant kmers for training
 	with open(Path(PATH, "results/training_sig_k_mers.csv"), 'w+', newline="") as csv_file:
 		writer = csv.DictWriter(csv_file, fieldnames=sig_kmers, extrasaction='ignore')
 		writer.writeheader()
 		for g in train_data:
-			if g.vector == dataset1[1:]:
+			if g.vector == dataset1:
 				g.kmers["Class"] = 0
-			elif g.vector == dataset2[1:]:
+			elif g.vector == dataset2:
 				g.kmers["Class"] = 1
 
 			writer.writerow(g.kmers)

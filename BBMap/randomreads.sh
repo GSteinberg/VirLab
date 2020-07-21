@@ -1,4 +1,5 @@
 #!/bin/bash
+#set -x -e
 
 usage(){
 echo "
@@ -125,12 +126,13 @@ Java Parameters:
 #This block allows symlinked shellscripts to correctly set classpath.
 pushd . > /dev/null
 DIR="${BASH_SOURCE[0]}"
+#DIR="$0"
 while [ -h "$DIR" ]; do
   cd "$(dirname "$DIR")"
   DIR="$(readlink "$(basename "$DIR")")"
 done
 cd "$(dirname "$DIR")"
-DIR="$(pwd)/"
+DIR="$('pwd')/"
 popd > /dev/null
 
 #DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/"
@@ -155,7 +157,7 @@ calcXmx () {
 	fi
 	freeRam 3200m 84
 	z="-Xmx${RAM}m"
-	z2="-Xms${RAM}m"
+	z2="i-Xms${RAM}m"
 }
 calcXmx "$@"
 
@@ -178,7 +180,7 @@ randomreads() {
 		module load java/1.8.0_144
 		module load pigz
 	fi
-	local CMD="java $EA $EOOM $z -cp $CP align2.RandomReads3 build=1 $@"
+	local CMD='java $EA $EOOM $z -cp "$CP" align2.RandomReads3 build=1 $@'
 	echo $CMD >&2
 	eval $CMD
 }

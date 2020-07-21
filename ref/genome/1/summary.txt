@@ -1,13 +1,13 @@
 #Summary
-#Generated on	Mon Mar 09 17:07:33 EDT 2020
+#Generated on	Tue Jul 21 18:50:23 EDT 2020
 #Version	5
-chroms	0
-bases	0
-defined	0
-undefined	0
-contigs	0
-scaffolds	0
+chroms	1
+bases	334397
+defined	280397
+undefined	54000
+contigs	77
+scaffolds	77
 interpad	500
-source	/Users/lenkaupert/Desktop/Files/VirLab/results/test_genomes_2.fasta
-bytes	0
-last modified	1583788052000
+source	/Users/lenkaupert/Desktop/Local Files/Programming/VirLab/results/test_genomes_2.fasta
+bytes	286607
+last modified	1595371814039

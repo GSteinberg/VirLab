@@ -29,6 +29,8 @@ def parse_dir( dataset1, dataset2 ):
 			print("dir: ", dirName)
 
 			for filename in fileList:
+				if filename == ".DS_Store":
+					continue
 				# Split file name to obtain file type
 				disease, filetype = filename.rsplit(".", 1)
 				if filetype == "fna":

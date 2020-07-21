@@ -33,7 +33,7 @@ degree_choice = 2
 # TRAIN ALGORITHM
 from sklearn.svm import SVC
 from sklearn.metrics import classification_report, confusion_matrix  
-svclassifier = SVC(kernel=kernel_choice, degree=degree_choice)
+svclassifier = SVC(kernel=kernel_choice, degree=degree_choice, cache_size=2000)
 svclassifier.fit(X_train, y_train)
 
 y_pred2 = svclassifier.predict(X_train)
